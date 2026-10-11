@@ -3,13 +3,15 @@ extends SceneTree
 
 const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
+const Layout = preload("res://scripts/room_layout.gd")
+const Main = preload("res://scripts/main.gd")
 var failures := 0
 
 
 func _initialize() -> void:
     run_tests()
     if failures == 0:
-        print("PASS: seed, connectivity, room types, collapse policy, budget diagnostics")
+        print("PASS: generation, collapse policies, facing sheets, 32px tile regions, resizable layouts")
     quit(1 if failures > 0 else 0)
 
 
@@ -27,22 +29,53 @@ func run_tests() -> void:
         return
     var policy = Collapse.new(config.get("collapse", {}))
 
-    # The visual prototype must have a valid 192x160 atlas that covers all regions.
-    var atlas: Texture2D = load("res://assets/crypt_atlas.png") as Texture2D
-    check(atlas != null, "crypt atlas imports successfully")
-    if atlas != null:
-        check(atlas.get_size() == Vector2(192, 160), "crypt atlas is 192x160")
-        var regions: Array[Rect2] = [
-            Rect2(0, 0, 32, 32), Rect2(32, 0, 32, 32),
-            Rect2(64, 0, 64, 64), Rect2(0, 64, 48, 48),
-            Rect2(48, 64, 48, 48), Rect2(96, 64, 96, 96)
-        ]
-        for region in regions:
-            check(region.position.x >= 0 and region.position.y >= 0
-                and region.end.x <= atlas.get_width()
-                and region.end.y <= atlas.get_height(),
-                "art region fits within atlas: %s" % region)
+    # Independent artwork by category, with all 8 compass facings.
+    var crypt: Texture2D = load("res://assets/biomes/stone_crypt/tileset.png") as Texture2D
+    check(crypt != null, "biome tileset imports")
+    if crypt != null:
+        check(crypt.get_size() == Vector2(128, 128), "crypt tileset is 128x128")
+        for tile in [Rect2(0, 0, 32, 32), Rect2(32, 0, 32, 32),
+                Rect2(64, 0, 32, 32), Rect2(96, 0, 32, 32), Rect2(64, 64, 64, 64)]:
+            check(tile.end.x <= 128 and tile.end.y <= 128, "environment tile is within atlas")
+    for sprite in [
+            {"path": "res://assets/characters/crawler/facing_8.png", "frame": 48},
+            {"path": "res://assets/enemies/rat/facing_8.png", "frame": 48},
+            {"path": "res://assets/enemies/brute_boss/facing_8.png", "frame": 96}
+        ]:
+        var sheet: Texture2D = load(sprite["path"]) as Texture2D
+        check(sheet != null, "facing sheet imports: %s" % sprite["path"])
+        if sheet != null:
+            var cell: int = int(sprite["frame"])
+            check(sheet.get_size() == Vector2(cell * 8, cell),
+                "sheet has exactly 8 frames: %s" % sprite["path"])
 
+    var main = Main.new()
+    var facing_vectors: Array[Vector2] = [
+        Vector2.RIGHT, Vector2(1, 1), Vector2.DOWN, Vector2(-1, 1),
+        Vector2.LEFT, Vector2(-1, -1), Vector2.UP, Vector2(1, -1)
+    ]
+    for i in range(8):
+        check(main._facing_from_vector(facing_vectors[i]) == i,
+            "eight-way facing quadrant %d" % i)
+    main.free()
+
+    for dimensions in [Vector2(720, 480), Vector2(960, 540),
+            Vector2(1280, 720), Vector2(1920, 1080)]:
+        var layout: Dictionary = Layout.compute(dimensions)
+        var bounds: Rect2 = layout["arena"]
+        check(int(layout["columns"]) % 2 == 0 and int(layout["rows"]) % 2 == 0,
+            "even tile counts allow 2-cell door openings")
+        check(int(bounds.size.x) % 32 == 0 and int(bounds.size.y) % 32 == 0,
+            "room dimensions are 32px multiples")
+        check(bounds.position.x >= 32 and bounds.position.y >= 108,
+            "room top and sides leave room for HUD and walls")
+        check(bounds.end.x <= dimensions.x - 32 and bounds.end.y <= dimensions.y - 80,
+            "room stays inside the resizeable window")
+    check(
+        Layout.compute(Vector2(1920, 1080))["columns"] >
+            Layout.compute(Vector2(960, 540))["columns"],
+        "larger window exposes more tiles rather than stretching a fixed room"
+    )
 
     for seed_value in range(25):
         var floor: Dictionary = Generator.generate(seed_value + 1100, 22)

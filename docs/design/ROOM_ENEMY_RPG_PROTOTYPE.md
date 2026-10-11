@@ -4,11 +4,19 @@
 
 ## Fixed-size rooms versus window resolution
 
-- **D-16 accepted:** Each interior is **24×24 tiles × 32 logical pixels = 768×768 world pixels**. Walls extend 32px beyond those interior bounds. The 24×24 layout **never changes** when a window is resized.
+- **D-16 accepted:** Each interior is **24×24 tiles × 16 logical pixels = 384×384 world pixels**. Walls extend 16px beyond those interior bounds. The 24×24 layout **never changes** when a window is resized.
 - [`room_layout.gd`](../../game/scripts/room_layout.gd) computes a fit-to-window **render scale and offset**. Gameplay positions, obstacle positions, movement speed, melee reach, and projectile velocity remain in unchanged world pixels.
 - Mouse aiming uses the inverse screen-to-world transform, so player facing and attacks still point accurately after resizing.
 - Default window 960×540, minimum 720×480. At smaller windows the entire room is downscaled; because a square room must fit inside a landscape viewport, actors can appear small. Future UX evaluation should compare whole-room fit versus a camera that scrolls around a fixed-size room.
 - **Not a new room-size rule:** number of rooms per floor (currently 22) is a different variable from number of tiles per room (fixed 24×24).
+
+### Window resolution controls
+
+The **Esc pause menu** offers common windowed resolutions, including 800×600, 960×540, 1024×768, 1280×720, 1366×768, 1600×900, 1920×1080, 2560×1440, and 3840×2160. Choosing an entry and clicking **Apply resolution** changes the actual Godot window size. The scene recalculates only its visual scale/offset, and inverse-transform mouse aiming still works. Room and obstacle coordinates remain 24×24 cells at 16px each. These settings are session-only in the prototype and do not yet include fullscreen or monitor selection.
+
+### Imported sampler boundaries
+
+The user-provided 16px sampler contains 12 sprites in an 8×2 atlas, including floors, wall tops/faces, edges, wood door, stairs, barrel, chest and bones. Explicit bottom corners and south wall edges described in its README are **not included** in the ZIP, so the renderer currently uses rotated wall-top sections as temporary joins. The uploaded pack's README has no explicit redistribution license; verify that separately before publishing art.
 
 ## Props, collision, and reachability
 
@@ -16,7 +24,7 @@
 
 The generator:
 
-1. Reserves a central combat/spawn zone and 64px-wide lanes at each potential cardinal exit.
+1. Reserves a central combat/spawn zone and 32px-wide lanes at each potential cardinal exit.
 2. Randomizes candidate grid cells using a seeded RNG.
 3. Adds blocking obstacles one at a time.
 4. Rejects a placement if breadth-first search cannot reach **every linked exit** from the center. Because all exits connect to that center, they remain mutually reachable.
@@ -35,7 +43,7 @@ Each enemy type has an ID and these fields:
 | `name`, `sprite` | `Rat Scavenger`, `rat` | UI and art selection |
 | `level`, `xp`, `hp`, `ac` | `1`, `25`, `7`, `12` | Combat challenge, rewards, defenses |
 | `scores` | `{ "STR":10, "DEX":14, ... }` | Six ability scores |
-| `speed`, `collision_radius` | `86`, `12` | Movement and world-space footprint |
+| `speed`, `collision_radius` | `43`, `6` | Movement and collision footprint at the new 16px world scale |
 | `behavior.mode` | `chase`, `kite`, `guard` | Pursuit or preferred-spacing behavior |
 | `behavior.pathfinding` | `grid_bfs`, `direct`, `stationary` | Choose grid BFS, direct steering, or no movement |
 | `behavior.preferred_distance` | `26` or `210` | Close-in for melee, keep range for ranged |

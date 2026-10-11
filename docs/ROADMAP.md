@@ -10,7 +10,7 @@
 Create a **top-down, single-player-first roguelike dungeon crawler** that takes inspiration from the room-based action and build variety of *The Binding of Isaac*, while introducing:
 
 - **Much larger floors** built procedurally from connected rooms on a grid.
-- **A collapse clock** that decreases as players choose to enter new rooms, turning exploration and routing into important trade-offs.
+- **A tunable collapse clock** that responds to room transitions, with configurable rules for boss rooms, guild halls, revisits, and other special rooms.
 - **Omnidirectional action combat** with projectiles, melee weapons, active items, spells/abilities, and eventually companion support.
 - **RPG depth** through experience, levels, attributes, skills, equipment, and meaningful build synergies.
 - **An escalating descent** featuring harder enemies, encounters, hazards, and bosses at greater dungeon depths.
@@ -51,7 +51,8 @@ The four content/design phases below follow the project's requested order. Techn
 ### Deliverables
 - [x] Create a project overview in `README.md`.
 - [x] Record the roadmap in `docs/ROADMAP.md`.
-- [ ] Choose a game engine, target platform, repository conventions, and issue labels **after** Phase 1 feasibility evaluation.
+- [x] Document engine and platform options in [ADR-001](decisions/ADR-001-engine-and-platform.md); **Godot 4.x + GDScript, desktop-PC-first** is proposed, not yet approved.
+- [ ] Accept D-01 after owner selection and a short technical spike; pin the version, platform, and repository conventions.
 - [ ] Decide whether this is a private fan prototype or intended for distribution; assess required intellectual-property permissions before public/commercial use.
 
 **Gate:** Documentation can be found and project goals are written down.
@@ -69,11 +70,12 @@ The four content/design phases below follow the project's requested order. Techn
 - [ ] Decide whether floor progression is linear, branching, or includes optional side objectives.
 
 ### 1B. Collapse-clock system — signature mechanic
-- [ ] Define the clock unit (e.g., abstract **collapse ticks**, not necessarily real-time seconds) and starting budget.
-- [ ] Resolve **exactly what charges the clock**: first entry to an unexplored room, every entry, certain doors, special actions, and/or combat. The starting hypothesis is **one charge per newly visited room**; revisit rules must be explicit.
+- [ ] Define the clock unit (e.g., abstract **collapse ticks**), starting budget, floor/depth tuning parameters, and minimum feasible budget for mandatory routes.
+- [ ] Define **configurable** clock triggers (first entry, every transition, events, and revisits), rather than committing to a uniform cost per room.
+- [ ] Provide data-driven policy overrides for **normal rooms, boss rooms, guild halls/safe hubs, special rooms, and revisits**; charge, waiver, pause, and refund behaviors remain design/testing decisions.
 - [ ] Show the player the expected cost **before** they choose a room transition; keep current budget visible during exploration.
 - [ ] Decide what happens at zero (immediate collapse, escape grace period, changing hazards, or another explicit rule).
-- [ ] Define mechanisms that increase/decrease time, including earned time, traps, special rooms, loot, and character skills.
+- [ ] Define mechanisms that increase/decrease/pause time, including earned time, traps, room-type modifiers, loot, and character skills; log clock changes for tuning.
 - [ ] Test for unwinnable procedural seeds, accidental softlocks, and incentives to avoid exploring altogether.
 
 **Key design tension:** The player should be tempted to explore *one more room* without feeling punished for random, unknowable requirements.
@@ -95,7 +97,8 @@ The four content/design phases below follow the project's requested order. Techn
 
 ### 1E. Presentation and technology
 - [ ] Set a pixel-art art bible: 16-bit-inspired style, sprite scale, tiles, palettes, silhouette readability, animations, effects, and UI.
-- [ ] Evaluate engine options against 2D tilemaps, deterministic procedural generation, combat collision, data-driven content, accessibility, save systems, and build targets.
+- [x] Evaluate engine and platform options against 2D tilemaps, deterministic procedural generation, combat collision, content architecture, licensing, and export; see [ADR-001](decisions/ADR-001-engine-and-platform.md).
+- [ ] Validate the proposed engine with a small seeded generation/combat/collapse spike before accepting D-01.
 - [ ] Choose input targets, minimum performance targets, and initial development platform.
 - [ ] Establish deterministic random seeds, debug overlays, and basic automated generator validation from day one.
 
@@ -249,10 +252,10 @@ Keep these in a living decision log and resolve them in Phase 1 unless noted.
 
 | ID | Decision | Current stance |
 | --- | --- | --- |
-| D-01 | Engine and deployment platform | **Open**; evaluate 2D-first options with a short prototype |
+| D-01 | Engine and deployment platform | **Proposed (ADR-001):** Godot 4.x + GDScript, desktop-PC-first; alternatives: Unity/C#, GameMaker/GML, Defold/Lua. Pending owner selection and spike. |
 | D-02 | Controller/keyboard/mouse aiming rules | **Open**; all-direction attack support is required |
-| D-03 | Collapse charge: first visit vs. every transition | **Open**; first visit only is the initial prototype hypothesis |
-| D-04 | Clock unit and starting budget | **Open**; use abstract ticks until tested |
+| D-03 | Collapse charge: first visit vs. every transition | **Open; configurable by room category and transition** (boss rooms and guild halls need distinct policies). |
+| D-04 | Clock unit and starting budget | **Open; tune** by floor size, mandatory route, special-room distribution, and playtest results. |
 | D-05 | What happens at zero clock | **Open**; must be explicit and fair |
 | D-06 | Floor size, room shapes, branch/loop distribution | **Open**; 40–80 rooms is a test range, not a commitment |
 | D-07 | Combat lock-in and room re-entry | **Open** |
@@ -299,10 +302,10 @@ These are ordered, small enough to turn into GitHub issues, and explicitly tied 
 
 1. **Write the game loop contract.** Define victory, failure, floor advance, per-run progression, and what happens between rooms. Deliver: `GAME_DESIGN.md` outline and one-page flow.
 2. **Specify collapse clock v0.** Document tick triggers, starting budget, HUD, zero-clock outcome, and edge cases. Deliver: `COLLAPSE_SYSTEM.md` with examples.
-3. **Create a seeded room-grid generator.** Make connected floors with start, exit, optional branches, and reachability checks. Deliver: testable generation code and seed output.
-4. **Prototype room navigation and discovery.** Movement, doors, transitions, minimap, and previously visited state.
+3. **Validate D-01 with an engine spike.** Test a seeded room graph, movement and aim, one projectile and melee attack, and data-driven boss-room/guild-hall collapse policies. Deliver: a greybox build and a short acceptance report per [ADR-001](decisions/ADR-001-engine-and-platform.md).
+4. **Extend seeded generation and navigation.** Add connected floor layout, optional branches, room transitions, minimap, and visit persistence.
 5. **Prototype combat primitives.** One ranged projectile and one melee attack in any direction; basic enemy dummy and collision/damage.
-6. **Prototype collapse integration.** Clock changes on the agreed transition event, communicates costs, and enforces a consistent fail state.
+6. **Prototype configurable collapse integration.** Clock uses category/entry/revisit policy, previews costs, and enforces a consistent fail state.
 7. **Define the RPG/inventory minimum.** XP, one level-up choice, one equippable weapon, and one active-use item.
 8. **Create the source taxonomy and catalogue schema.** Pick book/chapter citation format, spoiler handling, review fields, and stable IDs.
 9. **Catalogue a small verified research sample.** Select one agreed source segment, record interactions and equipment, and test filtering into gameplay candidates.
@@ -325,7 +328,7 @@ A task is done when its output:
 | Risk | Mitigation |
 | --- | --- |
 | Huge floor size becomes repetitive | Test critical-path length, unique room functions, navigation friction, and optional detours early |
-| Collapse clock creates unwinnable or frustrating runs | Seed validation; known minimum route cost; preview room-entry costs; grace/recovery design |
+| Collapse clock creates unwinnable or frustrating runs | Seed validation; mandatory route cost; boss/guild-hall-specific tuning; previewed clock impact; grace/recovery design |
 | Exhaustive book cataloguing delays the game | Build representative samples and a playable core first; expand catalogue continuously |
 | Content becomes difficult to tune | Shared schemas, deterministic tests, separate canon facts from game stats |
 | Descending floors become numerical HP inflation | Design enemy roles, encounters, counters, and telegraphs, not just stat multipliers |

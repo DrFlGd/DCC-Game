@@ -1,6 +1,6 @@
-# DCC Game — Godot Greybox Prototype
+# DCC Game — Godot 32×32 Stone-Crypt Prototype
 
-This is the **D-01 Option A technical spike**, not a finished game. It uses drawn debug shapes (no copyrighted art/assets) to test the mechanics and structure before adding content and sprites.
+This is the **D-01 Option A technical spike**, not a finished game. The first environment now uses a **32×32 logical tile grid** and a compact atlas of original placeholder pixel-art assets. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
 
 ## Engine
 
@@ -11,7 +11,7 @@ This is the **D-01 Option A technical spike**, not a finished game. It uses draw
 1. Install Godot 4.7.2 standard.
 2. Open Godot Project Manager and **Import** `game/project.godot` from this repository.
 3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project.
-4. Move through colored door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted).
+4. Walk toward the decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
 
 | Input | Action |
 | --- | --- |
@@ -32,6 +32,16 @@ This is the **D-01 Option A technical spike**, not a finished game. It uses draw
 - Visible tick/health HUD, door preview of net tick effects, and end-of-run/restart handling.
 - Omnidirectional aim; ranged fire and directional melee; basic damage and enemy AI; enemy health/state maintained across revisits.
 - A seeded smoke-test suite covering topology, deterministic generation, room tags, policies, and a route-budget diagnostic.
+- **32×32 stone floor and rotated masonry wall tiles**, two-tile door gaps, direction-rotated doors, and original player/rat-scavenger/boss sprite placeholders. See [the atlas specification](assets/README.md).
+
+## Visual and tile layout
+
+The room interior is **24 columns × 10 rows = 768 × 320 logical pixels**, with one 32-pixel wall ring outside the floor. Doors occupy a **64-pixel (two-tile) opening** centered on each side where the procedural room graph provides a connection. Walls are rotated 0°/180°/±90° depending on the side; floor tiles rotate by 90° increments to vary repetition. Doors likewise rotate to face the direction of travel.
+
+The sprite atlas uses a deliberately limited palette and nearest-neighbor filtering. The default player and regular enemy are drawn at **48×48 pixels** (1.5 tiles), while the boss is **96×96 pixels** (3 tiles). These are render footprints, **not final collision radii or finalized animation resolutions**. The source artwork was downscaled from larger exploratory pixel-art images and is provisional; final production tilesets will require cleaned-up edge transitions and animation frames. The game currently has 32px tile *drawing* and simple bounding-area traversal, not Godot TileMapLayer physics or collision-per-tile.
+
+The 64-pixel door image is opaque and decorative, so connected doors currently look closed even when they permit travel. Real door-state sprites and animations are on the art backlog.
+
 
 ## Editing the clock and floor
 
@@ -63,6 +73,9 @@ GitHub Actions also defines a headless smoke check in `.github/workflows/godot-c
 game/
 ├── project.godot
 ├── README.md
+├── assets/
+│   ├── README.md              # 32px atlas layout and rotations
+│   └── crypt_atlas.png        # floor, wall, door, player, enemy, boss
 ├── scenes/Main.tscn
 ├── scripts/
 │   ├── main.gd                 # renderer, input, room transitions, combat & HUD
@@ -74,7 +87,7 @@ game/
 
 ### Important scope limits
 
-This is a **minimal engine-validation build**, not the Phase 5 vertical slice: combat uses a simple chasing dummy, room interiors are debug rectangles, there is only one floor, and there are no inventory/skills, companion AI, art assets, audio, or saves. The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **minimal engine-validation build**, not the Phase 5 vertical slice: combat uses a simple chasing enemy, room interiors have a starter tiling treatment rather than finished level art, there is only one floor, and there are no inventory/skills, companion AI, animation frames, audio, or saves. The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

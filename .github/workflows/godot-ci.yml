@@ -31,5 +31,7 @@ jobs:
         run: godot --headless --path game --editor --quit
       - name: Run deterministic smoke tests
         run: godot --headless --path game --script res://tests/smoke_test.gd
+      - name: Run live menu integration checks
+        run: godot --headless --path game --script res://tests/menu_integration_test.gd
       - name: Launch main scene briefly
         run: godot --headless --path game --quit-after 5

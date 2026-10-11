@@ -17,14 +17,14 @@
         "WIS": 10,
         "CHA": 5
       },
-      "speed": 86,
-      "collision_radius": 12,
+      "speed": 43,
+      "collision_radius": 6,
       "behavior": {
         "mode": "chase",
         "pathfinding": "grid_bfs",
         "repath_seconds": 0.35,
-        "preferred_distance": 26,
-        "detection_range": 900
+        "preferred_distance": 13,
+        "detection_range": 450
       },
       "attacks": [
         {
@@ -32,7 +32,7 @@
           "type": "melee",
           "ability": "STR",
           "proficient": true,
-          "range": 38,
+          "range": 19,
           "cooldown": 1.05,
           "damage_die": 4,
           "damage_bonus": 0
@@ -57,14 +57,14 @@
         "WIS": 11,
         "CHA": 4
       },
-      "speed": 73,
-      "collision_radius": 12,
+      "speed": 37,
+      "collision_radius": 6,
       "behavior": {
         "mode": "kite",
         "pathfinding": "grid_bfs",
         "repath_seconds": 0.4,
-        "preferred_distance": 210,
-        "detection_range": 900
+        "preferred_distance": 105,
+        "detection_range": 450
       },
       "attacks": [
         {
@@ -72,11 +72,11 @@
           "type": "ranged",
           "ability": "DEX",
           "proficient": true,
-          "range": 370,
+          "range": 185,
           "cooldown": 2.2,
           "damage_die": 4,
           "damage_bonus": 0,
-          "projectile_speed": 235
+          "projectile_speed": 117.5
         }
       ]
     },
@@ -98,14 +98,14 @@
         "WIS": 9,
         "CHA": 5
       },
-      "speed": 56,
-      "collision_radius": 18,
+      "speed": 28,
+      "collision_radius": 9,
       "behavior": {
         "mode": "chase",
         "pathfinding": "grid_bfs",
         "repath_seconds": 0.25,
-        "preferred_distance": 31,
-        "detection_range": 900
+        "preferred_distance": 15.5,
+        "detection_range": 450
       },
       "attacks": [
         {
@@ -113,7 +113,7 @@
           "type": "melee",
           "ability": "STR",
           "proficient": true,
-          "range": 46,
+          "range": 23,
           "cooldown": 1.6,
           "damage_die": 6,
           "damage_bonus": 0
@@ -138,14 +138,14 @@
         "WIS": 10,
         "CHA": 7
       },
-      "speed": 62,
-      "collision_radius": 28,
+      "speed": 31,
+      "collision_radius": 14,
       "behavior": {
         "mode": "chase",
         "pathfinding": "grid_bfs",
         "repath_seconds": 0.3,
-        "preferred_distance": 45,
-        "detection_range": 900
+        "preferred_distance": 22.5,
+        "detection_range": 450
       },
       "attacks": [
         {
@@ -153,7 +153,7 @@
           "type": "melee",
           "ability": "STR",
           "proficient": true,
-          "range": 60,
+          "range": 30,
           "cooldown": 1.85,
           "damage_die": 8,
           "damage_bonus": 1

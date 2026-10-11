@@ -207,6 +207,9 @@ func _unhandled_input(event: InputEvent) -> void:
                 _start_run(seed_value)
             elif key_event.keycode == KEY_N:
                 _start_run(int(Time.get_ticks_usec() % 2147483647))
+            elif key_event.keycode == KEY_F9 and outcome == "running" and player_level < 20:
+                # Prototype playtest shortcut: jump to the next XP threshold.
+                _award_xp(maxi(0, RPG.next_level_xp(player_level) - player_xp))
 
 
 func _physics_process(delta: float) -> void:

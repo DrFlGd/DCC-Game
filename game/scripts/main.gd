@@ -6,12 +6,23 @@ const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 
 const VIEW_SIZE := Vector2(960, 540)
-const ARENA := Rect2(86.0, 116.0, 788.0, 316.0)
-const CENTER := Vector2(480, 274)
-const DOOR_HALF_WIDTH := 44.0
+const TILE_SIZE := 32.0
+const ROOM_COLUMNS := 24
+const ROOM_ROWS := 10
+const ARENA := Rect2(96.0, 112.0, 768.0, 320.0)
+const CENTER := Vector2(480, 272)
+const DOOR_HALF_WIDTH := 32.0
 const PLAYER_RADIUS := 11.0
 const BULLET_SPEED := 445.0
 const MOVE_LABELS := ["N", "E", "S", "W"]
+
+const ATLAS = preload("res://assets/crypt_atlas.png")
+const ART_FLOOR := Rect2(0.0, 0.0, 32.0, 32.0)
+const ART_WALL := Rect2(32.0, 0.0, 32.0, 32.0)
+const ART_DOOR := Rect2(64.0, 0.0, 64.0, 64.0)
+const ART_PLAYER := Rect2(0.0, 64.0, 48.0, 48.0)
+const ART_ENEMY := Rect2(48.0, 64.0, 48.0, 48.0)
+const ART_BOSS := Rect2(96.0, 64.0, 96.0, 96.0)
 
 var config: Dictionary = {}
 var floor: Dictionary = {}
@@ -41,6 +52,7 @@ var rooms_entered := 1
 
 
 func _ready() -> void:
+    texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     var raw: String = FileAccess.get_file_as_string("res://data/prototype_rules.json")
     var parsed = JSON.parse_string(raw)
     if not parsed is Dictionary:
@@ -314,103 +326,128 @@ func _draw() -> void:
 
 func _draw_room() -> void:
     var kind: String = String(_room()["kind"])
-    var tiles: Color = Color("#263443")
+    # Use 32x32 source tiles; rotate alternating slabs to reduce obvious repeats.
+    for y in range(ROOM_ROWS):
+        for x in range(ROOM_COLUMNS):
+            var cell_center: Vector2 = ARENA.position + Vector2(
+                float(x) * TILE_SIZE + TILE_SIZE * 0.5,
+                float(y) * TILE_SIZE + TILE_SIZE * 0.5
+            )
+            var rotation: float = float((x * 7 + y * 11) % 4) * PI * 0.5
+            _atlas_piece(ART_FLOOR, cell_center, Vector2(32, 32), rotation)
+
+    var tint := Color.TRANSPARENT
     match kind:
         "boss":
-            tiles = Color("#3b2635")
+            tint = Color(0.30, 0.05, 0.09, 0.20)
         "guild_hall":
-            tiles = Color("#243d38")
+            tint = Color(0.04, 0.30, 0.22, 0.15)
         "exit":
-            tiles = Color("#423926")
+            tint = Color(0.35, 0.24, 0.06, 0.14)
+    if tint.a > 0.0:
+        draw_rect(ARENA, tint)
 
-    draw_rect(ARENA, tiles)
-    # Checkerboard gives scale/visual structure without art dependencies.
-    for ix in range(25):
-        for iy in range(10):
-            if (ix + iy) % 2 == 0:
-                var cell_pos := ARENA.position + Vector2(ix * 32.0, iy * 32.0)
-                draw_rect(Rect2(cell_pos, Vector2(32, 32)), Color(1.0, 1.0, 1.0, 0.027))
-
-    var wall := Color("#111821")
-    draw_rect(Rect2(ARENA.position.x - 16, ARENA.position.y - 16, ARENA.size.x + 32, 16), wall)
-    draw_rect(Rect2(ARENA.position.x - 16, ARENA.end.y, ARENA.size.x + 32, 16), wall)
-    draw_rect(Rect2(ARENA.position.x - 16, ARENA.position.y, 16, ARENA.size.y), wall)
-    draw_rect(Rect2(ARENA.end.x, ARENA.position.y, 16, ARENA.size.y), wall)
-
+    # A 32px wall ring, with 64px-wide physical gaps where graph links exist.
+    # Rotate the same masonry to keep its stone-edge orientation consistent.
     var links: Dictionary = _room()["neighbors"]
+    for x in range(-1, ROOM_COLUMNS + 1):
+        if not (links.has("N") and (x == ROOM_COLUMNS / 2 - 1 or x == ROOM_COLUMNS / 2)):
+            _atlas_piece(ART_WALL, Vector2(ARENA.position.x + (float(x) + 0.5) * TILE_SIZE,
+                ARENA.position.y - 16.0), Vector2(32, 32))
+        if not (links.has("S") and (x == ROOM_COLUMNS / 2 - 1 or x == ROOM_COLUMNS / 2)):
+            _atlas_piece(ART_WALL, Vector2(ARENA.position.x + (float(x) + 0.5) * TILE_SIZE,
+                ARENA.end.y + 16.0), Vector2(32, 32), PI)
+
+    for y in range(ROOM_ROWS):
+        if not (links.has("W") and (y == ROOM_ROWS / 2 - 1 or y == ROOM_ROWS / 2)):
+            _atlas_piece(ART_WALL, Vector2(ARENA.position.x - 16.0,
+                ARENA.position.y + (float(y) + 0.5) * TILE_SIZE), Vector2(32, 32), -PI * 0.5)
+        if not (links.has("E") and (y == ROOM_ROWS / 2 - 1 or y == ROOM_ROWS / 2)):
+            _atlas_piece(ART_WALL, Vector2(ARENA.end.x + 16.0,
+                ARENA.position.y + (float(y) + 0.5) * TILE_SIZE), Vector2(32, 32), PI * 0.5)
+
     for direction in MOVE_LABELS:
         if not links.has(direction):
             continue
         var next_id: int = int(links[direction])
         var next_room: Dictionary = floor["rooms"][next_id]
-        var preview: Dictionary = rules.evaluate(
-            ticks, String(next_room["kind"]), not visited.has(next_id), next_id
-        )
-        var color: Color = Color("#69cca8")
+        var preview: Dictionary = rules.evaluate(ticks, String(next_room["kind"]),
+            not visited.has(next_id), next_id)
+        var tone := Color.WHITE
         if next_room["kind"] == "guild_hall":
-            color = Color("#7ac9ff")
+            tone = Color("#a4efe1")
         elif next_room["kind"] == "boss":
-            color = Color("#f08282")
+            tone = Color("#f5b0b0")
         elif next_room["kind"] == "exit":
-            color = Color("#f4cd7b") if boss_defeated else Color("#bd5969")
-        var width := DOOR_HALF_WIDTH * 2.0
-        var bar: Rect2
-        var label_pos: Vector2
+            tone = Color("#f9d57e") if boss_defeated else Color("#c77179")
+        var midpoint := CENTER
+        var rotation := 0.0
+        var label_pos := CENTER
         match direction:
             "N":
-                bar = Rect2(CENTER.x - DOOR_HALF_WIDTH, ARENA.position.y - 16, width, 16)
-                label_pos = Vector2(CENTER.x - 22, ARENA.position.y + 12)
+                midpoint = Vector2(CENTER.x, ARENA.position.y)
+                label_pos = midpoint + Vector2(-19, 25)
             "S":
-                bar = Rect2(CENTER.x - DOOR_HALF_WIDTH, ARENA.end.y, width, 16)
-                label_pos = Vector2(CENTER.x - 22, ARENA.end.y - 6)
+                midpoint = Vector2(CENTER.x, ARENA.end.y)
+                rotation = PI
+                label_pos = midpoint + Vector2(-19, -18)
             "W":
-                bar = Rect2(ARENA.position.x - 16, CENTER.y - DOOR_HALF_WIDTH, 16, width)
-                label_pos = Vector2(ARENA.position.x + 4, CENTER.y + 4)
-            _:
-                bar = Rect2(ARENA.end.x, CENTER.y - DOOR_HALF_WIDTH, 16, width)
-                label_pos = Vector2(ARENA.end.x - 45, CENTER.y + 4)
-        draw_rect(bar, color)
-        var change: int = int(preview["cost"]) - int(preview["grant"])
-        _text("%s%+d" % [direction, -change], label_pos, 13, Color.WHITE)
+                midpoint = Vector2(ARENA.position.x, CENTER.y)
+                rotation = -PI * 0.5
+                label_pos = midpoint + Vector2(28, 4)
+            "E":
+                midpoint = Vector2(ARENA.end.x, CENTER.y)
+                rotation = PI * 0.5
+                label_pos = midpoint + Vector2(-58, 4)
+        _atlas_piece(ART_DOOR, midpoint, Vector2(64, 64), rotation, tone)
+        var net_ticks: int = int(preview["grant"]) - int(preview["cost"])
+        _text("%s%+d" % [direction, net_ticks], label_pos, 13, Color.WHITE)
 
     if kind == "guild_hall":
-        draw_rect(Rect2(CENTER + Vector2(-30, -27), Vector2(60, 54)), Color("#3e9e8a"))
-        _text("GUILD", CENTER + Vector2(-25, 5), 12, Color.WHITE)
+        draw_circle(CENTER, 23.0, Color(0.08, 0.47, 0.36, 0.76))
+        _text("GUILD", CENTER + Vector2(-23, 5), 12, Color.WHITE)
     elif kind == "boss":
-        _text("BOSS CHAMBER", Vector2(409, 160), 18, Color("#ffacbd"))
+        _text("BOSS CHAMBER", Vector2(409, 159), 18, Color("#ffacbd"))
     elif kind == "exit":
-        draw_rect(Rect2(CENTER + Vector2(-32, -30), Vector2(64, 60)), Color("#c49b52"))
-        _text("EXIT", CENTER + Vector2(-20, 6), 15, Color("#151721"))
+        draw_rect(Rect2(CENTER - Vector2(30, 30), Vector2(60, 60)), Color("#9c783c"))
+        _text("EXIT", CENTER + Vector2(-17, 5), 15, Color.WHITE)
 
 
 func _draw_combat() -> void:
     for projectile in projectiles:
-        var point: Vector2 = projectile["pos"]
-        draw_rect(Rect2(point - Vector2(4, 4), Vector2(8, 8)), Color("#fce38a"))
+        var pos: Vector2 = projectile["pos"]
+        draw_rect(Rect2(pos - Vector2(4, 4), Vector2(8, 8)), Color("#fce38a"))
     if not enemy.is_empty():
-        var point: Vector2 = enemy["pos"]
-        var radius: float = float(enemy["radius"])
-        draw_rect(Rect2(point - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0)),
-            Color("#bb526d") if _room()["kind"] == "boss" else Color("#e18b68"))
+        var pos: Vector2 = enemy["pos"]
+        var boss_room: bool = _room()["kind"] == "boss"
+        var bounds := Vector2(96, 96) if boss_room else Vector2(48, 48)
+        _atlas_piece(ART_BOSS if boss_room else ART_ENEMY, pos, bounds)
         var hp_ratio: float = float(enemy["hp"]) / float(enemy["max_hp"])
-        draw_rect(Rect2(point.x - 21.0, point.y - radius - 12.0, 42.0, 5.0), Color("#181a24"))
-        draw_rect(Rect2(point.x - 21.0, point.y - radius - 12.0, 42.0 * hp_ratio, 5.0),
+        draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0, 48.0, 6.0),
+            Color("#181a24"))
+        draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0, 48.0 * hp_ratio, 6.0),
             Color("#a5d49b"))
 
-    var player_color := Color("#8de5e2")
-    if invincible_seconds > 0.0:
-        player_color = Color("#ffffff")
-    draw_rect(Rect2(player_position - Vector2(PLAYER_RADIUS, PLAYER_RADIUS),
-        Vector2(PLAYER_RADIUS * 2.0, PLAYER_RADIUS * 2.0)), player_color)
-    draw_line(player_position, player_position + aim_direction * 25.0, Color("#ffe0a1"), 3.0)
+    _atlas_piece(ART_PLAYER, player_position, Vector2(48, 48))
+    # This aim line and melee arc remain prototype indicators, not final animations.
+    draw_line(player_position, player_position + aim_direction * 28.0, Color("#ffe0a1"), 2.0)
     if melee_flash > 0.0:
-        draw_arc(player_position, 55.0, aim_direction.angle() - 0.70,
+        draw_arc(player_position, 58.0, aim_direction.angle() - 0.70,
             aim_direction.angle() + 0.70, 12, Color("#f7e6a3"), 5.0)
+    if invincible_seconds > 0.0:
+        draw_circle(player_position, 20.0, Color(1.0, 1.0, 1.0, 0.16))
+
+
+func _atlas_piece(region: Rect2, center_point: Vector2, size: Vector2,
+        rotation: float = 0.0, modulation: Color = Color.WHITE) -> void:
+    draw_set_transform(center_point, rotation, Vector2.ONE)
+    draw_texture_rect_region(ATLAS, Rect2(-size * 0.5, size), region, modulation)
+    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_hud() -> void:
     var room: Dictionary = _room()
-    _text("DCC GAME | GREYBOX", Vector2(18, 26), 20, Color("#f5dda2"))
+    _text("DCC GAME | 32PX CRYPT ART", Vector2(18, 26), 20, Color("#f5dda2"))
     _text("SEED %d | ROOM %d (%s) | VISITED %d/%d" % [
         initial_seed, current_room_id, String(room["kind"]).to_upper(),
         visited.size(), (floor["rooms"] as Array).size()
@@ -423,9 +460,9 @@ func _draw_hud() -> void:
     _draw_minimap()
     _text("WASD / arrows: move  |  mouse: aim  |  left click: fire  |  space: melee",
         Vector2(18, 475), 15, Color("#e0e9f0"))
-    _text("R: replay seed  |  N: new seed  |  Door labels preview tick change",
+    _text("R: replay seed  |  N: new seed  |  Door labels: net collapse ticks",
         Vector2(18, 498), 14, Color("#b8cfde"))
-    _text("Boss defeats unlock exit.  Guild halls can grant ticks.  Settings: data/prototype_rules.json",
+    _text("Stone crypt 32px tiles | Boss unlocks exit | Rules: data/prototype_rules.json",
         Vector2(18, 521), 12, Color("#97d2b7"))
 
 

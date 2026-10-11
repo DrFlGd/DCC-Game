@@ -3,8 +3,15 @@ extends CanvasLayer
 ## Esc toggles pause; level-up must be allocated before combat resumes.
 signal resume_requested
 signal allocation_confirmed(changes: Dictionary)
+signal resolution_requested(size: Vector2i)
 
 const RPG = preload("res://scripts/rpg_rules.gd")
+const RESOLUTION_PRESETS := [
+    Vector2i(800, 600), Vector2i(960, 540), Vector2i(1024, 768),
+    Vector2i(1280, 720), Vector2i(1280, 800), Vector2i(1366, 768),
+    Vector2i(1440, 900), Vector2i(1600, 900), Vector2i(1920, 1080),
+    Vector2i(2560, 1440), Vector2i(3840, 2160)
+]
 const ABILITY_NAMES := {
     "STR": "Strength", "DEX": "Dexterity", "CON": "Constitution",
     "INT": "Intelligence", "WIS": "Wisdom", "CHA": "Charisma"
@@ -17,6 +24,9 @@ var context: Dictionary = {}
 var staged: Dictionary = {}
 var point_pool := 0
 var score_cap := 20
+var selected_resolution := Vector2i(960, 540)
+var current_resolution := Vector2i(960, 540)
+var resolution_feedback := ""
 var overlay: Control
 var center: CenterContainer
 
@@ -53,6 +63,9 @@ func show_pause(new_scores: Dictionary, new_context: Dictionary) -> void:
     context = new_context.duplicate(true)
     mode = "pause"
     page = "overview"
+    current_resolution = Vector2i(new_context.get("window_size", Vector2i(960, 540)))
+    selected_resolution = current_resolution if RESOLUTION_PRESETS.has(current_resolution) else Vector2i(960, 540)
+    resolution_feedback = ""
     _refresh()
 
 
@@ -101,6 +114,22 @@ func _resume() -> void:
         return
     close_menu()
     resume_requested.emit()
+
+
+func _select_resolution(index: int) -> void:
+    if mode != "pause" or index < 0 or index >= RESOLUTION_PRESETS.size():
+        return
+    selected_resolution = RESOLUTION_PRESETS[index]
+
+
+func _apply_resolution() -> void:
+    if mode != "pause" or not RESOLUTION_PRESETS.has(selected_resolution):
+        return
+    resolution_requested.emit(selected_resolution)
+    resolution_feedback = "Requested %d × %d (windowed)" % [
+        selected_resolution.x, selected_resolution.y
+    ]
+    _refresh()
 
 
 func _open_character_page() -> void:
@@ -209,10 +238,25 @@ func _pause_content(content: VBoxContainer) -> void:
         int(context.get("level", 1)), int(context.get("xp", 0)),
         int(context.get("hp", 1)), int(context.get("max_hp", 1)),
         int(context.get("ac", 10))], 18, Color.WHITE))
-    content.add_child(_text("Check your build, then return to the dungeon.",
-        13, Color("#bacad6")))
-    var stats := _button("View character stats", Callable(self, "_open_character_page"))
-    content.add_child(stats)
+    content.add_child(_button("View character stats", Callable(self, "_open_character_page")))
+    content.add_child(_text("DISPLAY RESOLUTION (windowed)", 14, Color("#f6d48d")))
+    var resolution_row := HBoxContainer.new()
+    resolution_row.add_theme_constant_override("separation", 10)
+    content.add_child(resolution_row)
+    var selector := OptionButton.new()
+    selector.custom_minimum_size = Vector2(225, 32)
+    for resolution in RESOLUTION_PRESETS:
+        selector.add_item("%d × %d" % [resolution.x, resolution.y])
+    selector.select(RESOLUTION_PRESETS.find(selected_resolution))
+    selector.item_selected.connect(_select_resolution)
+    resolution_row.add_child(selector)
+    var apply := _button("Apply resolution", Callable(self, "_apply_resolution"))
+    resolution_row.add_child(apply)
+    content.add_child(_text("Current: %d × %d  |  World room remains 24 × 24 tiles" % [
+        current_resolution.x, current_resolution.y
+    ], 12, Color("#9eb8c4")))
+    if not resolution_feedback.is_empty():
+        content.add_child(_text(resolution_feedback, 12, Color("#a9e7c5")))
     var resume := _button("Resume game  (Esc)", Callable(self, "_resume"))
     content.add_child(resume)
     content.add_child(_text("WASD: move   Mouse: aim   Left click: shoot   Space: melee",

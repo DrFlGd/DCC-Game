@@ -53,6 +53,25 @@ func _run() -> void:
     main._input(escape)
     check(ui.mode == "closed", "Escape resumes from stat page")
 
+    # Resolution selection is available directly in pause; it changes only
+    # screen dimensions, never the fixed 24x24 tile world.
+    main._input(escape)
+    check(ui.mode == "pause", "pause reopens for display settings")
+    check(ui.RESOLUTION_PRESETS.has(Vector2i(1280, 720)) and
+        ui.RESOLUTION_PRESETS.has(Vector2i(1920, 1080)),
+        "standard resolution presets included")
+    var choice: int = ui.RESOLUTION_PRESETS.find(Vector2i(1280, 720))
+    ui._select_resolution(choice)
+    check(ui.selected_resolution == Vector2i(1280, 720),
+        "resolution dropdown stages the selected dimensions")
+    ui._apply_resolution()
+    check(main.get_window().size == Vector2i(1280, 720),
+        "Apply changes Godot's actual window size")
+    check(main.ROOM.size == Vector2(384, 384),
+        "resolution cannot change gameplay room dimensions")
+    main._input(escape)
+    check(ui.mode == "closed", "pause closes after resolution apply")
+
     # A multi-level XP award must queue all points, even when levels are skipped.
     main._start_run(424242)
     main._award_xp(2700)

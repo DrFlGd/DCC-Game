@@ -11,7 +11,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 1. Install Godot 4.7.2 standard.
 2. Open Godot Project Manager and **Import** `game/project.godot` from this repository.
 3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project.
-4. Resize the game window by dragging an edge; the number of 32px room tiles changes to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
+4. Resize the game window by dragging an edge; the room remains **24×24 tiles** and scales to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
 
 | Input | Action |
 | --- | --- |
@@ -22,7 +22,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | R | Restart using same seed |
 | N | Restart using a new seed |
 
-**Goal:** defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Green/cyan guild halls grant bonus ticks under the current *sample* configuration. Enemies in ordinary rooms chase and contact-damage the player. The minimap shows rooms that have been visited; the exit is visible from the start so the goal is discoverable.
+**Goal:** defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Guild halls grant sample bonus ticks. Normal rooms contain **2–4 enemies** using melee or ranged attacks and basic pathfinding; the boss room contains multiple enemies. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
 ## What works
 
@@ -35,24 +35,32 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 - **Correctly assigned stone floor and masonry wall tiles**, dedicated corner pieces, two-tile door gaps, and direction-rotated doors.
 - **Eight-way facing sprites** for the player (mouse aim), rat enemy, and armored boss (AI pursuit direction).
 - **Separate per-biome and per-character/enemy assets** rather than a master atlas. See [asset conventions](assets/README.md).
-- **Responsive room and HUD** tied to window size, with 32px tile alignment and even tile counts; minimum supported window is 720×480.
+- **Fixed 24×24 interior tiles**, independent of display size; resize only changes the rendering scale and screen-space HUD. Minimum window size is 720×480.
+- **Deterministic rubble and pillar obstacles**, tested for walkable routes from room center to every connected exit.
+- **Data-driven multi-enemy encounters**, pathfinding/attack behavior, and a six-ability d20-inspired XP/level system.
 
 ## Visual and tile layout
 
 D-13 selects **32×32 environment tiles**. Floor and wall textures have been corrected: the brown cracked-stone slab is used for walkable floor, the cool gray masonry for perimeter walls. A special corner tile (rotated 90° on other corners) joins perpendicular sides. Each connected room has a **two-tile, 64px doorway**, decorated by a rotated 64×64 door image.
 
-Unlike the original fixed 24×10 room, the number of visible columns and rows **adjusts to your window size** while keeping tiles at 32 logical pixels. The Godot project launches at 960×540, can be resized down to 720×480, and expands the room grid as the window grows. The viewport no longer stretches a fixed 960×540 drawing surface. HUD and minimap positions follow the window edges. Resize calculations live in `scripts/room_layout.gd`.
+**Every room interior is exactly 24 columns × 24 rows = 768×768 world pixels.** Resizing the window only changes its display scale and centering, not tile count, door/obstacle locations, speeds, or hit distances. The game starts in a 960×540 window (minimum 720×480). The viewport retains an entire-room view, so sprites appear small in very short windows; a follow-camera zoom is a possible future design option. Mouse aiming maps screen coordinates into this fixed world. See `scripts/room_layout.gd`.
 
 The crawler and rat are drawn from separate **384×48** sprite sheets, and the boss from a **768×96** sprite sheet. Each contains eight compass views, in order E, SE, S, SW, W, NW, N, NE. The player chooses the frame from **mouse aim** and enemies choose it from their **movement direction**. The 8 views are first-pass placeholders, not animated walking cycles, and gameplay hit detection remains based on simple collision radii.
 
 See the [per-category art file layout](assets/README.md). The door appears visually closed although it permits travel when connected and not gated; proper door states are a subsequent asset task.
+
+## Enemy and RPG design references
+
+See [the gameplay systems specification](../docs/design/ROOM_ENEMY_RPG_PROTOTYPE.md) for how to add enemy types, pick chase/kite/guard behavior, choose BFS/direct/stationary navigation, edit melee or ranged attacks/abilities, and tune enemy XP. The player HUD shows six attributes, AC, HP, proficiency, level, and cumulative XP. D20 attacks use relevant stat modifiers, proficiency, and armor class. This is an action-game adaptation, **not full tabletop D&D**.
 
 ## Editing the clock and floor
 
 Open `data/prototype_rules.json`. Restart the game after editing it.
 
 - `seed`: initial deterministic layout. Use **R** to reproduce a run, **N** for a new seed.
-- `room_count`: number of rooms in the floor; 22 is deliberately small for an engine spike.
+- `room_count`: number of **rooms in the floor**, unrelated to the fixed 24×24 **tiles per room**; 22 is a test value.
+- `obstacle_count`: target blocking prop count for normal rooms; safe rooms use fewer.
+- `player_ability_scores`: six editable starting attributes (STR/DEX/CON/INT/WIS/CHA); HP, AC, attack bonuses, and progression derive from these.
 - `start_ticks`: starting collapse budget.
 - `collapse.default.first_entry_cost` / `revisit_cost`: fallback transition cost.
 - `collapse.room_types.<kind>`: optional override for `start`, `normal`, `boss`, `guild_hall`, `exit`; currently boss costs 3, guild hall costs 0 and grants 3, exit costs 1.
@@ -88,20 +96,25 @@ game/
 ├── scripts/
 │   ├── main.gd                 # renderer, input, room transitions, combat & HUD
 │   ├── floor_generator.gd      # deterministic graph and route queries
-│   ├── room_layout.gd          # responsive window-to-tile-grid calculations
+│   ├── room_layout.gd          # fixed 24x24 world, fit-to-window scale
+│   ├── room_contents.gd        # obstacle generator and reachability checks
+│   ├── enemy_system.gd         # definitions, encounters, navigation
+│   ├── rpg_rules.gd            # six stats, d20 attack and XP progression
 │   └── collapse_policy.gd     # room-specific timing policy and ledger
-├── data/prototype_rules.json # tweakable floor/combat/timer configuration
+├── data/
+│   ├── prototype_rules.json    # collapse, obstacle count, player abilities
+│   └── enemies.json            # enemy behavior, stats, attacks, encounter tables
 └── tests/smoke_test.gd       # headless logic checks
 ```
 
 ### Important scope limits
 
-This is a **minimal engine-validation build**, not the Phase 5 vertical slice: combat uses a simple chasing enemy, room interiors have a starter tiling treatment rather than finished level art, there is only one floor, and there are no inventory/skills, companion AI, movement/attack animation cycles, audio, or saves. The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies and a starter XP/stat system, but it has only one floor, no classes or skill selection, no inventory/loot, no companion AI, no finished movement/attack animations, audio, or saves. The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 
 - If Godot cannot locate the main scene, make sure you imported/opened the **game/** directory, not the repository root.
 - If controls do not respond, click inside the running game window.
-- Resize the window by dragging its border. The floor grid should add/remove complete 32px tiles while the player, doors and overlays retain their placement.
+- Resize the window by dragging its border. The **24×24 room never changes**; only its visual scale/centering and screen-space HUD change.
 - Replaying with **R** repeats the graph exactly but moment-to-moment mouse and keyboard inputs are not recorded.
 - If an edited JSON file is invalid, the game reports an error and exits; use the headless smoke-test command after making rule changes.

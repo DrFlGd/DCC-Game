@@ -103,6 +103,7 @@ The four content/design phases below follow the project's requested order. Techn
 
 ### 1E. Presentation and technology
 - [ ] Set a pixel-art art bible: 16-bit-inspired style, sprite scale, tiles, palettes, silhouette readability, animations, effects, and UI.
+- [ ] **D-15 — Catalogue dungeon biomes and their tilesets.** Create a proposed biome list and define the visual/environmental identity of each; for every biome specify tile families (floors, walls, corners, doors, thresholds, obstacles, decals, hazards, and transitions), palette and lighting, room features, navigation/collision requirements, and environmental gameplay hooks. Distinguish source-inspired candidates from original designs. Keep tile dimensions pending D-13.
 - [x] Evaluate engine and platform options against 2D tilemaps, deterministic procedural generation, combat collision, content architecture, licensing, and export; see [ADR-001](decisions/ADR-001-engine-and-platform.md).
 - [x] Implement a first seeded generator/combat/collapse technical spike in [`game/`](../game/README.md).
 - [ ] Validate the Godot 4.7.2 prototype via headless tests and interactive playtesting (not executed in this authoring environment).
@@ -192,6 +193,7 @@ The four content/design phases below follow the project's requested order. Techn
 - [ ] Record AI state/behavior, attack telegraphs, projectile patterns, reactions, environmental dependencies, and counters.
 - [ ] Tag canon lineage/source where appropriate; distinguish invented and adapted enemies.
 - [ ] Define room encounter budgets, composition rules, environmental hazards, spawn placement constraints, and floor-specific themes.
+- [ ] Cross-reference encounter tables with the D-15 biome catalogue so enemy placement, hazards, and environmental effects suit each biome.
 
 ### Provisional progression bands
 
@@ -273,6 +275,7 @@ Keep these in a living decision log and resolve them in Phase 1 unless noted.
 | D-12 | Fan prototype vs. broader distribution; IP permissions | **Open**; assess before sharing externally |
 | D-13 | Standard tile size for room elements and art scale | **Open / later Phase 1:** decide logical pixel dimensions, sprites-to-tiles ratio, room size in tiles, collision granularity, and scaling conventions. Test 16/24/32px candidates as options only. |
 | D-14 | Full melee combat mechanics | **Open / later Phase 1:** choose strike patterns and aiming, attack timing, hit detection, range/arc, cooldown/stamina, knockback/cleave, weapon variation, and readability. Current prototype is temporary. |
+| D-15 | Biome catalogue and associated room tilesets | **Open / planning:** list distinct dungeon biomes, floor/depth suitability, environment mechanics, palettes, and complete modular tileset requirements. Final pixel dimensions depend on D-13; defer bulk art until tile-scale tests. |
 
 Record final choices with date, alternatives, rationale, and implications under `docs/decisions/`.
 
@@ -328,6 +331,7 @@ These do **not** block completing the initial engine smoke test. Address them be
 
 - [ ] **D-13 — Standard room tile size and art scale:** Build a comparison room using candidate logical tile sizes (e.g., 16×16, 24×24, 32×32 pixels). Verify the resulting player sprite footprint, door width, wall thickness, movement/collision precision, tiles per room, projectiles, enemy sizes, and integer camera scaling at desktop resolutions. Record the selected grid/asset convention in `docs/design/GAME_DESIGN.md` and the pixel-art guide. **Done when:** one documented tile standard is used in a room mock-up and can support ordinary and large enemies.
 - [ ] **D-14 — Define melee combat:** Compare radial/directional arc swipes, thrusts, and weapon-dependent patterns; decide how aim, attack input, hitboxes, active frames, multi-target hits, range, cooldown/resource costs, knockback, and enemy telegraphs work. Test feel alongside projectile combat and specify how weapons vary. Record the result in `docs/design/COMBAT_AND_RPG.md`. **Done when:** one playable melee ruleset has been playtested and its collision/timing behaviors are documented.
+- [ ] **D-15 — Catalogue biomes and design their tilesets:** Propose biomes (illustrative candidates: stone crypt, fungal cavern, industrial maintenance, flooded catacombs, volcanic foundry, guild/safe-hub interior), tag floor/depth and lore origin, and specify for each a palette, environmental hazards/interactions, enemy affinities, and minimum tile inventory: floor variants, walls, corners, doors, transitions, obstacles, props, and decorative decals. Identify which assets can be shared/recolored across biomes; add room mock-ups at D-13 candidate tile sizes before final tileset production. Track in `docs/design/BIOMES_AND_TILESETS.md`. **Done when:** a reviewable biome matrix and one minimum viable tileset specification/mock-up are ready, with no final-size assumptions embedded.
 
 **Current prototype behavior (not a committed design):** Space triggers a melee swing in the mouse-aimed direction at roughly 0.44 s intervals, hitting a nearby enemy in a forward-facing cone within a 64-pixel base reach, for 2 damage. This simple check is a placeholder for proper weapon hitboxes, animation timing, and balance. The current room visuals are programmatic debug shapes rather than a selected tile-art standard.
 
@@ -346,6 +350,7 @@ A task is done when its output:
 | Risk | Mitigation |
 | --- | --- |
 | Huge floor size becomes repetitive | Test critical-path length, unique room functions, navigation friction, and optional detours early |
+| Biomes and art production explode before tile dimensions are decided | Build biome/tileset taxonomy first; resolve D-13 scale, reuse tile modules across biomes, then produce art in batches |
 | Collapse clock creates unwinnable or frustrating runs | Seed validation; mandatory route cost; boss/guild-hall-specific tuning; previewed clock impact; grace/recovery design |
 | Exhaustive book cataloguing delays the game | Build representative samples and a playable core first; expand catalogue continuously |
 | Content becomes difficult to tune | Shared schemas, deterministic tests, separate canon facts from game stats |

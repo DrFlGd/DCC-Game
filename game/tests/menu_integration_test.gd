@@ -66,6 +66,16 @@ func _run() -> void:
     check(ui.mode == "closed" and main.pending_stat_points == 0,
         "new run resets menu and points")
 
+    # Debug shortcut allows reviewers to exercise the modal without grinding.
+    var level_key := InputEventKey.new()
+    level_key.keycode = KEY_F9
+    level_key.pressed = true
+    main._unhandled_input(level_key)
+    check(main.player_level == 2 and ui.mode == "level_up" and
+        main.pending_stat_points == 2,
+        "F9 reaches the next XP threshold and opens allocation")
+    main._start_run(424242)
+
     main.queue_free()
     if failures == 0:
         print("PASS: live menu opening, stat allocation, level jumps, pause/resume and time freeze")

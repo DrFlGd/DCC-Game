@@ -2,7 +2,7 @@
 
 A game-design and development project inspired by **Dungeon Crawler Carl**. The intended experience is a top-down, room-based roguelike dungeon crawler with a 16-bit-inspired pixel-art aesthetic, expanded procedural floors, tactical pressure from a floor-collapse clock, action combat, RPG progression, and optional companions.
 
-> **Project status:** Pre-production Godot 4.7.2/GDScript prototype. Every room is now **fixed at 24×24 logical 32px tiles**, with window scaling, connected-path-safe obstacles, multi-enemy encounters, configurable AI, and a six-stat d20-inspired XP/level system. The rat uses the supplied eight-direction GIF. Automated tests pass; hands-on playtesting remains.
+> **Project status:** Pre-production Godot 4.7.2/GDScript prototype with **fixed 24×24 rooms**, window scaling, obstacle-safe procedural layouts, multi-enemy encounters, configurable AI and six-stat RPG progression. **Level-up stat allocation** and an **Esc pause/character-sheet menu** are implemented. Automated tests pass; hands-on visual playtesting remains.
 
 ## Start here
 

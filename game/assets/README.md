@@ -1,40 +1,55 @@
-# Stone-Crypt Prototype Atlas
+# DCC Game — art asset structure (32×32 baseline)
 
-**Decision D-13:** 32×32 logical pixels per environment tile, selected for the initial DCC Game prototype. This atlas is an **art test**, not a complete production tileset.
+Art is organized **by content family**, not one shared master atlas. New biomes, characters, enemies, and weapons each get their own sprite sheet or tileset file. Nothing should reference the retired `assets/crypt_atlas.png`.
 
-## Source file
+## Paths
 
-[`crypt_atlas.png`](crypt_atlas.png) — **192×160 pixels**, 64-color indexed PNG with transparency. Assembled from the initial exploratory pixel-art assets generated for this project, downscaled with nearest-neighbor interpolation, then palette-reduced. Attribution: original, AI-assisted prototype assets; not book illustrations or assets from another game.
+| Family | Current file | Grid / indexing |
+| --- | --- | --- |
+| Biome: Stone Crypt | [`biomes/stone_crypt/tileset.png`](biomes/stone_crypt/tileset.png) | 128×128 texture, 32px cells, plus one 64×64 door block |
+| Character: Crawler | [`characters/crawler/facing_8.png`](characters/crawler/facing_8.png) | 384×48; 8 frames of 48×48 |
+| Enemy: Rat scavenger | [`enemies/rat/facing_8.png`](enemies/rat/facing_8.png) | 384×48; 8 frames of 48×48 |
+| Enemy: Armored brute | [`enemies/brute_boss/facing_8.png`](enemies/brute_boss/facing_8.png) | 768×96; 8 frames of 96×96 |
+| Weapons | `weapons/<weapon_id>/...` | Separate equipment sheet; no finished weapon asset yet |
 
-## Atlas regions
+As a rule, biomes use modular **environment tilesets**, while characters/enemies use **directional sprite sheets** rather than TileSet terrain resources. The initial artwork is provisional pixel art made for this prototype. Production assets will need better animation, environmental edges and silhouettes.
 
-Source rectangles use **(x, y, width, height)** in pixels. Drawing logic is in [`scripts/main.gd`](../scripts/main.gd).
+## Stone-crypt tiles
 
-| Symbol | Source rectangle | Render size | Purpose |
-| --- | --- | --- | --- |
-| `ART_FLOOR` | `(0, 0, 32, 32)` | 32×32 | Old stone floor, 0°/90°/180°/270° variants at runtime |
-| `ART_WALL` | `(32, 0, 32, 32)` | 32×32 | Masonry perimeter; rotate to orient wall shading |
-| `ART_DOOR` | `(64, 0, 64, 64)` | 64×64 | Door and stone surround, rotated to cardinal direction |
-| `ART_PLAYER` | `(0, 64, 48, 48)` | 48×48 | Temporary crawler visual |
-| `ART_ENEMY` | `(48, 64, 48, 48)` | 48×48 | Temporary rat-scavenger enemy |
-| `ART_BOSS` | `(96, 64, 96, 96)` | 96×96 | Temporary armored brute boss |
+Source pixel rectangles are in `biomes/stone_crypt/tileset.png`:
 
-### Room construction
+| Piece | Region (x, y, width, height) | Purpose |
+| --- | --- | --- |
+| `ART_FLOOR` | `(0, 0, 32, 32)` | Warm worn stone floor — corrected from the swapped floor/wall assignment |
+| `ART_FLOOR_VARIANT` | `(32, 0, 32, 32)` | Rotated floor variation |
+| `ART_WALL` | `(64, 0, 32, 32)` | Gray masonry wall |
+| `ART_CORNER` | `(96, 0, 32, 32)` | Dedicated right-angle joining tile, rotated for four outer corners |
+| `ART_DOOR` | `(64, 64, 64, 64)` | Two-tile-wide door art, rotated north/east/south/west |
 
-- The traversable floor is 24 columns × 10 rows, **768×320 logical pixels**.
-- The surrounding wall ring is one 32-pixel tile thick.
-- Connected room edges reserve **two 32-pixel wall cells** at the midpoint, then draw a door/arch visual centered on that gap.
-- North wall art uses 0°, south 180°, west -90°, and east +90°. Door art rotates by side as well.
-- All rotation is implemented in Godot's draw transform: no redundant rotated PNGs are stored. It preserves exact square-grid geometry and reduces maintenance when art changes.
-- Collision remains simple room-boundary clamping and door checks for the spike. Do not infer physics/TileMap collision from the visuals.
+The wall ring is one tile deep, with **two adjacent cells omitted for each linked doorway**. Corners are filled using the separate corner tile, not a straight wall piece. The renderer uses `_crypt_piece` to rotate the source region at 90° intervals without duplicating PNGs.
 
-### Next art tasks
+## Eight-way facing contract
 
-- [ ] Create true repeatable floor and wall patterns with edge/corner/cap transitions (rotating a single tile is temporary).
-- [ ] Replace visually closed doors with distinct open, shut, locked, boss-sealed, and guild-hall portal states.
-- [ ] Add 4+ facing/attack/hurt animation frames for the player and enemy.
-- [ ] Establish sprite anchor/foot-position and tile-scale collision standards.
-- [ ] Build the D-15 biome catalogue using this tile scale as baseline.
-- [ ] Consider splitting the atlas into per-biome TileSet resources and sprite sheets once content grows.
+Direction index across every sprite sheet, left to right:
 
-Do not treat the sample asset palette, character look, or tile art as final production direction.
+| Frame | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Direction | E | SE | S | SW | W | NW | N | NE |
+
+`_facing_from_vector` selects one of the eight images from a vector angle. **Player facing follows mouse aim**, regardless of movement direction; **enemy facing follows its pursuit direction**. This is a single idle/attack-neutral pose per facing, not eight full animations. No gameplay hitbox rotates with the artwork at present.
+
+## Responsive display
+
+`scripts/room_layout.gd` computes the size of the visible room based on the current window viewport, maintaining a **32px tile grid** with even row/column counts so the 64px portals remain centered. The scene moves the player, enemy and projectiles with its center after resizing. A minimum window size of 720×480 is set; the initial window is 960×540. `window/stretch/mode="disabled"` prevents the engine from treating every resized window as the original fixed-size drawing canvas. HUD footer and minimap are anchored to viewport edges.
+
+## Next art tasks
+
+- [ ] Seamless transition/cap tiles for door-adjacent masonry, interior corners, debris and floor-to-wall borders.
+- [ ] Open/closed/locked/sealed door state art, rather than the same visually closed decorative arch.
+- [ ] Animation frames for walking, melee, ranged attacks, hurt and death for each facing.
+- [ ] Replace first-pass 8-way placeholder illustrations with approved character art.
+- [ ] Separate per-weapon animation/effect sheets once items are implemented.
+- [ ] Build a biome registry that points to the tileset for the currently generated floor.
+- [ ] Add TileMapLayer and collision shapes when moving beyond the current debug boundary checks.
+
+**Notes:** Generated images are original AI-assisted prototype placeholders, not copied game or book artwork. The 32px environment tile size is accepted under D-13; the content look and gameplay collision settings are not final.

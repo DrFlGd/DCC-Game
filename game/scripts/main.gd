@@ -97,7 +97,7 @@ func _start_run(new_seed: int) -> void:
     aim_direction = Vector2.RIGHT
     player_facing = 0
     player_xp = 0
-    ability_scores = RPG.player_base_scores()
+    ability_scores = config.get("player_ability_scores", RPG.player_base_scores()).duplicate(true)
     _sync_progression()
     player_hp = player_max_hp
     invulnerability = 0.0

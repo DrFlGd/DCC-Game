@@ -1,6 +1,6 @@
-# DCC Game — Godot 32×32 Stone-Crypt Prototype
+# DCC Game — Godot 16×16 Stone-Crypt Prototype
 
-This is the **D-01 Option A technical spike**, not a finished game. The first environment uses **32×32 logical tiles** and separate graphics files for the stone-crypt biome, player, and two enemy types. All three actors have eight direction-dependent idle sprites. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
+This is the **D-01 Option A technical spike**, not a finished game. The first environment now uses the **user-provided 16×16 dungeon sampler tiles** and separate graphics files for the stone-crypt biome, player, and two enemy types. All three actors have eight direction-dependent idle sprites. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
 
 ## Engine
 
@@ -19,7 +19,8 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Mouse | Aim freely in any direction |
 | Hold left mouse button | Shoot projectiles |
 | Hold Space | Melee attack in aim direction |
-| Esc | Open pause menu, or resume from pause / character stats |
+| Esc | Open pause menu, view character stats, or resume |
+| Pause → Display resolution | Choose a common windowed resolution and click **Apply resolution** |
 | F9 (prototype debug) | Award XP up to the next level so you can test the level-up menu immediately |
 | Mouse in level-up menu | Assign and refund points with + / −, then confirm |
 | R | Restart using same seed |
@@ -35,10 +36,10 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 - Visible tick/health HUD, door preview of net tick effects, and end-of-run/restart handling.
 - Omnidirectional aim; ranged fire and directional melee; basic damage and enemy AI; enemy health/state maintained across revisits.
 - A seeded smoke-test suite covering topology, deterministic generation, room tags, policies, and a route-budget diagnostic.
-- **Correctly assigned stone floor and masonry wall tiles**, dedicated corner pieces, two-tile door gaps, and direction-rotated doors.
+- **16×16 dungeon sampler stone floors, masonry, torches, side edges, double-leaf doors and prop sprites**. Free sampler omits true corner/south wall pieces, so temporary matching wall-top rotations fill those joins.
 - **Eight-way facing sprites** for the player (mouse aim), rat enemy, and armored boss (AI pursuit direction).
 - **Separate per-biome and per-character/enemy assets** rather than a master atlas. See [asset conventions](assets/README.md).
-- **Fixed 24×24 interior tiles**, independent of display size; resize only changes the rendering scale and screen-space HUD. Minimum window size is 720×480.
+- **Fixed 24×24 interior tiles (384×384 world pixels)**; resize changes only rendering scale and screen-space HUD. Minimum window 720×480, with selectable common window resolutions from the pause menu.
 - **Deterministic rubble and pillar obstacles**, tested for walkable routes from room center to every connected exit.
 - **Data-driven multi-enemy encounters**, pathfinding/attack behavior, and a six-ability d20-inspired XP/level system.
 - **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
@@ -46,13 +47,15 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 
 ## Visual and tile layout
 
-D-13 selects **32×32 environment tiles**. Floor and wall textures have been corrected: the brown cracked-stone slab is used for walkable floor, the cool gray masonry for perimeter walls. A special corner tile (rotated 90° on other corners) joins perpendicular sides. Each connected room has a **two-tile, 64px doorway**, decorated by a rotated 64×64 door image.
+**D-13 revised:** Standard environment tile dimensions are **16×16 native pixels**. The stone-crypt floor uses the provided [`tileset_16x16.png`](assets/biomes/stone_crypt/tileset_16x16.png), an 8-column/2-row sampler atlas with 12 supplied sprites: two floors, wall top and edges, wall face/torch, wood door, stairs, barrel, chest and bones. Each connected side has a **two-tile-wide (32px) opening**, decorated with two native 16px door leaves.
 
-**Every room interior is exactly 24 columns × 24 rows = 768×768 world pixels.** Resizing the window only changes its display scale and centering, not tile count, door/obstacle locations, speeds, or hit distances. The game starts in a 960×540 window (minimum 720×480). The viewport retains an entire-room view, so sprites appear small in very short windows; a follow-camera zoom is a possible future design option. Mouse aiming maps screen coordinates into this fixed world. See `scripts/room_layout.gd`.
+**Every room remains exactly 24×24 tiles = 384×384 world pixels**, independently of display resolution. Game movement speeds, combat ranges, collision footprints and enemy AI spacings were halved relative to the previous 32px prototype to keep approximately the same gameplay-to-tile proportions. The window can still scale the room up or down. Use **Esc → Display resolution → Apply resolution** or drag the window border; neither changes the dungeon tile count.
 
-The crawler and rat are drawn from separate **384×48** sprite sheets, and the boss from a **768×96** sprite sheet. Each contains eight compass views, in order E, SE, S, SW, W, NW, N, NE. The player chooses the frame from **mouse aim** and enemies choose it from their **movement direction**. The 8 views are first-pass placeholders, not animated walking cycles, and gameplay hit detection remains based on simple collision radii.
+This is the **free sampler**, not the complete tile pack. Its README mentions dedicated bottom corners and a south-wall edge that are **not included in the supplied 12-tile assets**. We temporarily join outer corners and south walls with rotated wall-top tiles, and use wall faces/torches for the north side. These transitions can be revisited after acquiring/creating the missing pieces.
 
-See the [per-category art file layout](assets/README.md). The door appears visually closed although it permits travel when connected and not gated; proper door states are a subsequent asset task.
+Player and rat sprite sheets remain separate. The **crawler and ordinary enemies render at 24×24** (about 1.5 terrain tiles), and the **boss at 48×48** (3 tiles). They retain all eight compass facings E, SE, S, SW, W, NW, N, NE. Source frames can be higher resolution; the renderer displays them with nearest-neighbor scaling. The 8 poses are prototype facings, not movement animations.
+
+See [asset conventions and tile index](assets/README.md) for the complete mapping. Doors still look closed even when the procedural graph permits passage; proper door open/locked sprites and animation remain future work.
 
 ## Enemy and RPG design references
 
@@ -64,7 +67,7 @@ When XP crosses a level threshold, combat stops and a **Level Up** overlay appea
 
 New scores immediately update AC (DEX), max HP (CON), STR-based melee and DEX-based ranged attack bonuses, and any relevant damage modifiers on new attacks. Raising CON grants the corresponding max-HP increase to current HP. All points are lost on starting a new run.
 
-Press **Esc** to open the pause menu. Choose **View character stats** to see your build, or **Resume game** to return. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
+Press **Esc** to open the pause menu. Choose **View character stats** to see your build, select one of the built-in **windowed resolution presets** (800×600, 960×540, 1024×768, 1280×720, 1280×800, 1366×768, 1440×900, 1600×900, 1920×1080, 2560×1440, 3840×2160) and click **Apply resolution**, or select **Resume game** to return. Large options may be limited by your monitor/window manager; resizing affects the viewport, not the fixed 24×24 room. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
 
 Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). More UI/audio accessibility and gamepad support remain future tasks.
 
@@ -104,7 +107,7 @@ game/
 ├── README.md
 ├── assets/
 │   ├── README.md              # separate categories, 8-way contract
-│   ├── biomes/stone_crypt/tileset.png
+│   ├── biomes/stone_crypt/tileset_16x16.png
 │   ├── characters/crawler/facing_8.png
 │   ├── enemies/rat/facing_8.png
 │   ├── enemies/brute_boss/facing_8.png
@@ -133,6 +136,8 @@ This is a **technical prototype**, not a finished game. It supports multiple bas
 
 - If Godot cannot locate the main scene, make sure you imported/opened the **game/** directory, not the repository root.
 - If controls do not respond, click inside the running game window.
-- Resize the window by dragging its border. The **24×24 room never changes**; only its visual scale/centering and screen-space HUD change.
+- Resize the window by dragging its border, or choose **Esc → Display resolution → Apply resolution**. The **24×24 room never changes**; only its visual scale/centering and screen-space HUD change.
 - Replaying with **R** repeats the graph exactly but moment-to-moment mouse and keyboard inputs are not recorded.
 - If an edited JSON file is invalid, the game reports an error and exits; use the headless smoke-test command after making rule changes.
+
+**Asset distribution note:** The sampler README does not include an explicit redistribution license. Before publicly distributing builds or source asset files, confirm the permissions associated with the supplied pack.

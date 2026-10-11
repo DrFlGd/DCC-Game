@@ -42,7 +42,7 @@ The four content/design phases below follow the project's requested order. Techn
 
 **Phase priority:** 1 → 2 → 3 → 4, with small prototype experiments throughout. Phase 5 integrates those deliverables. Revisiting earlier phases is expected.
 
-**Latest engineering update (2026-10-11):** The [Godot prototype](../game/README.md) now has individual biome/character/enemy sprite sheets, an accepted 32×32 tile scale, joined wall corners, eight-way character facing, and viewport-responsive room sizing. GitHub Actions headless import, deterministic tests and brief scene launch pass. **Human visual/playtest validation is still pending**; this is not a completed Phase 1 or Phase 5 build.
+**Latest engineering update (2026-10-11):** The [Godot prototype](../game/README.md) now uses **fixed 24×24 room interiors**, viewport-only scaling, deterministic debris with linked-exit path validation, data-driven **2–4 enemy encounters**, and six-stat d20-inspired combat/XP. See [the implementation spec](design/ROOM_ENEMY_RPG_PROTOTYPE.md). Automated tests check these rules; **human playtesting and balancing remain pending**.
 
 ---
 
@@ -69,7 +69,10 @@ The four content/design phases below follow the project's requested order. Techn
 - [ ] Define what a *run*, *floor*, *room*, *encounter*, *boss*, *exit*, and *collapse* mean.
 - [ ] Specify a procedural **room-grid graph**: adjacent connections, doors, branches, loops, dead ends, special rooms, gated routes, and discovery/fog-of-war.
 - [ ] Define room interior tile grids, collision, hazards, destructibles, and interaction points separately from the overall floor map.
-- [x] **D-13 — Adopt 32×32 logical environment tiles for the prototype.** The 32-pixel crypt room grid now adapts to the window size; 64-pixel door gaps, 48-pixel ordinary sprites, and a 96-pixel boss sprite are implemented. Sprite animation cycles and collision granularity remain future work.
+- [x] **D-13 — Adopt 32×32 logical environment tiles.** Sprite animation cycles and collision granularity remain follow-ups.
+- [x] **D-16 — Lock each room interior to 24×24 tiles** (768×768 world pixels); window resizing changes only the render scale and offset, not the room footprint.
+- [x] Generate seeded blocking debris/pillars and check paths from center to every linked exit before accepting each obstacle.
+- [ ] Extend connectivity to account for actor sizes, destructible obstacles, and multi-tile hazards.
 - [ ] Set **large-floor design targets**. Evaluate initial test sizes such as 40–80 rooms per floor, then tune based on traversal time and decision density; these are hypotheses, not final requirements.
 - [ ] Require every generated floor to have an achievable critical route from start to exit/objective, with optional risk/reward branches.
 - [ ] Decide whether floor progression is linear, branching, or includes optional side objectives.
@@ -92,10 +95,13 @@ The four content/design phases below follow the project's requested order. Techn
 - [ ] **Design the full melee ruleset (D-14).** Decide whether attacks use directionally aimed arcs, straight thrusts, close-range contact, or weapon-specific patterns; how aim and attack inputs work; whether holding attack repeats; hitboxes/active frames, reach, cleave and multiple-target hits, knockback, cooldowns/stamina, animation tells, and how melee compares to projectile builds. Include companion melee behavior and environmental interactions as later considerations.
 - [ ] Define inventory/equipment slots, pickup interactions, consumables, and active versus passive items.
 - [ ] Establish companions as a later system, but choose foundational assumptions now: follower AI, target selection, positioning, commands, buffs, survivability, and independent attacks.
+- [x] Prototype multi-enemy rooms and editable melee/ranged attack definitions, AI modes and BFS obstacle navigation via [`enemies.json`](../game/data/enemies.json).
+- [ ] Improve path clearance, enemy separation, ranged counterplay, and encounter budgets with real playtests.
 - [ ] Decide combat persistence on leaving/re-entering rooms and whether doors are locked during encounters.
 
 ### 1D. RPG and build systems
-- [ ] Specify XP gain, level-up cadence, core attributes, and stat scaling.
+- [x] Implement a first-pass RPG: six STR/DEX/CON/INT/WIS/CHA attributes, d20 roll-to-hit against AC, proficiency, XP-per-kill, cumulative level thresholds, and HP growth.
+- [ ] Tune the RPG for real-time play; choose classes/skill paths, spellcasting and rewards, ability-score upgrades, and how death resets meta-progression.
 - [ ] Decide how skills are learned/upgraded, including prerequisites and active/passive categories.
 - [ ] Specify spells/abilities, cooldowns, mana/stamina/other costs, status effects, and stacking rules.
 - [ ] Decide what resets on death versus persists between runs (full reset, unlock-based meta-progression, or hybrid).
@@ -108,7 +114,7 @@ The four content/design phases below follow the project's requested order. Techn
 - [x] Implement a first seeded generator/combat/collapse technical spike in [`game/`](../game/README.md).
 - [ ] Validate the Godot 4.7.2 prototype via headless tests and interactive playtesting (not executed in this authoring environment).
 - [ ] Choose input targets, minimum performance targets, and initial development platform.
-- [ ] Establish deterministic random seeds, debug overlays, and basic automated generator validation from day one.
+- [x] Establish deterministic seeds, basic HUD/debug output, validated room layouts/obstacles, and CI smoke tests.
 
 **Documents to create:** `docs/design/GAME_DESIGN.md`, `docs/design/COLLAPSE_SYSTEM.md`, `docs/design/PROCEDURAL_GENERATION.md`, `docs/design/COMBAT_AND_RPG.md`, `docs/decisions/ADR-001-engine-and-platform.md`.
 
@@ -275,7 +281,10 @@ Keep these in a living decision log and resolve them in Phase 1 unless noted.
 | D-12 | Fan prototype vs. broader distribution; IP permissions | **Open**; assess before sharing externally |
 | D-13 | Standard tile size for room elements and art scale | **Accepted 2026-10-11:** 32×32 logical environment tiles. First-floor demo uses 24×10 tiles, 64px-wide wall gaps/doors, 48px player/enemy and 96px boss sprites. Detailed art, collision and scaling remain refinements. |
 | D-14 | Full melee combat mechanics | **Open / later Phase 1:** choose strike patterns and aiming, attack timing, hit detection, range/arc, cooldown/stamina, knockback/cleave, weapon variation, and readability. Current prototype is temporary. |
-| D-15 | Biome catalogue and associated room tilesets | **Open / planning:** use the accepted 32×32 baseline. Stone-crypt starter tileset is implemented separately under `game/assets/biomes/stone_crypt/`; character, enemy, and future weapon art use independent files. Continue the full biome catalogue and biome-specific hazards, palettes, corners and transitions. |
+| D-15 | Biome catalogue and associated room tilesets | **Open / planning:** use 32×32. Stone-crypt tileset and separate character/enemy art exist; complete the biome/environment catalogue. |
+| D-16 | Fixed room geometry versus display scaling | **Accepted:** 24×24 environment tiles per room (768×768 world pixels). Window dimensions alter camera/render scale and UI positioning, never room grid or game-world distances. |
+| D-17 | Data-driven enemy encounters, AI and navigation | **Prototype implemented:** JSON definitions for attack/ability/stat/XP configuration, melee vs. ranged enemies, chase/kite/guard and BFS/direct/stationary nav, 2–4 normal foes and multi-foe boss. Tune AI fairness, difficulty budgets and large-creature clearance. |
+| D-18 | D&D-inspired six-stat RPG and XP | **Prototype implemented:** six abilities, modifiers, AC, proficiency, d20 attacks, damage dice, XP per enemy and levels 1–20. **Open:** classes, skills, saving throws, spells, progression balance and deviations from tabletop conventions. |
 
 Record final choices with date, alternatives, rationale, and implications under `docs/decisions/`.
 
@@ -327,13 +336,13 @@ These are ordered, small enough to turn into GitHub issues, and explicitly tied 
 
 ## 5A. Follow-up design questions (deferred, tracked)
 
-These do **not** block completing the initial engine smoke test. Address them before final art production, comprehensive room authoring, or combat-content balance.
+These open quality and expansion tasks do **not** block the initial engine smoke test. Address them before final art production, comprehensive room authoring, or combat-content balance.
 
 - [x] **D-13 — Standard environment tile size:** 32×32 logical pixels selected. A viewport-responsive room built from 32×32 stone floors, masonry walls, joined corners and 64px door gaps is integrated in [the 32px demo](../game/README.md) and [the art structure](../game/assets/README.md). Separate eight-view sheets are in use for the player, rat and boss. **Follow-up:** polish seams, animations, collision dimensions, and sprite anchors through playtests.
 - [ ] **D-14 — Define melee combat:** Compare radial/directional arc swipes, thrusts, and weapon-dependent patterns; decide how aim, attack input, hitboxes, active frames, multi-target hits, range, cooldown/resource costs, knockback, and enemy telegraphs work. Test feel alongside projectile combat and specify how weapons vary. Record the result in `docs/design/COMBAT_AND_RPG.md`. **Done when:** one playable melee ruleset has been playtested and its collision/timing behaviors are documented.
 - [ ] **D-15 — Catalogue biomes and design their tilesets:** Propose biomes (illustrative candidates: stone crypt, fungal cavern, industrial maintenance, flooded catacombs, volcanic foundry, guild/safe-hub interior), tag floor/depth and lore origin, and specify for each a palette, environmental hazards/interactions, enemy affinities, and minimum tile inventory: floor variants, walls, corners, doors, transitions, obstacles, props, and decorative decals. Identify which assets can be shared/recolored across biomes; create mock-ups in the accepted 32×32 tile scale; use `assets/biomes/<biome>/tileset.png` and separate files for characters, enemies, weapons, and effects before final art production. Track in `docs/design/BIOMES_AND_TILESETS.md`. **Done when:** a reviewable biome matrix and one minimum viable tileset specification/mock-up are ready, with no final-size assumptions embedded.
 
-**Current prototype behavior (not a committed melee design):** Space triggers a mouse-aimed swing at roughly 0.44 s intervals, hitting a nearby enemy within a basic forward cone for 2 damage. This remains a placeholder for proper weapon hitboxes, animation timing, and balance. The room uses its own 32×32 stone-crypt tileset with corrected floor/wall assignment, corner joins and direction-rotated doors. Characters/enemies have separate 8-way sprite sheets. This remains initial art, not a finished biome.
+**Current prototype behavior (not a committed melee design):** Space triggers a directional melee swipe on a 0.50-second cooldown. Damage uses a d6 + STR modifier and d20 attack check against each nearby target's AC. The swipe can hit several enemies, but animation and weapon-specific hitboxes remain open D-14 work. Obstacles and 24×24 geometry are currently schematic placeholder art.
 
 ## 6. Definition of done for any design or content task
 

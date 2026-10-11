@@ -534,8 +534,9 @@ func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
 
 func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facing: int) -> void:
     var index: int = posmod(facing, 8)
+    var frame_size := Vector2(sheet.get_width() / 8.0, sheet.get_height())
     draw_texture_rect_region(sheet, Rect2(center - size * 0.5, size),
-        Rect2(float(index) * size.x, 0.0, size.x, size.y))
+        Rect2(float(index) * frame_size.x, 0.0, frame_size.x, frame_size.y))
 
 
 func _draw_hud() -> void:

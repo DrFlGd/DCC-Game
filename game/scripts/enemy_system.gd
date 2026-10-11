@@ -75,6 +75,9 @@ static func advance(enemy: Dictionary, definition: Dictionary, delta: float,
     if distance < 0.01 or distance > float(behavior.get("detection_range", 1000.0)):
         return
     var preferred: float = float(behavior.get("preferred_distance", 28.0))
+    var navigation: String = String(behavior.get("pathfinding", "grid_bfs"))
+    if navigation == "stationary" or (mode == "guard" and distance > preferred * 4.0):
+        return
     var target: Vector2 = player_pos
     if mode == "kite":
         if distance >= preferred and distance <= preferred * 1.30:
@@ -85,6 +88,14 @@ static func advance(enemy: Dictionary, definition: Dictionary, delta: float,
             target.x = clampf(target.x, 18.0, Room.SIZE * Room.TILE - 18.0)
             target.y = clampf(target.y, 18.0, Room.SIZE * Room.TILE - 18.0)
     elif distance < preferred:
+        return
+    if navigation == "direct":
+        var straight: Vector2 = target - position
+        if straight.length_squared() > 0.1:
+            var trial: Vector2 = position + straight.normalized() * float(definition.get("speed", 55.0)) * delta
+            if Room.can_occupy(trial, float(enemy["radius"]), blocked):
+                enemy["pos"] = trial
+                enemy["facing"] = posmod(int(round(straight.angle() / (PI / 4.0))), 8)
         return
     enemy["repath"] = float(enemy.get("repath", 0.0)) - delta
     var waypoints: Array = enemy.get("waypoints", [])
@@ -140,4 +151,7 @@ static func validate_catalogue(catalogue: Dictionary) -> Array[String]:
         var mode: String = String(data.get("behavior", {}).get("mode", ""))
         if not ["chase", "kite", "guard"].has(mode):
             problems.append("%s: unsupported AI mode" % enemy_id)
+        var navigation: String = String(data.get("behavior", {}).get("pathfinding", "grid_bfs"))
+        if not ["grid_bfs", "direct", "stationary"].has(navigation):
+            problems.append("%s: unsupported pathfinding" % enemy_id)
     return problems

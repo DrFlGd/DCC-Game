@@ -2,9 +2,7 @@
   "seed": 424242,
   "room_count": 22,
   "start_ticks": 26,
-  "player_max_hp": 8,
-  "player_speed": 210.0,
-  "enemy_speed": 56.0,
+  "player_speed": 210,
   "collapse": {
     "default": {
       "first_entry_cost": 2,
@@ -26,5 +24,14 @@
         "first_entry_cost": 1
       }
     }
-  }
+  },
+  "player_ability_scores": {
+    "STR": 14,
+    "DEX": 14,
+    "CON": 14,
+    "INT": 10,
+    "WIS": 12,
+    "CHA": 10
+  },
+  "obstacle_count": 38
 }

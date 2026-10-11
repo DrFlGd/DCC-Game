@@ -1,22 +1,28 @@
 extends RefCounted
-## Pure window-to-room layout. Reusable for tests and future biome renderers.
-const TILE_SIZE := 32.0
+## Fixed 24x24 room in world pixels; window resize changes scale, never tile count.
+const TILE_SIZE := 32
+const COLUMNS := 24
+const ROWS := 24
+const ARENA := Rect2(0.0, 0.0, 768.0, 768.0)
 const MIN_WINDOW := Vector2(720.0, 480.0)
+const BORDER := 32.0
 
 static func compute(window_size: Vector2) -> Dictionary:
-    var view := Vector2(
-        maxf(MIN_WINDOW.x, window_size.x),
-        maxf(MIN_WINDOW.y, window_size.y)
+    var view := Vector2(maxf(MIN_WINDOW.x, window_size.x), maxf(MIN_WINDOW.y, window_size.y))
+    var full_size := ARENA.size + Vector2(BORDER * 2.0, BORDER * 2.0)
+    var available := Vector2(maxf(10.0, view.x - 40.0), maxf(10.0, view.y - 193.0))
+    var scale: float = minf(available.x / full_size.x, available.y / full_size.y)
+    var offset := Vector2(
+        floorf((view.x - ARENA.size.x * scale) * 0.5),
+        floorf(106.0 + (available.y - full_size.y * scale) * 0.5 + BORDER * scale)
     )
-    # Even tile counts provide a symmetric 2-tile-wide portal on every side.
-    var columns: int = maxi(12, 2 * int(floorf((view.x - 96.0) / (2.0 * TILE_SIZE))))
-    var rows: int = maxi(6, 2 * int(floorf((view.y - 212.0) / (2.0 * TILE_SIZE))))
-    var content_size := Vector2(float(columns), float(rows)) * TILE_SIZE
-    var top: float = floorf(110.0 + maxf(0.0,
-        view.y - 212.0 - content_size.y) * 0.5)
-    var arena := Rect2(
-        Vector2(floorf((view.x - content_size.x) * 0.5), top),
-        content_size
-    )
-    return {"viewport": view, "columns": columns, "rows": rows,
-        "arena": arena, "center": arena.get_center()}
+    return {
+        "viewport": view, "columns": COLUMNS, "rows": ROWS, "arena": ARENA,
+        "center": ARENA.get_center(), "scale": scale, "offset": offset
+    }
+
+static func world_to_screen(point: Vector2, layout: Dictionary) -> Vector2:
+    return Vector2(layout["offset"]) + point * float(layout["scale"])
+
+static func screen_to_world(point: Vector2, layout: Dictionary) -> Vector2:
+    return (point - Vector2(layout["offset"])) / float(layout["scale"])

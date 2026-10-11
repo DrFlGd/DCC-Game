@@ -37,13 +37,13 @@ Each enemy type has an ID and these fields:
 | `scores` | `{ "STR":10, "DEX":14, ... }` | Six ability scores |
 | `speed`, `collision_radius` | `86`, `12` | Movement and world-space footprint |
 | `behavior.mode` | `chase`, `kite`, `guard` | Pursuit or preferred-spacing behavior |
-| `behavior.pathfinding` | `grid_bfs` | Planned navigation mode (currently BFS for all movers) |
+| `behavior.pathfinding` | `grid_bfs`, `direct`, `stationary` | Choose grid BFS, direct steering, or no movement |
 | `behavior.preferred_distance` | `26` or `210` | Close-in for melee, keep range for ranged |
 | `behavior.repath_seconds` | `0.35` | Navigation refresh period |
 | `attacks[]` | `bite` or `spit` | Melee/ranged, STR/DEX, die, cooldown, range, projectile speed |
 | `abilities[]` | `lunge`, `twin_shot` | Implemented modifiers: close-range speed boost, paired shots |
 
-You can add enemy definitions and reference them in `encounter_tables.normal.pool`, adjusting `min`/`max`. Currently normal encounters use **2–4 enemies**, while the boss room contains an armored brute plus two smaller enemies. Enemies persist in their room between visits; killing one removes only that instance. The two rat varieties currently reuse the same visual sheet with a violet marker for ranged attackers.
+You can add enemy definitions and reference them in `encounter_tables.normal.pool`, adjusting `min`/`max`. Currently normal encounters use **2–4 enemies**, while the boss room contains an armored brute plus two smaller enemies. Enemies persist in their room between visits; killing one removes only that instance. The two rat varieties currently reuse the **user-provided eight-frame rat GIF**, converted into the game's E/SE/S/SW/W/NW/N/NE order; a violet marker distinguishes ranged attackers.
 
 The enemy definitions are schema-validated at startup and in CI. If you invent a new `behavior.mode` or `attacks[].type`, add corresponding logic and a test. A JSON label alone does not implement a new ability.
 

@@ -27,6 +27,23 @@ func run_tests() -> void:
         return
     var policy = Collapse.new(config.get("collapse", {}))
 
+    # The visual prototype must have a valid 192x160 atlas that covers all regions.
+    var atlas: Texture2D = load("res://assets/crypt_atlas.png") as Texture2D
+    check(atlas != null, "crypt atlas imports successfully")
+    if atlas != null:
+        check(atlas.get_size() == Vector2(192, 160), "crypt atlas is 192x160")
+        var regions: Array[Rect2] = [
+            Rect2(0, 0, 32, 32), Rect2(32, 0, 32, 32),
+            Rect2(64, 0, 64, 64), Rect2(0, 64, 48, 48),
+            Rect2(48, 64, 48, 48), Rect2(96, 64, 96, 96)
+        ]
+        for region in regions:
+            check(region.position.x >= 0 and region.position.y >= 0
+                and region.end.x <= atlas.get_width()
+                and region.end.y <= atlas.get_height(),
+                "art region fits within atlas: %s" % region)
+
+
     for seed_value in range(25):
         var floor: Dictionary = Generator.generate(seed_value + 1100, 22)
         var rooms: Array = floor["rooms"]

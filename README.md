@@ -2,16 +2,16 @@
 
 A game-design and development project inspired by **Dungeon Crawler Carl**. The intended experience is a top-down, room-based roguelike dungeon crawler with a 16-bit-inspired pixel-art aesthetic, expanded procedural floors, tactical pressure from a floor-collapse clock, action combat, RPG progression, and optional companions.
 
-> **Project status:** Pre-production Godot 4.7.2/GDScript prototype with **fixed 24×24 rooms**, window scaling, obstacle-safe procedural layouts, multi-enemy encounters, configurable AI and six-stat RPG progression. **Level-up stat allocation** and an **Esc pause/character-sheet menu** are implemented. Automated tests pass; hands-on visual playtesting remains.
+> **Project status:** Pre-production Godot 4.7.2/GDScript prototype with **24×24 rooms using 16×16 native tiles** from the uploaded dungeon sampler, window scaling, obstacle-safe procedural layouts, multi-enemy encounters, configurable AI and six-stat RPG progression. **Level-up stat allocation** and an **Esc pause/character-sheet menu with resolution presets** are implemented. Automated tests pass; hands-on visual playtesting remains.
 
 ## Start here
 
 - **[Project roadmap](docs/ROADMAP.md)** — phases, deliverables, completion criteria, design questions, and first actionable tasks.
 - **[D-01 engine and platform decision](docs/decisions/ADR-001-engine-and-platform.md)** — Godot 4.7.2 + GDScript selected; implementation record and test gate.
 - **[Godot prototype: setup and controls](game/README.md)** — import `game/project.godot`, play the seeded dungeon-room spike, and run smoke tests.
-- **[32×32 art files and room construction](game/assets/README.md)** — corrected crypt tiles, the user-provided 8-way rat sheet, independent character/enemy files, and asset conventions for future biomes and weapons.
+- **[16×16 dungeon sampler and art files](game/assets/README.md)** — corrected crypt tiles, the user-provided 8-way rat sheet, independent character/enemy files, and asset conventions for future biomes and weapons.
 - **[Room, enemy AI and RPG prototype specification](docs/design/ROOM_ENEMY_RPG_PROTOTYPE.md)** — fixed dimensions, safe obstacle placement, JSON-configurable enemy types, combat stats and XP progression.
-- The team has selected **Godot 4.7.2 + GDScript** and **24×24 rooms made of 32×32 environment tiles**. The next step is to playtest scaled room visibility, enemy AI and collision, experience pacing, and the collapse clock.
+- The team has selected **Godot 4.7.2 + GDScript** and **24×24 rooms made of 16×16 environment tiles**. The next step is to playtest scaled room visibility, enemy AI and collision, experience pacing, and the collapse clock.
 - The second goal is a **source-referenced canon catalogue** of Carl's and companions' interactions, equipment, enemies, skills, and other mechanics.
 - The third and fourth goals are a **game-ready item/ability catalogue** and a **tiered enemy roster**.
 

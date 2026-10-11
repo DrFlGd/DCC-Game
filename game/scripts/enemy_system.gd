@@ -37,14 +37,14 @@ static func generate_encounter(catalogue: Dictionary, kind: String, seed_value: 
             if not Room.is_walkable(cell, blocked) or not Room.can_occupy(candidate_pos,
                     float(template.get("collision_radius", 12)), blocked):
                 continue
-            if candidate_pos.distance_to(Room.cell_center(Vector2i(12, 12))) < 164.0:
+            if candidate_pos.distance_to(Room.cell_center(Vector2i(12, 12))) < 82.0:
                 continue
             if Room.find_path(blocked, cell, Vector2i(12, 12)).is_empty():
                 continue
             var collides := false
             for other in results:
                 if candidate_pos.distance_to(Vector2(other["pos"])) < (
-                        float(template.get("collision_radius", 12)) + float(other["radius"]) + 22.0):
+                        float(template.get("collision_radius", 12)) + float(other["radius"]) + 11.0):
                     collides = true
                     break
             if collides:
@@ -84,9 +84,9 @@ static func advance(enemy: Dictionary, definition: Dictionary, delta: float,
             return
         if distance < preferred:
             var escape: Vector2 = -to_player.normalized()
-            target = position + escape * 140.0
-            target.x = clampf(target.x, 18.0, Room.SIZE * Room.TILE - 18.0)
-            target.y = clampf(target.y, 18.0, Room.SIZE * Room.TILE - 18.0)
+            target = position + escape * 70.0
+            target.x = clampf(target.x, 9.0, Room.SIZE * Room.TILE - 9.0)
+            target.y = clampf(target.y, 9.0, Room.SIZE * Room.TILE - 9.0)
     elif distance < preferred:
         return
     if navigation == "direct":
@@ -110,7 +110,7 @@ static func advance(enemy: Dictionary, definition: Dictionary, delta: float,
         enemy["waypoints"] = waypoints
     if waypoints.is_empty():
         return
-    if position.distance_to(Vector2(waypoints[0])) < 7.0:
+    if position.distance_to(Vector2(waypoints[0])) < 3.5:
         waypoints.remove_at(0)
     if waypoints.is_empty():
         return
@@ -119,7 +119,7 @@ static func advance(enemy: Dictionary, definition: Dictionary, delta: float,
         return
     var speed: float = float(definition.get("speed", 55.0))
     var abilities: Array = definition.get("abilities", [])
-    if "lunge" in abilities and distance < 144.0:
+    if "lunge" in abilities and distance < 72.0:
         speed *= 1.35
     var next: Vector2 = position + movement.normalized() * minf(speed * delta, movement.length())
     if Room.can_occupy(next, float(enemy["radius"]), blocked):
@@ -128,7 +128,7 @@ static func advance(enemy: Dictionary, definition: Dictionary, delta: float,
 
 static func has_line_of_sight(from_pos: Vector2, to_pos: Vector2, blocked: Dictionary) -> bool:
     var displacement: Vector2 = to_pos - from_pos
-    var steps: int = maxi(1, int(ceilf(displacement.length() / 8.0)))
+    var steps: int = maxi(1, int(ceilf(displacement.length() / 4.0)))
     for i in range(1, steps):
         var point: Vector2 = from_pos + displacement * (float(i) / float(steps))
         if blocked.has(Room.cell_of(point)):

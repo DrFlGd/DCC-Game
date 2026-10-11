@@ -8,22 +8,29 @@ const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
 const CharacterMenu = preload("res://scripts/character_menu.gd")
 
-const TILE := 32.0
+const TILE := 16.0
 const SIZE := 24
-const ROOM := Rect2(Vector2.ZERO, Vector2(768, 768))
-const MID := Vector2(384, 384)
-const DOOR_HALF := 32.0
-const PLAYER_RADIUS := 11.0
+const ROOM := Rect2(Vector2.ZERO, Vector2(384, 384))
+const MID := Vector2(192, 192)
+const DOOR_HALF := 16.0
+const PLAYER_RADIUS := 5.5
 const DIRECTIONS := ["N", "E", "S", "W"]
-const CRYPT = preload("res://assets/biomes/stone_crypt/tileset.png")
+const CRYPT = preload("res://assets/biomes/stone_crypt/tileset_16x16.png")
 const CRAWLER = preload("res://assets/characters/crawler/facing_8.png")
 const RAT = preload("res://assets/enemies/rat/facing_8.png")
 const BOSS = preload("res://assets/enemies/brute_boss/facing_8.png")
-const FLOOR_TILE := Rect2(0, 0, 32, 32)
-const FLOOR_ALT := Rect2(32, 0, 32, 32)
-const WALL_TILE := Rect2(64, 0, 32, 32)
-const CORNER_TILE := Rect2(96, 0, 32, 32)
-const DOOR_TILE := Rect2(64, 64, 64, 64)
+const FLOOR_TILE := Rect2(0, 0, 16, 16)
+const FLOOR_ALT := Rect2(16, 0, 16, 16)
+const WALL_TOP := Rect2(32, 0, 16, 16)
+const WALL_LEFT_EDGE := Rect2(64, 0, 16, 16)
+const WALL_RIGHT_EDGE := Rect2(48, 0, 16, 16)
+const WALL_FACE := Rect2(80, 0, 16, 16)
+const WALL_TORCH := Rect2(96, 0, 16, 16)
+const DOOR_TILE := Rect2(112, 0, 16, 16)
+const STAIRS := Rect2(0, 16, 16, 16)
+const PROP_BARREL := Rect2(16, 16, 16, 16)
+const PROP_CHEST := Rect2(32, 16, 16, 16)
+const PROP_BONES := Rect2(48, 16, 16, 16)
 
 var config: Dictionary = {}
 var catalogue: Dictionary = {}
@@ -231,7 +238,7 @@ func _physics_process(delta: float) -> void:
         move_axis.y -= 1.0
     if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
         move_axis.y += 1.0
-    var change: Vector2 = move_axis.normalized() * float(config.get("player_speed", 210.0)) * delta
+    var change: Vector2 = move_axis.normalized() * float(config.get("player_speed", 105.0)) * delta
     _move_player(change)
     if outcome != "running":
         queue_redraw()
@@ -295,10 +302,10 @@ func _enter_neighbor(direction: String) -> void:
     visited[next_id] = true
     projectiles.clear()
     match direction:
-        "N": player_position = Vector2(MID.x, ROOM.end.y - 42)
-        "S": player_position = Vector2(MID.x, 42)
-        "W": player_position = Vector2(ROOM.end.x - 42, MID.y)
-        "E": player_position = Vector2(42, MID.y)
+        "N": player_position = Vector2(MID.x, ROOM.end.y - 21)
+        "S": player_position = Vector2(MID.x, 21)
+        "W": player_position = Vector2(ROOM.end.x - 21, MID.y)
+        "E": player_position = Vector2(21, MID.y)
     _load_room(next_id)
     message = "Room %d [%s] | %s | %d ticks left" % [
         next_id, String(next_room["kind"]), String(entry["reason"]), ticks]
@@ -315,8 +322,8 @@ func _fire() -> void:
     fire_cooldown = 0.28
     shots_fired += 1
     projectiles.append({
-        "pos": player_position + aim_direction * 18.0,
-        "velocity": aim_direction * 430.0, "ttl": 2.0, "owner": "player",
+        "pos": player_position + aim_direction * 9.0,
+        "velocity": aim_direction * 215.0, "ttl": 2.0, "owner": "player",
         "die": 6, "bonus": RPG.modifier(int(ability_scores["DEX"])),
         "attack_bonus": RPG.attack_bonus(ability_scores, "DEX", player_level)
     })
@@ -329,7 +336,7 @@ func _melee() -> void:
     for i in range(enemies.size() - 1, -1, -1):
         var foe: Dictionary = enemies[i]
         var toward: Vector2 = Vector2(foe["pos"]) - player_position
-        if toward.length() <= 64.0 + float(foe["radius"]) and toward.length() > 0.01:
+        if toward.length() <= 32.0 + float(foe["radius"]) and toward.length() > 0.01:
             if aim_direction.dot(toward.normalized()) > 0.45:
                 _hit_enemy(i, RPG.attack_bonus(ability_scores, "STR", player_level),
                     6, RPG.modifier(int(ability_scores["STR"])))
@@ -379,17 +386,17 @@ func _update_projectiles(delta: float) -> void:
         bullet["pos"] = Vector2(bullet["pos"]) + Vector2(bullet["velocity"]) * delta
         bullet["ttl"] = float(bullet["ttl"]) - delta
         var position: Vector2 = bullet["pos"]
-        if float(bullet["ttl"]) <= 0.0 or not Contents.can_occupy(position, 4.0, room_obstacles):
+        if float(bullet["ttl"]) <= 0.0 or not Contents.can_occupy(position, 2.0, room_obstacles):
             projectiles.remove_at(i)
             continue
         var collided := false
         if String(bullet["owner"]) == "player":
             for j in range(enemies.size() - 1, -1, -1):
-                if position.distance_to(Vector2(enemies[j]["pos"])) < float(enemies[j]["radius"]) + 6.0:
+                if position.distance_to(Vector2(enemies[j]["pos"])) < float(enemies[j]["radius"]) + 3.0:
                     _hit_enemy(j, int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]))
                     collided = true
                     break
-        elif position.distance_to(player_position) < PLAYER_RADIUS + 6.0:
+        elif position.distance_to(player_position) < PLAYER_RADIUS + 3.0:
             _hit_player(int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]))
             collided = true
         if collided:
@@ -425,7 +432,7 @@ func _update_enemies(delta: float) -> void:
             continue
         var skill: Dictionary = attacks[0]
         var distance: float = Vector2(foe["pos"]).distance_to(player_position)
-        if distance > float(skill.get("range", 45.0)):
+        if distance > float(skill.get("range", 22.5)):
             continue
         if not Enemies.has_line_of_sight(Vector2(foe["pos"]), player_position, room_obstacles):
             continue
@@ -444,8 +451,8 @@ func _update_enemies(delta: float) -> void:
             for angle in angles:
                 var shot: Vector2 = direction.rotated(angle)
                 projectiles.append({
-                    "pos": Vector2(foe["pos"]) + shot * (float(foe["radius"]) + 8.0),
-                    "velocity": shot * float(skill.get("projectile_speed", 250.0)),
+                    "pos": Vector2(foe["pos"]) + shot * (float(foe["radius"]) + 4.0),
+                    "velocity": shot * float(skill.get("projectile_speed", 125.0)),
                     "ttl": 2.8, "owner": "enemy", "die": int(skill["damage_die"]),
                     "bonus": damage_bonus, "attack_bonus": attack_bonus
                 })
@@ -478,16 +485,21 @@ func _draw() -> void:
 
 
 func _draw_room() -> void:
+    # Supplied 8x2 native-16px atlas; the sampler has no explicit corner/south
+    # pieces, so rotated top-stone is a temporary joining fallback.
     for y in range(SIZE):
         for x in range(SIZE):
-            var center: Vector2 = Vector2((float(x) + 0.5) * TILE, (float(y) + 0.5) * TILE)
-            var tile: Rect2 = FLOOR_ALT if (x * 17 + y * 13) % 9 == 0 else FLOOR_TILE
-            _crypt_piece(tile, center, Vector2(32, 32), float((x + y * 3) % 4) * PI * 0.5)
+            var tile_center := Vector2((float(x) + 0.5) * TILE, (float(y) + 0.5) * TILE)
+            var tile_region := FLOOR_ALT if (x * 17 + y * 13) % 9 == 0 else FLOOR_TILE
+            _crypt_piece(tile_region, tile_center, Vector2(TILE, TILE))
     var kind: String = String(floor["rooms"][current_room_id]["kind"])
     var tint := Color.TRANSPARENT
-    if kind == "boss": tint = Color(0.3, 0.05, 0.09, 0.16)
-    elif kind == "guild_hall": tint = Color(0.04, 0.30, 0.22, 0.14)
-    elif kind == "exit": tint = Color(0.35, 0.24, 0.06, 0.14)
+    if kind == "boss":
+        tint = Color(0.3, 0.05, 0.09, 0.16)
+    elif kind == "guild_hall":
+        tint = Color(0.04, 0.30, 0.22, 0.14)
+    elif kind == "exit":
+        tint = Color(0.35, 0.24, 0.06, 0.14)
     if tint.a > 0.0:
         draw_rect(ROOM, tint)
 
@@ -497,20 +509,28 @@ func _draw_room() -> void:
     var links: Dictionary = floor["rooms"][current_room_id]["neighbors"]
     for x in range(SIZE):
         var px: float = (float(x) + 0.5) * TILE
-        if not (links.has("N") and (x == 11 or x == 12)):
-            _crypt_piece(WALL_TILE, Vector2(px, -16), Vector2(32, 32))
-        if not (links.has("S") and (x == 11 or x == 12)):
-            _crypt_piece(WALL_TILE, Vector2(px, 784), Vector2(32, 32), PI)
+        var north_gap: bool = links.has("N") and (x == 11 or x == 12)
+        var south_gap: bool = links.has("S") and (x == 11 or x == 12)
+        if not north_gap:
+            _crypt_piece(WALL_TOP, Vector2(px, -TILE * 0.5), Vector2(TILE, TILE))
+            var face: Rect2 = WALL_TORCH if (x == 5 or x == 18) else WALL_FACE
+            _crypt_piece(face, Vector2(px, TILE * 0.5), Vector2(TILE, TILE))
+        if not south_gap:
+            _crypt_piece(WALL_TOP, Vector2(px, ROOM.end.y + TILE * 0.5),
+                Vector2(TILE, TILE), PI)
     for y in range(SIZE):
         var py: float = (float(y) + 0.5) * TILE
         if not (links.has("W") and (y == 11 or y == 12)):
-            _crypt_piece(WALL_TILE, Vector2(-16, py), Vector2(32, 32), -PI * 0.5)
+            _crypt_piece(WALL_RIGHT_EDGE, Vector2(-TILE * 0.5, py), Vector2(TILE, TILE))
         if not (links.has("E") and (y == 11 or y == 12)):
-            _crypt_piece(WALL_TILE, Vector2(784, py), Vector2(32, 32), PI * 0.5)
-    _crypt_piece(CORNER_TILE, Vector2(-16, -16), Vector2(32, 32))
-    _crypt_piece(CORNER_TILE, Vector2(784, -16), Vector2(32, 32), PI * 0.5)
-    _crypt_piece(CORNER_TILE, Vector2(784, 784), Vector2(32, 32), PI)
-    _crypt_piece(CORNER_TILE, Vector2(-16, 784), Vector2(32, 32), -PI * 0.5)
+            _crypt_piece(WALL_LEFT_EDGE, Vector2(ROOM.end.x + TILE * 0.5, py),
+                Vector2(TILE, TILE))
+    # Corner fallback uses wall-top stone because the free sampler omits corner tiles.
+    _crypt_piece(WALL_TOP, Vector2(-8, -8), Vector2(TILE, TILE))
+    _crypt_piece(WALL_TOP, Vector2(ROOM.end.x + 8, -8), Vector2(TILE, TILE), PI * 0.5)
+    _crypt_piece(WALL_TOP, ROOM.end + Vector2(8, 8), Vector2(TILE, TILE), PI)
+    _crypt_piece(WALL_TOP, Vector2(-8, ROOM.end.y + 8), Vector2(TILE, TILE), -PI * 0.5)
+
     for direction in DIRECTIONS:
         if not links.has(direction):
             continue
@@ -519,85 +539,84 @@ func _draw_room() -> void:
         var preview: Dictionary = rules.evaluate(ticks, String(destination["kind"]),
             not visited.has(next_id), next_id)
         var color := Color.WHITE
-        if destination["kind"] == "guild_hall": color = Color("#a4efe1")
-        elif destination["kind"] == "boss": color = Color("#f5b0b0")
+        if destination["kind"] == "guild_hall":
+            color = Color("#a4efe1")
+        elif destination["kind"] == "boss":
+            color = Color("#f5b0b0")
         elif destination["kind"] == "exit":
             color = Color("#f9d57e") if boss_defeated else Color("#c77179")
-        var center := MID
+        var door_center := MID
         var rotation := 0.0
-        var label := MID
+        var label_pos := MID
         match direction:
             "N":
-                center = Vector2(384, 0)
-                label = Vector2(361, 42)
+                door_center = Vector2(MID.x, 0)
+                label_pos = Vector2(MID.x - 16, 30)
             "S":
-                center = Vector2(384, 768)
+                door_center = Vector2(MID.x, ROOM.end.y)
                 rotation = PI
-                label = Vector2(361, 738)
+                label_pos = Vector2(MID.x - 16, ROOM.end.y - 19)
             "W":
-                center = Vector2(0, 384)
+                door_center = Vector2(0, MID.y)
                 rotation = -PI * 0.5
-                label = Vector2(25, 392)
+                label_pos = Vector2(16, MID.y + 6)
             "E":
-                center = Vector2(768, 384)
+                door_center = Vector2(ROOM.end.x, MID.y)
                 rotation = PI * 0.5
-                label = Vector2(690, 392)
-        _crypt_piece(DOOR_TILE, center, Vector2(64, 64), rotation, color)
-        var net: int = int(preview["grant"]) - int(preview["cost"])
-        _text("%s%+d" % [direction, net], label, 23, Color.WHITE)
+                label_pos = Vector2(ROOM.end.x - 40, MID.y + 6)
+        # Two 16px leaf sprites visually fill each 32px linked-door opening.
+        var door_offset := Vector2(TILE * 0.5, 0).rotated(rotation)
+        _crypt_piece(DOOR_TILE, door_center - door_offset, Vector2(TILE, TILE), rotation, color)
+        _crypt_piece(DOOR_TILE, door_center + door_offset, Vector2(TILE, TILE), rotation, color)
+        var net_ticks: int = int(preview["grant"]) - int(preview["cost"])
+        _text("%s%+d" % [direction, net_ticks], label_pos, 13, Color.WHITE)
+
     if kind == "boss":
-        _text("BOSS ROOM", Vector2(306, 60), 26, Color("#ffb4b7"))
+        _text("BOSS", MID + Vector2(-20, -146), 17, Color("#ffb4b7"))
     elif kind == "guild_hall":
-        _text("GUILD HALL", Vector2(300, 60), 26, Color("#b4f9d8"))
+        _text("GUILD", MID + Vector2(-22, -146), 17, Color("#b4f9d8"))
     elif kind == "exit":
-        _text("EXIT", Vector2(344, 60), 26, Color("#ffdc91"))
+        _crypt_piece(STAIRS, MID, Vector2(32, 32))
+        _text("EXIT", MID + Vector2(-16, -146), 17, Color("#ffdc91"))
 
 
 func _draw_obstacle(prop: Dictionary) -> void:
     var cell: Vector2i = prop["cell"]
     var center: Vector2 = Contents.cell_center(cell)
-    draw_circle(center + Vector2(2, 5), 15.5, Color("#11151c"))
-    if prop["kind"] == "pillar":
-        _crypt_piece(WALL_TILE, center, Vector2(32, 32))
-        draw_rect(Rect2(center - Vector2(10, 12), Vector2(20, 5)), Color("#a39c92"))
-    else:
-        draw_colored_polygon(PackedVector2Array([
-            center + Vector2(-13, 9), center + Vector2(-11, -5),
-            center + Vector2(-2, -13), center + Vector2(10, -7),
-            center + Vector2(13, 11)]), Color("#736b66"))
-        draw_rect(Rect2(center + Vector2(-5, -7), Vector2(9, 7)), Color("#a4a09b"))
+    var region: Rect2 = PROP_BARREL if prop["kind"] == "pillar" else PROP_BONES
+    _crypt_piece(region, center, Vector2(TILE, TILE))
 
 
 func _draw_combat() -> void:
     for projectile in projectiles:
         var point: Vector2 = projectile["pos"]
         var color := Color("#ffe78b") if projectile["owner"] == "player" else Color("#d778dc")
-        draw_circle(point, 5.0, color)
+        draw_circle(point, 2.5, color)
     for foe in enemies:
         var definition: Dictionary = catalogue["enemies"][foe["definition"]]
         var boss_sprite: bool = definition["sprite"] == "boss"
         var sheet: Texture2D = BOSS if boss_sprite else RAT
-        var size := Vector2(96, 96) if boss_sprite else Vector2(48, 48)
+        var sprite_size := Vector2(48, 48) if boss_sprite else Vector2(24, 24)
         var point: Vector2 = foe["pos"]
-        _draw_facing_sprite(sheet, point, size, int(foe["facing"]))
+        _draw_facing_sprite(sheet, point, sprite_size, int(foe["facing"]))
         var hp_ratio: float = float(foe["hp"]) / float(foe["max_hp"])
-        draw_rect(Rect2(point.x - 24, point.y - size.y * 0.5 - 12, 48, 6), Color("#151b25"))
-        draw_rect(Rect2(point.x - 24, point.y - size.y * 0.5 - 12,
-            48 * hp_ratio, 6), Color("#a5d49b"))
+        draw_rect(Rect2(point.x - 12, point.y - sprite_size.y * 0.5 - 6, 24, 3),
+            Color("#151b25"))
+        draw_rect(Rect2(point.x - 12, point.y - sprite_size.y * 0.5 - 6, 24 * hp_ratio, 3),
+            Color("#a5d49b"))
         if foe["definition"] == "spitting_rat":
-            draw_circle(point + Vector2(0, 22), 4.0, Color("#c978d4"))
-    _draw_facing_sprite(CRAWLER, player_position, Vector2(48, 48), player_facing)
-    draw_line(player_position, player_position + aim_direction * 26.0, Color("#f9dc92"), 2.0)
+            draw_circle(point + Vector2(0, 11), 2.5, Color("#c978d4"))
+    _draw_facing_sprite(CRAWLER, player_position, Vector2(24, 24), player_facing)
+    draw_line(player_position, player_position + aim_direction * 13.0, Color("#f9dc92"), 1.0)
     if melee_flash > 0.0:
-        draw_arc(player_position, 60.0, aim_direction.angle() - 0.7,
-            aim_direction.angle() + 0.7, 14, Color("#fff1a7"), 5.0)
+        draw_arc(player_position, 30.0, aim_direction.angle() - 0.7,
+            aim_direction.angle() + 0.7, 14, Color("#fff1a7"), 3.0)
     if invulnerability > 0.0:
-        draw_arc(player_position, 24.0, 0.0, TAU, 24, Color(1, 1, 1, 0.42), 2.0)
+        draw_arc(player_position, 12.0, 0.0, TAU, 24, Color(1, 1, 1, 0.42), 1.0)
 
 
 func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
         rotation: float = 0.0, modulation: Color = Color.WHITE) -> void:
-    # Draw transforms are absolute; compose the room's screen transform here.
     var offset: Vector2 = layout["offset"]
     var scale: float = float(layout["scale"])
     draw_set_transform(offset + center * scale, rotation, Vector2.ONE * scale)

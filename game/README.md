@@ -19,6 +19,8 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Mouse | Aim freely in any direction |
 | Hold left mouse button | Shoot projectiles |
 | Hold Space | Melee attack in aim direction |
+| Esc | Open pause menu, or resume from pause / character stats |
+| Mouse in level-up menu | Assign and refund points with + / −, then confirm |
 | R | Restart using same seed |
 | N | Restart using a new seed |
 
@@ -38,6 +40,8 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 - **Fixed 24×24 interior tiles**, independent of display size; resize only changes the rendering scale and screen-space HUD. Minimum window size is 720×480.
 - **Deterministic rubble and pillar obstacles**, tested for walkable routes from room center to every connected exit.
 - **Data-driven multi-enemy encounters**, pathfinding/attack behavior, and a six-ability d20-inspired XP/level system.
+- **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
+- **Esc pause menu and character-stat page** with HP, AC, level, XP, proficiency, six scores/modifiers, and derived melee/ranged attack bonuses.
 
 ## Visual and tile layout
 
@@ -53,6 +57,16 @@ See the [per-category art file layout](assets/README.md). The door appears visua
 
 See [the gameplay systems specification](../docs/design/ROOM_ENEMY_RPG_PROTOTYPE.md) for how to add enemy types, pick chase/kite/guard behavior, choose BFS/direct/stationary navigation, edit melee or ranged attacks/abilities, and tune enemy XP. The player HUD shows six attributes, AC, HP, proficiency, level, and cumulative XP. D20 attacks use relevant stat modifiers, proficiency, and armor class. This is an action-game adaptation, **not full tabletop D&D**.
 
+## Level-up and pause menus
+
+When XP crosses a level threshold, combat stops and a **Level Up** overlay appears. The default is **2 free ability points per level gained** (this is a game-design adaptation, **not** D&D's class-specific Ability Score Improvement rule). The screen shows each of the six ability scores and its modifier, with **+** and **−** buttons to stage/undo points. Points are only applied when you select **Confirm allocation**, and confirmation remains disabled until all available points are assigned. Level jumps grant points for every level earned in that XP award. Scores cannot exceed the configured cap (default **20**).
+
+New scores immediately update AC (DEX), max HP (CON), STR-based melee and DEX-based ranged attack bonuses, and any relevant damage modifiers on new attacks. Raising CON grants the corresponding max-HP increase to current HP. All points are lost on starting a new run.
+
+Press **Esc** to open the pause menu. Choose **View character stats** to see your build, or **Resume game** to return. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
+
+Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). More UI/audio accessibility and gamepad support remain future tasks.
+
 ## Editing the clock and floor
 
 Open `data/prototype_rules.json`. Restart the game after editing it.
@@ -61,6 +75,8 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 - `room_count`: number of **rooms in the floor**, unrelated to the fixed 24×24 **tiles per room**; 22 is a test value.
 - `obstacle_count`: target blocking prop count for normal rooms; safe rooms use fewer.
 - `player_ability_scores`: six editable starting attributes (STR/DEX/CON/INT/WIS/CHA); HP, AC, attack bonuses, and progression derive from these.
+- `stat_points_per_level`: points earned for each new level (default 2).
+- `stat_score_cap`: upper limit for each ability score (default 20).
 - `start_ticks`: starting collapse budget.
 - `collapse.default.first_entry_cost` / `revisit_cost`: fallback transition cost.
 - `collapse.room_types.<kind>`: optional override for `start`, `normal`, `boss`, `guild_hall`, `exit`; currently boss costs 3, guild hall costs 0 and grants 3, exit costs 1.
@@ -100,6 +116,7 @@ game/
 │   ├── room_contents.gd        # obstacle generator and reachability checks
 │   ├── enemy_system.gd         # definitions, encounters, navigation
 │   ├── rpg_rules.gd            # six stats, d20 attack and XP progression
+│   ├── character_menu.gd       # level-up allocation, pause and stat screens
 │   └── collapse_policy.gd     # room-specific timing policy and ledger
 ├── data/
 │   ├── prototype_rules.json    # collapse, obstacle count, player abilities

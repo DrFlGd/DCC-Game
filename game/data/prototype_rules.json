@@ -33,5 +33,7 @@
     "WIS": 12,
     "CHA": 10
   },
-  "obstacle_count": 38
+  "obstacle_count": 38,
+  "stat_points_per_level": 2,
+  "stat_score_cap": 20
 }

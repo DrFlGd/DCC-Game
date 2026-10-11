@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "enemies": {
+    "rat_scavenger": {
+      "name": "Rat Scavenger",
+      "sprite": "rat",
+      "level": 1,
+      "hp": 7,
+      "ac": 12,
+      "xp": 25,
+      "abilities": [],
+      "scores": {
+        "STR": 10,
+        "DEX": 14,
+        "CON": 10,
+        "INT": 3,
+        "WIS": 10,
+        "CHA": 5
+      },
+      "speed": 86,
+      "collision_radius": 12,
+      "behavior": {
+        "mode": "chase",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.35,
+        "preferred_distance": 26,
+        "detection_range": 900
+      },
+      "attacks": [
+        {
+          "id": "bite",
+          "type": "melee",
+          "ability": "STR",
+          "proficient": true,
+          "range": 38,
+          "cooldown": 1.05,
+          "damage_die": 4,
+          "damage_bonus": 0
+        }
+      ]
+    },
+    "spitting_rat": {
+      "name": "Spitting Rat",
+      "sprite": "rat",
+      "level": 1,
+      "hp": 5,
+      "ac": 12,
+      "xp": 50,
+      "abilities": [
+        "twin_shot"
+      ],
+      "scores": {
+        "STR": 8,
+        "DEX": 14,
+        "CON": 10,
+        "INT": 4,
+        "WIS": 11,
+        "CHA": 4
+      },
+      "speed": 73,
+      "collision_radius": 12,
+      "behavior": {
+        "mode": "kite",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 210,
+        "detection_range": 900
+      },
+      "attacks": [
+        {
+          "id": "spit",
+          "type": "ranged",
+          "ability": "DEX",
+          "proficient": true,
+          "range": 370,
+          "cooldown": 2.2,
+          "damage_die": 4,
+          "damage_bonus": 0,
+          "projectile_speed": 235
+        }
+      ]
+    },
+    "hulking_rat": {
+      "name": "Hulking Rat",
+      "sprite": "rat",
+      "level": 2,
+      "hp": 17,
+      "ac": 13,
+      "xp": 100,
+      "abilities": [
+        "lunge"
+      ],
+      "scores": {
+        "STR": 16,
+        "DEX": 10,
+        "CON": 14,
+        "INT": 3,
+        "WIS": 9,
+        "CHA": 5
+      },
+      "speed": 56,
+      "collision_radius": 18,
+      "behavior": {
+        "mode": "chase",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.25,
+        "preferred_distance": 31,
+        "detection_range": 900
+      },
+      "attacks": [
+        {
+          "id": "claw",
+          "type": "melee",
+          "ability": "STR",
+          "proficient": true,
+          "range": 46,
+          "cooldown": 1.6,
+          "damage_die": 6,
+          "damage_bonus": 0
+        }
+      ]
+    },
+    "armored_brute": {
+      "name": "Armored Brute",
+      "sprite": "boss",
+      "level": 3,
+      "hp": 42,
+      "ac": 15,
+      "xp": 250,
+      "abilities": [
+        "lunge"
+      ],
+      "scores": {
+        "STR": 18,
+        "DEX": 9,
+        "CON": 16,
+        "INT": 7,
+        "WIS": 10,
+        "CHA": 7
+      },
+      "speed": 62,
+      "collision_radius": 28,
+      "behavior": {
+        "mode": "chase",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.3,
+        "preferred_distance": 45,
+        "detection_range": 900
+      },
+      "attacks": [
+        {
+          "id": "maul",
+          "type": "melee",
+          "ability": "STR",
+          "proficient": true,
+          "range": 60,
+          "cooldown": 1.85,
+          "damage_die": 8,
+          "damage_bonus": 1
+        }
+      ]
+    }
+  },
+  "encounter_tables": {
+    "normal": {
+      "min": 2,
+      "max": 4,
+      "pool": [
+        "rat_scavenger",
+        "rat_scavenger",
+        "spitting_rat",
+        "hulking_rat"
+      ]
+    },
+    "boss": {
+      "fixed": [
+        "armored_brute",
+        "rat_scavenger",
+        "spitting_rat"
+      ]
+    },
+    "start": {
+      "min": 0,
+      "max": 0,
+      "pool": []
+    },
+    "guild_hall": {
+      "min": 0,
+      "max": 0,
+      "pool": []
+    },
+    "exit": {
+      "min": 0,
+      "max": 0,
+      "pool": []
+    }
+  }
+}

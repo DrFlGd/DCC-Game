@@ -69,6 +69,7 @@ The four content/design phases below follow the project's requested order. Techn
 - [ ] Define what a *run*, *floor*, *room*, *encounter*, *boss*, *exit*, and *collapse* mean.
 - [ ] Specify a procedural **room-grid graph**: adjacent connections, doors, branches, loops, dead ends, special rooms, gated routes, and discovery/fog-of-war.
 - [ ] Define room interior tile grids, collision, hazards, destructibles, and interaction points separately from the overall floor map.
+- [ ] **Choose a standard room tile size and coordinate scale (D-13).** Compare candidate tile resolutions (for example 16×16, 24×24, or 32×32 *logical pixels*, not final choices), player/enemy sprite footprints, room dimensions in tiles, collision-cell granularity, and camera/UI scaling at target resolutions. Check that door widths, large enemies, and projectiles align with the grid.
 - [ ] Set **large-floor design targets**. Evaluate initial test sizes such as 40–80 rooms per floor, then tune based on traversal time and decision density; these are hypotheses, not final requirements.
 - [ ] Require every generated floor to have an achievable critical route from start to exit/objective, with optional risk/reward branches.
 - [ ] Decide whether floor progression is linear, branching, or includes optional side objectives.
@@ -88,6 +89,7 @@ The four content/design phases below follow the project's requested order. Techn
 - [ ] Specify movement, collision, dodge/avoidance, damage, health, death, invulnerability frames, and hit feedback.
 - [ ] Support **full-direction aiming/attacking** from a top-down view (input method to be decided).
 - [ ] Prototype projectile and melee attacks with hitboxes, range, speed, cooldowns, attack arcs, knockback, and damage types.
+- [ ] **Design the full melee ruleset (D-14).** Decide whether attacks use directionally aimed arcs, straight thrusts, close-range contact, or weapon-specific patterns; how aim and attack inputs work; whether holding attack repeats; hitboxes/active frames, reach, cleave and multiple-target hits, knockback, cooldowns/stamina, animation tells, and how melee compares to projectile builds. Include companion melee behavior and environmental interactions as later considerations.
 - [ ] Define inventory/equipment slots, pickup interactions, consumables, and active versus passive items.
 - [ ] Establish companions as a later system, but choose foundational assumptions now: follower AI, target selection, positioning, commands, buffs, survivability, and independent attacks.
 - [ ] Decide combat persistence on leaving/re-entering rooms and whether doors are locked during encounters.
@@ -269,6 +271,8 @@ Keep these in a living decision log and resolve them in Phase 1 unless noted.
 | D-10 | Companions at launch versus later | **Open**; design for them, prototype solo first |
 | D-11 | Source-books scope, edition references, spoiler policy | **Open**; decide before bulk cataloguing |
 | D-12 | Fan prototype vs. broader distribution; IP permissions | **Open**; assess before sharing externally |
+| D-13 | Standard tile size for room elements and art scale | **Open / later Phase 1:** decide logical pixel dimensions, sprites-to-tiles ratio, room size in tiles, collision granularity, and scaling conventions. Test 16/24/32px candidates as options only. |
+| D-14 | Full melee combat mechanics | **Open / later Phase 1:** choose strike patterns and aiming, attack timing, hit detection, range/arc, cooldown/stamina, knockback/cleave, weapon variation, and readability. Current prototype is temporary. |
 
 Record final choices with date, alternatives, rationale, and implications under `docs/decisions/`.
 
@@ -317,6 +321,15 @@ These are ordered, small enough to turn into GitHub issues, and explicitly tied 
 10. **Define the first enemy/loot test set.** Build a few basic enemy and item records, then playtest a full start-to-exit run.
 
 **Next working session recommendation:** start with tasks **1 and 2**; their decisions directly shape map generation, pacing, balance, and the eventual content system.
+
+## 5A. Follow-up design questions (deferred, tracked)
+
+These do **not** block completing the initial engine smoke test. Address them before final art production, comprehensive room authoring, or combat-content balance.
+
+- [ ] **D-13 — Standard room tile size and art scale:** Build a comparison room using candidate logical tile sizes (e.g., 16×16, 24×24, 32×32 pixels). Verify the resulting player sprite footprint, door width, wall thickness, movement/collision precision, tiles per room, projectiles, enemy sizes, and integer camera scaling at desktop resolutions. Record the selected grid/asset convention in `docs/design/GAME_DESIGN.md` and the pixel-art guide. **Done when:** one documented tile standard is used in a room mock-up and can support ordinary and large enemies.
+- [ ] **D-14 — Define melee combat:** Compare radial/directional arc swipes, thrusts, and weapon-dependent patterns; decide how aim, attack input, hitboxes, active frames, multi-target hits, range, cooldown/resource costs, knockback, and enemy telegraphs work. Test feel alongside projectile combat and specify how weapons vary. Record the result in `docs/design/COMBAT_AND_RPG.md`. **Done when:** one playable melee ruleset has been playtested and its collision/timing behaviors are documented.
+
+**Current prototype behavior (not a committed design):** Space triggers a melee swing in the mouse-aimed direction at roughly 0.44 s intervals, hitting a nearby enemy in a forward-facing cone within a 64-pixel base reach, for 2 damage. This simple check is a placeholder for proper weapon hitboxes, animation timing, and balance. The current room visuals are programmatic debug shapes rather than a selected tile-art standard.
 
 ## 6. Definition of done for any design or content task
 

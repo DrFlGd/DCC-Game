@@ -2,14 +2,14 @@
 
 A game-design and development project inspired by **Dungeon Crawler Carl**. The intended experience is a top-down, room-based roguelike dungeon crawler with a 16-bit-inspired pixel-art aesthetic, expanded procedural floors, tactical pressure from a floor-collapse clock, action combat, RPG progression, and optional companions.
 
-> **Project status:** Pre-production with a **Godot 4.7.2/GDScript prototype** and 32×32 stone-crypt starter art integrated in `game/`. GitHub's headless import, smoke tests, and scene launch have passed; interactive art/gameplay tuning is still pending.
+> **Project status:** Pre-production with a **Godot 4.7.2/GDScript prototype** and 32×32 stone-crypt biome with corrected corner tiles, separate eight-direction character/enemy art, and viewport-resizing rooms. Headless tests pass; hands-on playtesting remains.
 
 ## Start here
 
 - **[Project roadmap](docs/ROADMAP.md)** — phases, deliverables, completion criteria, design questions, and first actionable tasks.
 - **[D-01 engine and platform decision](docs/decisions/ADR-001-engine-and-platform.md)** — Godot 4.7.2 + GDScript selected; implementation record and test gate.
 - **[Godot prototype: setup and controls](game/README.md)** — import `game/project.godot`, play the seeded dungeon-room spike, and run smoke tests.
-- **[32×32 art atlas and room construction](game/assets/README.md)** — stone-crypt tiles, direction-rotated walls and doors, and initial character/enemy sprites.
+- **[32×32 art atlas and room construction](game/assets/README.md)** — corrected stone-crypt floor/wall/corner tiles, separate character/enemy eight-direction sprite sheets, and asset conventions for future biomes and weapons.
 - The team has selected **Godot 4.7.2 + GDScript** and **32×32 environment tiles**. The next step is to visually playtest room traversals and combat, then refine the collapse-loop pacing before building a large content library.
 - The second goal is a **source-referenced canon catalogue** of Carl's and companions' interactions, equipment, enemies, skills, and other mechanics.
 - The third and fourth goals are a **game-ready item/ability catalogue** and a **tiered enemy roster**.

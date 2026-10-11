@@ -1,0 +1,7 @@
+# Godot editor imports and local cache
+**/.godot/
+**/.import/
+# Exported builds and local developer overrides
+builds/
+*.tmp
+.DS_Store

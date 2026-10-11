@@ -42,6 +42,8 @@ The four content/design phases below follow the project's requested order. Techn
 
 **Phase priority:** 1 → 2 → 3 → 4, with small prototype experiments throughout. Phase 5 integrates those deliverables. Revisiting earlier phases is expected.
 
+**Latest engineering update (2026-10-10):** [D-01](decisions/ADR-001-engine-and-platform.md) is accepted. The [Godot greybox technical prototype](../game/README.md) is checked into `game/` with seeded rooms, simple combat, room-type collapse rules, and headless tests. **Runtime and interactive validation are still pending**; this is not a completed Phase 1 or Phase 5 build.
+
 ---
 
 ## Phase 0 — Establish the project (initialized)
@@ -52,7 +54,9 @@ The four content/design phases below follow the project's requested order. Techn
 - [x] Create a project overview in `README.md`.
 - [x] Record the roadmap in `docs/ROADMAP.md`.
 - [x] Document engine and platform options in [ADR-001](decisions/ADR-001-engine-and-platform.md); **Godot 4.x + GDScript, desktop-PC-first** is proposed, not yet approved.
-- [ ] Accept D-01 after owner selection and a short technical spike; pin the version, platform, and repository conventions.
+- [x] Accept D-01: project owner selected **Godot 4.7.2 stable (standard/GDScript), desktop-PC-first** on 2026-10-10.
+- [x] Add a runnable-project scaffold and headless smoke-test workflow under [`game/`](../game/README.md).
+- [ ] Run Godot CI/editor smoke tests and verify scene navigation, combat input, and game outcome; technical quality gate **pending**.
 - [ ] Decide whether this is a private fan prototype or intended for distribution; assess required intellectual-property permissions before public/commercial use.
 
 **Gate:** Documentation can be found and project goals are written down.
@@ -98,7 +102,8 @@ The four content/design phases below follow the project's requested order. Techn
 ### 1E. Presentation and technology
 - [ ] Set a pixel-art art bible: 16-bit-inspired style, sprite scale, tiles, palettes, silhouette readability, animations, effects, and UI.
 - [x] Evaluate engine and platform options against 2D tilemaps, deterministic procedural generation, combat collision, content architecture, licensing, and export; see [ADR-001](decisions/ADR-001-engine-and-platform.md).
-- [ ] Validate the proposed engine with a small seeded generation/combat/collapse spike before accepting D-01.
+- [x] Implement a first seeded generator/combat/collapse technical spike in [`game/`](../game/README.md).
+- [ ] Validate the Godot 4.7.2 prototype via headless tests and interactive playtesting (not executed in this authoring environment).
 - [ ] Choose input targets, minimum performance targets, and initial development platform.
 - [ ] Establish deterministic random seeds, debug overlays, and basic automated generator validation from day one.
 
@@ -252,7 +257,7 @@ Keep these in a living decision log and resolve them in Phase 1 unless noted.
 
 | ID | Decision | Current stance |
 | --- | --- | --- |
-| D-01 | Engine and deployment platform | **Proposed (ADR-001):** Godot 4.x + GDScript, desktop-PC-first; alternatives: Unity/C#, GameMaker/GML, Defold/Lua. Pending owner selection and spike. |
+| D-01 | Engine and deployment platform | **Accepted (ADR-001):** Godot **4.7.2 stable** + GDScript, desktop-PC-first. Prototype scaffold committed; Godot CI and playtest results pending. |
 | D-02 | Controller/keyboard/mouse aiming rules | **Open**; all-direction attack support is required |
 | D-03 | Collapse charge: first visit vs. every transition | **Open; configurable by room category and transition** (boss rooms and guild halls need distinct policies). |
 | D-04 | Clock unit and starting budget | **Open; tune** by floor size, mandatory route, special-room distribution, and playtest results. |
@@ -302,7 +307,7 @@ These are ordered, small enough to turn into GitHub issues, and explicitly tied 
 
 1. **Write the game loop contract.** Define victory, failure, floor advance, per-run progression, and what happens between rooms. Deliver: `GAME_DESIGN.md` outline and one-page flow.
 2. **Specify collapse clock v0.** Document tick triggers, starting budget, HUD, zero-clock outcome, and edge cases. Deliver: `COLLAPSE_SYSTEM.md` with examples.
-3. **Validate D-01 with an engine spike.** Test a seeded room graph, movement and aim, one projectile and melee attack, and data-driven boss-room/guild-hall collapse policies. Deliver: a greybox build and a short acceptance report per [ADR-001](decisions/ADR-001-engine-and-platform.md).
+3. **Verify the D-01 engine spike (code committed; test gate pending).** Run Godot headless tests and the scene in the editor, then exercise seeded room graph, movement/aim, projectiles/melee, and boss-room/guild-hall costs; record test results per [ADR-001](decisions/ADR-001-engine-and-platform.md).
 4. **Extend seeded generation and navigation.** Add connected floor layout, optional branches, room transitions, minimap, and visit persistence.
 5. **Prototype combat primitives.** One ranged projectile and one melee attack in any direction; basic enemy dummy and collision/damage.
 6. **Prototype configurable collapse integration.** Clock uses category/entry/revisit policy, previews costs, and enforces a consistent fail state.

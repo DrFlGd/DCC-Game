@@ -628,7 +628,7 @@ func _draw_hud() -> void:
     _draw_minimap()
     _text("WASD / arrows: move  |  Mouse: aim  |  LMB: shoot  |  Space: melee",
         Vector2(14, view.y - 46), 14, Color("#dce9f2"))
-    _text("R: replay seed | N: new seed | Fixed 24x24 tiles | Window scales view only",
+    _text("Esc: pause / stats | R: replay | N: new seed | Fixed 24x24 room",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
 
 

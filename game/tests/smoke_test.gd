@@ -33,30 +33,31 @@ func run_tests() -> void:
     check(collapse.evaluate(10, "guild_hall", true, 1)["grant"] == 3, "guild grant")
     check(not bool(collapse.evaluate(1, "boss", true, 1)["allowed"]), "cannot overspend")
 
-    # The interior always contains exactly 24x24 logical 32px tiles.
+    # The interior always contains exactly 24x24 logical 16px tiles.
     var last_scale := 0.0
     for dimensions in [Vector2(720, 480), Vector2(960, 540),
             Vector2(1280, 720), Vector2(1920, 1080)]:
         var l: Dictionary = Layout.compute(dimensions)
         var arena: Rect2 = l["arena"]
         check(int(l["columns"]) == 24 and int(l["rows"]) == 24, "fixed tile count")
-        check(arena == Rect2(0, 0, 768, 768), "world bounds never change")
+        check(arena == Rect2(0, 0, 384, 384), "world bounds never change")
         check(float(l["scale"]) >= last_scale, "larger window yields same or larger scale")
         last_scale = float(l["scale"])
-        var upper_left: Vector2 = Layout.world_to_screen(Vector2(-32, -32), l)
-        var lower_right: Vector2 = Layout.world_to_screen(Vector2(800, 800), l)
+        var upper_left: Vector2 = Layout.world_to_screen(Vector2(-16, -16), l)
+        var lower_right: Vector2 = Layout.world_to_screen(Vector2(400, 400), l)
         check(upper_left.x >= 0 and upper_left.y >= 98, "room ring inside upper margins")
         check(lower_right.x <= dimensions.x and lower_right.y <= dimensions.y - 55,
             "room ring fits under HUD")
-        var sample := Vector2(216.0, 535.0)
+        var sample := Vector2(108.0, 267.0)
         check(Layout.screen_to_world(Layout.world_to_screen(sample, l), l).distance_to(sample) < 0.01,
             "mouse screen/world mapping invertible")
     check(Layout.compute(Vector2(1920, 1080))["scale"] >
         Layout.compute(Vector2(720, 480))["scale"], "render scale changes with window")
 
     # Existing art uses separate files. Rat has 8 directional images.
-    var crypt: Texture2D = load("res://assets/biomes/stone_crypt/tileset.png") as Texture2D
-    check(crypt != null and crypt.get_size() == Vector2(128, 128), "crypt tileset")
+    var crypt: Texture2D = load("res://assets/biomes/stone_crypt/tileset_16x16.png") as Texture2D
+    check(crypt != null and crypt.get_size() == Vector2(128, 32), "supplied 16px sampler atlas")
+    check(Layout.TILE_SIZE == 16 and Contents.TILE == 16.0, "render and collision grid both 16px")
     for entry in [
         {"path":"res://assets/characters/crawler/facing_8.png", "frame":48},
         {"path":"res://assets/enemies/rat/facing_8.png", "frame":32},
@@ -172,7 +173,7 @@ func run_tests() -> void:
                 check(not Contents.find_path(obstacle_map["blocked"],
                     Contents.cell_of(foe["pos"]), Vector2i(12, 12)).is_empty(),
                     "enemy spawn reachable via navigation graph")
-    check(Enemies.has_line_of_sight(Vector2(64, 64), Vector2(160, 64), {}),
+    check(Enemies.has_line_of_sight(Vector2(32, 32), Vector2(80, 32), {}),
         "line of sight over open tiles")
-    check(not Enemies.has_line_of_sight(Vector2(64, 64), Vector2(160, 64),
+    check(not Enemies.has_line_of_sight(Vector2(32, 32), Vector2(80, 32),
         {Vector2i(3, 2): true}), "obstacle blocks projectile line of sight")

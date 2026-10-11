@@ -52,3 +52,31 @@ static func player_progression(total_xp: int, scores: Dictionary) -> Dictionary:
     return {"level": level, "xp": total_xp, "next_xp": next_level_xp(level),
         "proficiency": proficiency(level), "max_hp": player_hp_at_level(level, scores),
         "ac": armor_class(scores)}
+
+
+## Prototype level-up allocation: 2 freely assigned ability points per level by
+## default, not the class-specific ASI schedule of tabletop D&D.
+static func validate_allocation(scores: Dictionary, allocation: Dictionary,
+        available_points: int, score_cap: int = 20) -> bool:
+    if available_points < 0:
+        return false
+    var total := 0
+    for key in allocation.keys():
+        if not ABILITIES.has(String(key)):
+            return false
+    for ability in ABILITIES:
+        var points: int = int(allocation.get(ability, 0))
+        if points < 0 or int(scores.get(ability, 10)) + points > score_cap:
+            return false
+        total += points
+    return total == available_points
+
+
+static func apply_allocation(scores: Dictionary, allocation: Dictionary,
+        available_points: int, score_cap: int = 20) -> Dictionary:
+    if not validate_allocation(scores, allocation, available_points, score_cap):
+        return {}
+    var changed: Dictionary = scores.duplicate(true)
+    for ability in ABILITIES:
+        changed[ability] = int(changed.get(ability, 10)) + int(allocation.get(ability, 0))
+    return changed

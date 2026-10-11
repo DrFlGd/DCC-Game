@@ -1,130 +1,162 @@
 extends Node2D
-## DCC Game technical prototype; modular 32px biome tiles and eight-way facing sprites.
-
+## Fixed 24x24 world room; window scale and HUD layout remain independent.
 const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const Layout = preload("res://scripts/room_layout.gd")
+const Contents = preload("res://scripts/room_contents.gd")
+const Enemies = preload("res://scripts/enemy_system.gd")
+const RPG = preload("res://scripts/rpg_rules.gd")
 
-const TILE_SIZE := 32.0
-var VIEW_SIZE := Vector2(960, 540)
-var ROOM_COLUMNS := 24
-var ROOM_ROWS := 10
-var ARENA := Rect2(96.0, 112.0, 768.0, 320.0)
-var CENTER := Vector2(480, 272)
-const DOOR_HALF_WIDTH := 32.0
+const TILE := 32.0
+const SIZE := 24
+const ROOM := Rect2(Vector2.ZERO, Vector2(768, 768))
+const MID := Vector2(384, 384)
+const DOOR_HALF := 32.0
 const PLAYER_RADIUS := 11.0
-const BULLET_SPEED := 445.0
-const MOVE_LABELS := ["N", "E", "S", "W"]
-
+const DIRECTIONS := ["N", "E", "S", "W"]
 const CRYPT = preload("res://assets/biomes/stone_crypt/tileset.png")
-const PLAYER_SHEET = preload("res://assets/characters/crawler/facing_8.png")
-const RAT_SHEET = preload("res://assets/enemies/rat/facing_8.png")
-const BOSS_SHEET = preload("res://assets/enemies/brute_boss/facing_8.png")
-const ART_FLOOR := Rect2(0, 0, 32, 32)
-const ART_FLOOR_VARIANT := Rect2(32, 0, 32, 32)
-const ART_WALL := Rect2(64, 0, 32, 32)
-const ART_CORNER := Rect2(96, 0, 32, 32)
-const ART_DOOR := Rect2(64, 64, 64, 64)
-const DIRECTIONS_8 := ["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
+const CRAWLER = preload("res://assets/characters/crawler/facing_8.png")
+const RAT = preload("res://assets/enemies/rat/facing_8.png")
+const BOSS = preload("res://assets/enemies/brute_boss/facing_8.png")
+const FLOOR_TILE := Rect2(0, 0, 32, 32)
+const FLOOR_ALT := Rect2(32, 0, 32, 32)
+const WALL_TILE := Rect2(64, 0, 32, 32)
+const CORNER_TILE := Rect2(96, 0, 32, 32)
+const DOOR_TILE := Rect2(64, 64, 64, 64)
 
 var config: Dictionary = {}
+var catalogue: Dictionary = {}
 var floor: Dictionary = {}
+var layout: Dictionary = {}
 var rules
+var rng := RandomNumberGenerator.new()
+var seed_value := 0
 var current_room_id := 0
-var visited: Dictionary = {}
-var defeated: Dictionary = {}
-var saved_enemy_hp: Dictionary = {}
-var tick_ledger: Array[Dictionary] = []
 var ticks := 0
-var initial_seed := 0
-var player_position := Vector2(480, 272)
-var player_facing := 0
-var player_hp := 8
+var visited: Dictionary = {}
+var room_states: Dictionary = {}
+var room_obstacles: Dictionary = {}
+var props: Array = []
+var enemies: Array = []
+var projectiles: Array[Dictionary] = []
+var tick_ledger: Array[Dictionary] = []
 var boss_defeated := false
 var outcome := "running"
 var message := ""
-var projectiles: Array[Dictionary] = []
-var enemy: Dictionary = {}
+var rooms_entered := 1
+
+var player_position := MID
 var aim_direction := Vector2.RIGHT
+var player_facing := 0
+var ability_scores: Dictionary = {}
+var player_xp := 0
+var player_level := 1
+var player_max_hp := 12
+var player_hp := 12
+var player_ac := 12
+var player_proficiency := 2
 var fire_cooldown := 0.0
 var melee_cooldown := 0.0
 var melee_flash := 0.0
-var invincible_seconds := 0.0
+var invulnerability := 0.0
 var shots_fired := 0
 var melee_swings := 0
-var rooms_entered := 1
 
 
 func _ready() -> void:
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    var raw: String = FileAccess.get_file_as_string("res://data/prototype_rules.json")
-    var parsed = JSON.parse_string(raw)
+    var parsed = JSON.parse_string(FileAccess.get_file_as_string("res://data/prototype_rules.json"))
     if not parsed is Dictionary:
-        push_error("Invalid prototype_rules.json; expected JSON object")
+        push_error("Invalid prototype_rules.json")
         get_tree().quit(1)
         return
     config = parsed
-    _update_layout()
+    catalogue = Enemies.load_catalogue()
+    if not Enemies.validate_catalogue(catalogue).is_empty():
+        push_error("Invalid enemy definitions: %s" % [Enemies.validate_catalogue(catalogue)])
+        get_tree().quit(1)
+        return
+    layout = Layout.compute(get_viewport_rect().size)
     _start_run(int(config.get("seed", 424242)))
 
 
-func _start_run(seed_value: int) -> void:
-    initial_seed = seed_value
+func _start_run(new_seed: int) -> void:
+    seed_value = new_seed
+    rng.seed = seed_value
     floor = Generator.generate(seed_value, int(config.get("room_count", 22)))
     rules = Collapse.new(config.get("collapse", {}))
     ticks = int(config.get("start_ticks", 26))
     current_room_id = int(floor["start_id"])
     visited = {current_room_id: true}
-    defeated.clear()
-    saved_enemy_hp.clear()
-    tick_ledger.clear()
+    room_states.clear()
     projectiles.clear()
-    player_position = CENTER
-    player_facing = 0
-    player_hp = int(config.get("player_max_hp", 8))
+    tick_ledger.clear()
     boss_defeated = false
-    enemy.clear()
+    outcome = "running"
+    player_position = MID
     aim_direction = Vector2.RIGHT
+    player_facing = 0
+    player_xp = 0
+    ability_scores = RPG.player_base_scores()
+    _sync_progression()
+    player_hp = player_max_hp
+    invulnerability = 0.0
     fire_cooldown = 0.0
     melee_cooldown = 0.0
     melee_flash = 0.0
-    invincible_seconds = 0.0
+    rooms_entered = 1
     shots_fired = 0
     melee_swings = 0
-    rooms_entered = 1
-    outcome = "running"
-    var budget_floor: int = Collapse.mandatory_budget_floor(floor, rules)
-    message = "Seed %d | estimated mandatory route minimum %d ticks" % [seed_value, budget_floor]
-    if ticks < budget_floor:
-        push_warning("Starting budget is below the route diagnostic: %d < %d" % [ticks, budget_floor])
+    _load_room(current_room_id)
+    var budget: int = Collapse.mandatory_budget_floor(floor, rules)
+    message = "24x24 fixed room | Seed %d | budget diagnostic %d ticks" % [seed_value, budget]
     print(message)
     queue_redraw()
+
+
+func _sync_progression() -> void:
+    var progression: Dictionary = RPG.player_progression(player_xp, ability_scores)
+    player_level = int(progression["level"])
+    player_max_hp = int(progression["max_hp"])
+    player_ac = int(progression["ac"])
+    player_proficiency = int(progression["proficiency"])
+
+
+func _load_room(id: int) -> void:
+    if not room_states.has(id):
+        var room: Dictionary = floor["rooms"][id]
+        var contents: Dictionary = Contents.generate(seed_value, id, room["neighbors"],
+            String(room["kind"]), int(config.get("obstacle_count", 38)))
+        var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue,
+            String(room["kind"]), seed_value, id, contents["blocked"])
+        room_states[id] = {"blocked": contents["blocked"], "props": contents["props"],
+            "enemies": encounter}
+    var state: Dictionary = room_states[id]
+    room_obstacles = state["blocked"]
+    props = state["props"]
+    enemies = state["enemies"]
 
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey:
         var key_event: InputEventKey = event
-        if not key_event.pressed or key_event.echo:
-            return
-        if key_event.keycode == KEY_R:
-            _start_run(initial_seed)
-        elif key_event.keycode == KEY_N:
-            _start_run(int(Time.get_ticks_usec() % 2147483647))
+        if key_event.pressed and not key_event.echo:
+            if key_event.keycode == KEY_R:
+                _start_run(seed_value)
+            elif key_event.keycode == KEY_N:
+                _start_run(int(Time.get_ticks_usec() % 2147483647))
 
 
 func _physics_process(delta: float) -> void:
-    # Layout follows actual window dimensions rather than a fixed 960x540 drawing canvas.
-    if get_viewport_rect().size != VIEW_SIZE:
-        _update_layout()
+    if get_viewport_rect().size != Vector2(layout["viewport"]):
+        layout = Layout.compute(get_viewport_rect().size)
     if outcome != "running":
         queue_redraw()
         return
-
     fire_cooldown = maxf(0.0, fire_cooldown - delta)
     melee_cooldown = maxf(0.0, melee_cooldown - delta)
     melee_flash = maxf(0.0, melee_flash - delta)
-    invincible_seconds = maxf(0.0, invincible_seconds - delta)
-
+    invulnerability = maxf(0.0, invulnerability - delta)
     var move_axis := Vector2.ZERO
     if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
         move_axis.x -= 1.0
@@ -134,430 +166,430 @@ func _physics_process(delta: float) -> void:
         move_axis.y -= 1.0
     if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
         move_axis.y += 1.0
-    player_position += move_axis.normalized() * float(config.get("player_speed", 210.0)) * delta
-    _handle_doors()
+    var change: Vector2 = move_axis.normalized() * float(config.get("player_speed", 210.0)) * delta
+    _move_player(change)
     if outcome != "running":
         queue_redraw()
         return
-
-    var target: Vector2 = get_global_mouse_position() - player_position
-    if target.length_squared() > 9.0:
-        aim_direction = target.normalized()
+    var mouse_world: Vector2 = Layout.screen_to_world(get_global_mouse_position(), layout)
+    var to_mouse: Vector2 = mouse_world - player_position
+    if to_mouse.length_squared() > 9.0:
+        aim_direction = to_mouse.normalized()
         player_facing = _facing_from_vector(aim_direction)
     if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and fire_cooldown <= 0.0:
         _fire()
     if Input.is_key_pressed(KEY_SPACE) and melee_cooldown <= 0.0:
-        _melee_attack()
-
-    _move_projectiles(delta)
-    _move_enemy(delta)
+        _melee()
+    _update_projectiles(delta)
+    _update_enemies(delta)
     queue_redraw()
 
 
-func _room() -> Dictionary:
-    var rooms: Array = floor["rooms"]
-    return rooms[current_room_id]
-
-
-func _handle_doors() -> void:
-    var door := ""
-    if player_position.x < ARENA.position.x:
-        if absf(player_position.y - CENTER.y) <= DOOR_HALF_WIDTH:
-            door = "W"
-    elif player_position.x > ARENA.end.x:
-        if absf(player_position.y - CENTER.y) <= DOOR_HALF_WIDTH:
-            door = "E"
-    elif player_position.y < ARENA.position.y:
-        if absf(player_position.x - CENTER.x) <= DOOR_HALF_WIDTH:
-            door = "N"
-    elif player_position.y > ARENA.end.y:
-        if absf(player_position.x - CENTER.x) <= DOOR_HALF_WIDTH:
-            door = "S"
-    if door != "":
-        _enter_neighbor(door)
-    player_position.x = clampf(player_position.x, ARENA.position.x, ARENA.end.x)
-    player_position.y = clampf(player_position.y, ARENA.position.y, ARENA.end.y)
+func _move_player(change: Vector2) -> void:
+    var proposed: Vector2 = player_position + change
+    var direction := ""
+    if proposed.x < PLAYER_RADIUS and absf(proposed.y - MID.y) <= DOOR_HALF:
+        direction = "W"
+    elif proposed.x > ROOM.end.x - PLAYER_RADIUS and absf(proposed.y - MID.y) <= DOOR_HALF:
+        direction = "E"
+    elif proposed.y < PLAYER_RADIUS and absf(proposed.x - MID.x) <= DOOR_HALF:
+        direction = "N"
+    elif proposed.y > ROOM.end.y - PLAYER_RADIUS and absf(proposed.x - MID.x) <= DOOR_HALF:
+        direction = "S"
+    if direction != "":
+        _enter_neighbor(direction)
+        return
+    var horizontal := player_position + Vector2(change.x, 0.0)
+    if Contents.can_occupy(horizontal, PLAYER_RADIUS, room_obstacles):
+        player_position.x = horizontal.x
+    var vertical := player_position + Vector2(0.0, change.y)
+    if Contents.can_occupy(vertical, PLAYER_RADIUS, room_obstacles):
+        player_position.y = vertical.y
 
 
 func _enter_neighbor(direction: String) -> void:
-    var links: Dictionary = _room()["neighbors"]
-    if not links.has(direction):
-        message = "No door in that direction."
+    var room: Dictionary = floor["rooms"][current_room_id]
+    if not room["neighbors"].has(direction):
         return
-    var next_id: int = int(links[direction])
-    if next_id == int(floor["exit_id"]) and not boss_defeated:
-        message = "EXIT SEALED: defeat the boss to unlock this door."
+    var next_id: int = int(room["neighbors"][direction])
+    var next_room: Dictionary = floor["rooms"][next_id]
+    if next_room["kind"] == "exit" and not boss_defeated:
+        message = "EXIT SEALED: defeat the boss before descending."
         return
-
-    var rooms: Array = floor["rooms"]
-    var destination: Dictionary = rooms[next_id]
     var first_visit: bool = not visited.has(next_id)
-    var entry: Dictionary = rules.evaluate(ticks, String(destination["kind"]), first_visit, next_id)
+    var entry: Dictionary = rules.evaluate(ticks, String(next_room["kind"]), first_visit, next_id)
     if not bool(entry["allowed"]):
-        message = "Entry blocked: %s; only %d ticks left." % [entry["reason"], ticks]
+        message = "Not enough collapse ticks for that doorway."
         return
-
-    if not enemy.is_empty():
-        saved_enemy_hp[current_room_id] = int(enemy["hp"])
     tick_ledger.append(entry)
-    print("COLLAPSE LEDGER ", entry)
     ticks = int(entry["after"])
     current_room_id = next_id
     if first_visit:
         rooms_entered += 1
     visited[next_id] = true
     projectiles.clear()
-
-    # Emerge from the opposite door, just inside the arena.
     match direction:
-        "W":
-            player_position = Vector2(ARENA.end.x - 18.0, CENTER.y)
-        "E":
-            player_position = Vector2(ARENA.position.x + 18.0, CENTER.y)
-        "N":
-            player_position = Vector2(CENTER.x, ARENA.end.y - 18.0)
-        "S":
-            player_position = Vector2(CENTER.x, ARENA.position.y + 18.0)
-    _spawn_enemy()
-    message = "Room %d [%s] | %s | %d -> %d ticks" % [
-        next_id, String(destination["kind"]), entry["reason"], int(entry["before"]), ticks
-    ]
-
+        "N": player_position = Vector2(MID.x, ROOM.end.y - 42)
+        "S": player_position = Vector2(MID.x, 42)
+        "W": player_position = Vector2(ROOM.end.x - 42, MID.y)
+        "E": player_position = Vector2(42, MID.y)
+    _load_room(next_id)
+    message = "Room %d [%s] | %s | %d ticks left" % [
+        next_id, String(next_room["kind"]), String(entry["reason"]), ticks]
+    print("COLLAPSE LEDGER ", entry)
     if bool(entry["collapses"]):
         outcome = "collapsed"
-        message = "THE FLOOR COLLAPSED! Press R to replay seed; N for a new seed."
-    elif destination["kind"] == "exit":
+        message = "THE FLOOR COLLAPSED! R = repeat, N = new seed"
+    elif next_room["kind"] == "exit":
         outcome = "escaped"
-        message = "FLOOR CLEARED! Press R to replay seed; N for a new seed."
-
-
-func _spawn_enemy() -> void:
-    enemy.clear()
-    var kind: String = String(_room()["kind"])
-    if defeated.has(current_room_id) or not (kind == "normal" or kind == "boss"):
-        return
-    var max_hp: int = 11 if kind == "boss" else 3
-    enemy = {
-        "pos": CENTER + Vector2(112, -30),
-        "hp": int(saved_enemy_hp.get(current_room_id, max_hp)),
-        "max_hp": max_hp,
-        "radius": 23.0 if kind == "boss" else 14.0,
-        "speed": float(config.get("enemy_speed", 56.0)) * (0.75 if kind == "boss" else 1.0),
-        "facing": 4
-    }
+        message = "FLOOR CLEARED! R = repeat, N = new seed"
 
 
 func _fire() -> void:
-    fire_cooldown = 0.20
+    fire_cooldown = 0.28
     shots_fired += 1
     projectiles.append({
-        "pos": player_position + aim_direction * 17.0,
-        "velocity": aim_direction * BULLET_SPEED,
-        "ttl": 1.8
+        "pos": player_position + aim_direction * 18.0,
+        "velocity": aim_direction * 430.0, "ttl": 2.0, "owner": "player",
+        "die": 6, "bonus": RPG.modifier(int(ability_scores["DEX"])),
+        "attack_bonus": RPG.attack_bonus(ability_scores, "DEX", player_level)
     })
 
 
-func _melee_attack() -> void:
-    melee_cooldown = 0.44
-    melee_flash = 0.16
+func _melee() -> void:
+    melee_cooldown = 0.50
+    melee_flash = 0.17
     melee_swings += 1
-    if enemy.is_empty():
+    for i in range(enemies.size() - 1, -1, -1):
+        var foe: Dictionary = enemies[i]
+        var toward: Vector2 = Vector2(foe["pos"]) - player_position
+        if toward.length() <= 64.0 + float(foe["radius"]) and toward.length() > 0.01:
+            if aim_direction.dot(toward.normalized()) > 0.45:
+                _hit_enemy(i, RPG.attack_bonus(ability_scores, "STR", player_level),
+                    6, RPG.modifier(int(ability_scores["STR"])))
+
+
+func _hit_enemy(index: int, to_hit: int, die: int, damage_bonus: int) -> void:
+    if index < 0 or index >= enemies.size():
         return
-    var toward_enemy: Vector2 = enemy["pos"] - player_position
-    if toward_enemy.length() <= 64.0 + float(enemy["radius"]):
-        if aim_direction.dot(toward_enemy.normalized()) > 0.45:
-            _hurt_enemy(2)
+    var foe: Dictionary = enemies[index]
+    var definition: Dictionary = catalogue["enemies"][foe["definition"]]
+    var attack: Dictionary = RPG.roll_to_hit(rng, to_hit, int(definition["ac"]))
+    if not bool(attack["hit"]):
+        message = "Missed %s (d20: %d)" % [definition["name"], int(attack["d20"])]
+        return
+    var damage: int = RPG.roll_damage(rng, die, damage_bonus, bool(attack["critical"]))
+    foe["hp"] = int(foe["hp"]) - damage
+    message = "Hit %s for %d damage" % [definition["name"], damage]
+    if int(foe["hp"]) <= 0:
+        var defeated_id: String = String(foe["definition"])
+        enemies.remove_at(index)
+        _award_xp(int(definition["xp"]))
+        if defeated_id == "armored_brute":
+            boss_defeated = true
+            message = "Boss defeated! +%d XP | Exit unlocked." % int(definition["xp"])
 
 
-func _move_projectiles(delta: float) -> void:
-    for index in range(projectiles.size() - 1, -1, -1):
-        var bullet: Dictionary = projectiles[index]
+func _award_xp(amount: int) -> void:
+    var prior_level: int = player_level
+    var old_max: int = player_max_hp
+    player_xp += maxi(0, amount)
+    _sync_progression()
+    if player_level > prior_level:
+        player_hp = mini(player_max_hp, player_hp + (player_max_hp - old_max))
+        message = "LEVEL UP! Now level %d, HP %d/%d." % [player_level, player_hp, player_max_hp]
+
+
+func _update_projectiles(delta: float) -> void:
+    for i in range(projectiles.size() - 1, -1, -1):
+        var bullet: Dictionary = projectiles[i]
         bullet["pos"] = Vector2(bullet["pos"]) + Vector2(bullet["velocity"]) * delta
         bullet["ttl"] = float(bullet["ttl"]) - delta
         var position: Vector2 = bullet["pos"]
-        if float(bullet["ttl"]) <= 0.0 or not ARENA.has_point(position):
-            projectiles.remove_at(index)
+        if float(bullet["ttl"]) <= 0.0 or not Contents.can_occupy(position, 4.0, room_obstacles):
+            projectiles.remove_at(i)
             continue
-        if not enemy.is_empty():
-            if position.distance_to(Vector2(enemy["pos"])) <= float(enemy["radius"]) + 5.0:
-                _hurt_enemy(1)
-                projectiles.remove_at(index)
+        var collided := false
+        if String(bullet["owner"]) == "player":
+            for j in range(enemies.size() - 1, -1, -1):
+                if position.distance_to(Vector2(enemies[j]["pos"])) < float(enemies[j]["radius"]) + 6.0:
+                    _hit_enemy(j, int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]))
+                    collided = true
+                    break
+        elif position.distance_to(player_position) < PLAYER_RADIUS + 6.0:
+            _hit_player(int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]))
+            collided = true
+        if collided:
+            projectiles.remove_at(i)
 
 
-func _hurt_enemy(amount: int) -> void:
-    if enemy.is_empty():
+func _hit_player(to_hit: int, die: int, damage_bonus: int) -> void:
+    if invulnerability > 0.0:
         return
-    enemy["hp"] = int(enemy["hp"]) - amount
-    saved_enemy_hp[current_room_id] = int(enemy["hp"])
-    if int(enemy["hp"]) <= 0:
-        defeated[current_room_id] = true
-        saved_enemy_hp.erase(current_room_id)
-        enemy.clear()
-        if current_room_id == int(floor["boss_id"]):
-            boss_defeated = true
-            message = "Boss defeated! The exit door is unlocked."
-        else:
-            message = "Enemy defeated. Room cleared."
-
-
-func _move_enemy(delta: float) -> void:
-    if enemy.is_empty():
+    var attack: Dictionary = RPG.roll_to_hit(rng, to_hit, player_ac)
+    if not bool(attack["hit"]):
+        message = "Enemy missed you (d20: %d)." % int(attack["d20"])
         return
-    var enemy_pos: Vector2 = enemy["pos"]
-    var displacement: Vector2 = player_position - enemy_pos
-    if displacement.length_squared() > 100.0:
-        enemy["facing"] = _facing_from_vector(displacement)
-        enemy_pos += displacement.normalized() * float(enemy["speed"]) * delta
-    enemy_pos.x = clampf(enemy_pos.x, ARENA.position.x + 24.0, ARENA.end.x - 24.0)
-    enemy_pos.y = clampf(enemy_pos.y, ARENA.position.y + 24.0, ARENA.end.y - 24.0)
-    enemy["pos"] = enemy_pos
-    if enemy_pos.distance_to(player_position) <= float(enemy["radius"]) + PLAYER_RADIUS + 5.0:
-        if invincible_seconds <= 0.0:
-            player_hp -= 1
-            invincible_seconds = 1.1
-            message = "Hit! %d HP remaining." % player_hp
-            if player_hp <= 0:
-                outcome = "defeated"
-                message = "YOU DIED! Press R to replay seed; N for a new seed."
+    var damage: int = RPG.roll_damage(rng, die, damage_bonus, bool(attack["critical"]))
+    player_hp -= damage
+    invulnerability = 0.8
+    message = "You take %d damage. %d/%d HP." % [damage, maxi(0, player_hp), player_max_hp]
+    if player_hp <= 0:
+        outcome = "defeated"
+        message = "YOU DIED! R = retry, N = new seed."
+
+
+func _update_enemies(delta: float) -> void:
+    for i in range(enemies.size()):
+        var foe: Dictionary = enemies[i]
+        var definition: Dictionary = catalogue["enemies"][foe["definition"]]
+        Enemies.advance(foe, definition, delta, player_position, room_obstacles)
+        foe["attack_cooldown"] = maxf(0.0, float(foe["attack_cooldown"]) - delta)
+        if float(foe["attack_cooldown"]) > 0.0:
+            continue
+        var attacks: Array = definition.get("attacks", [])
+        if attacks.is_empty():
+            continue
+        var skill: Dictionary = attacks[0]
+        var distance: float = Vector2(foe["pos"]).distance_to(player_position)
+        if distance > float(skill.get("range", 45.0)):
+            continue
+        if not Enemies.has_line_of_sight(Vector2(foe["pos"]), player_position, room_obstacles):
+            continue
+        var ability: String = String(skill.get("ability", "STR"))
+        var attack_bonus: int = RPG.attack_bonus(definition["scores"], ability,
+            int(definition.get("level", 1)), bool(skill.get("proficient", true)))
+        var damage_bonus: int = RPG.modifier(int(definition["scores"].get(ability, 10))) + int(skill.get("damage_bonus", 0))
+        foe["attack_cooldown"] = float(skill.get("cooldown", 1.0))
+        if skill["type"] == "melee":
+            _hit_player(attack_bonus, int(skill["damage_die"]), damage_bonus)
+        elif skill["type"] == "ranged":
+            var direction: Vector2 = (player_position - Vector2(foe["pos"])).normalized()
+            var angles: Array[float] = [0.0]
+            if "twin_shot" in definition.get("abilities", []):
+                angles = [-0.15, 0.15]
+            for angle in angles:
+                var shot: Vector2 = direction.rotated(angle)
+                projectiles.append({
+                    "pos": Vector2(foe["pos"]) + shot * (float(foe["radius"]) + 8.0),
+                    "velocity": shot * float(skill.get("projectile_speed", 250.0)),
+                    "ttl": 2.8, "owner": "enemy", "die": int(skill["damage_die"]),
+                    "bonus": damage_bonus, "attack_bonus": attack_bonus
+                })
+
+
+func _facing_from_vector(vector: Vector2) -> int:
+    if vector.length_squared() < 0.0001:
+        return 0
+    return posmod(int(round(vector.angle() / (PI / 4.0))), 8)
 
 
 func _draw() -> void:
-    draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#101721"))
+    var viewport: Vector2 = Vector2(layout.get("viewport", Vector2(960, 540)))
+    draw_rect(Rect2(Vector2.ZERO, viewport), Color("#101720"))
+    var offset: Vector2 = layout.get("offset", Vector2.ZERO)
+    var scale: float = float(layout.get("scale", 1.0))
+    draw_set_transform(offset, 0.0, Vector2.ONE * scale)
     _draw_room()
     _draw_combat()
+    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
     _draw_hud()
     if outcome != "running":
-        draw_rect(Rect2(100, 198, 760, 123), Color(0.02, 0.03, 0.06, 0.93))
-        var title := "FLOOR CLEARED" if outcome == "escaped" else "RUN ENDED: " + outcome.to_upper()
-        _text(title, Vector2(326, 244), 24, Color("#f7d98b"))
-        _text("Rooms: %d   Shots: %d   Melee swings: %d   Seed: %d" % [
-            rooms_entered, shots_fired, melee_swings, initial_seed
-        ], Vector2(242, 274), 15, Color.WHITE)
-        _text("R = replay this seed     N = new seed", Vector2(323, 299), 14, Color.WHITE)
+        draw_rect(Rect2(Vector2(40, viewport.y * 0.48 - 58), Vector2(viewport.x - 80, 116)),
+            Color(0.02, 0.03, 0.07, 0.94))
+        _text("FLOOR CLEARED!" if outcome == "escaped" else "RUN ENDED: " + outcome.to_upper(),
+            Vector2(65, viewport.y * 0.48 - 12), 23, Color("#f7d98b"))
+        _text("Rooms %d | Kills yield XP | Level %d | XP %d | R: repeat  N: new seed" % [
+            rooms_entered, player_level, player_xp],
+            Vector2(65, viewport.y * 0.48 + 22), 14, Color.WHITE)
 
 
 func _draw_room() -> void:
-    var kind: String = String(_room()["kind"])
-    # Corrected visual mapping: floor = warm worn stone slab; wall = grey masonry.
-    for y in range(ROOM_ROWS):
-        for x in range(ROOM_COLUMNS):
-            var cell_center: Vector2 = ARENA.position + Vector2(
-                (float(x) + 0.5) * TILE_SIZE,
-                (float(y) + 0.5) * TILE_SIZE
-            )
-            var region: Rect2 = ART_FLOOR_VARIANT if (x * 17 + y * 13) % 9 == 0 else ART_FLOOR
-            _crypt_piece(region, cell_center, Vector2(32, 32),
-                float((x + y * 3) % 4) * PI * 0.5)
-
+    for y in range(SIZE):
+        for x in range(SIZE):
+            var center: Vector2 = Vector2((float(x) + 0.5) * TILE, (float(y) + 0.5) * TILE)
+            var tile: Rect2 = FLOOR_ALT if (x * 17 + y * 13) % 9 == 0 else FLOOR_TILE
+            _crypt_piece(tile, center, Vector2(32, 32), float((x + y * 3) % 4) * PI * 0.5)
+    var kind: String = String(floor["rooms"][current_room_id]["kind"])
     var tint := Color.TRANSPARENT
-    match kind:
-        "boss":
-            tint = Color(0.30, 0.05, 0.09, 0.20)
-        "guild_hall":
-            tint = Color(0.04, 0.30, 0.22, 0.15)
-        "exit":
-            tint = Color(0.35, 0.24, 0.06, 0.14)
+    if kind == "boss": tint = Color(0.3, 0.05, 0.09, 0.16)
+    elif kind == "guild_hall": tint = Color(0.04, 0.30, 0.22, 0.14)
+    elif kind == "exit": tint = Color(0.35, 0.24, 0.06, 0.14)
     if tint.a > 0.0:
-        draw_rect(ARENA, tint)
+        draw_rect(ROOM, tint)
 
-    var links: Dictionary = _room()["neighbors"]
-    var middle_x: int = ROOM_COLUMNS / 2
-    var middle_y: int = ROOM_ROWS / 2
-    # Wall perimeter: two empty 32px cells per traversable connection.
-    for x in range(ROOM_COLUMNS):
-        var px: float = ARENA.position.x + (float(x) + 0.5) * TILE_SIZE
-        if not (links.has("N") and (x == middle_x - 1 or x == middle_x)):
-            _crypt_piece(ART_WALL, Vector2(px, ARENA.position.y - 16), Vector2(32, 32))
-        if not (links.has("S") and (x == middle_x - 1 or x == middle_x)):
-            _crypt_piece(ART_WALL, Vector2(px, ARENA.end.y + 16), Vector2(32, 32), PI)
-    for y in range(ROOM_ROWS):
-        var py: float = ARENA.position.y + (float(y) + 0.5) * TILE_SIZE
-        if not (links.has("W") and (y == middle_y - 1 or y == middle_y)):
-            _crypt_piece(ART_WALL, Vector2(ARENA.position.x - 16, py), Vector2(32, 32), -PI * 0.5)
-        if not (links.has("E") and (y == middle_y - 1 or y == middle_y)):
-            _crypt_piece(ART_WALL, Vector2(ARENA.end.x + 16, py), Vector2(32, 32), PI * 0.5)
+    for prop in props:
+        _draw_obstacle(prop)
 
-    # Dedicated masonry corner ensures all four sides meet without a square hole.
-    _crypt_piece(ART_CORNER, ARENA.position - Vector2(16, 16), Vector2(32, 32))
-    _crypt_piece(ART_CORNER, Vector2(ARENA.end.x + 16, ARENA.position.y - 16),
-        Vector2(32, 32), PI * 0.5)
-    _crypt_piece(ART_CORNER, ARENA.end + Vector2(16, 16), Vector2(32, 32), PI)
-    _crypt_piece(ART_CORNER, Vector2(ARENA.position.x - 16, ARENA.end.y + 16),
-        Vector2(32, 32), -PI * 0.5)
-
-    for direction in MOVE_LABELS:
+    var links: Dictionary = floor["rooms"][current_room_id]["neighbors"]
+    for x in range(SIZE):
+        var px: float = (float(x) + 0.5) * TILE
+        if not (links.has("N") and (x == 11 or x == 12)):
+            _crypt_piece(WALL_TILE, Vector2(px, -16), Vector2(32, 32))
+        if not (links.has("S") and (x == 11 or x == 12)):
+            _crypt_piece(WALL_TILE, Vector2(px, 784), Vector2(32, 32), PI)
+    for y in range(SIZE):
+        var py: float = (float(y) + 0.5) * TILE
+        if not (links.has("W") and (y == 11 or y == 12)):
+            _crypt_piece(WALL_TILE, Vector2(-16, py), Vector2(32, 32), -PI * 0.5)
+        if not (links.has("E") and (y == 11 or y == 12)):
+            _crypt_piece(WALL_TILE, Vector2(784, py), Vector2(32, 32), PI * 0.5)
+    _crypt_piece(CORNER_TILE, Vector2(-16, -16), Vector2(32, 32))
+    _crypt_piece(CORNER_TILE, Vector2(784, -16), Vector2(32, 32), PI * 0.5)
+    _crypt_piece(CORNER_TILE, Vector2(784, 784), Vector2(32, 32), PI)
+    _crypt_piece(CORNER_TILE, Vector2(-16, 784), Vector2(32, 32), -PI * 0.5)
+    for direction in DIRECTIONS:
         if not links.has(direction):
             continue
         var next_id: int = int(links[direction])
-        var next_room: Dictionary = floor["rooms"][next_id]
-        var preview: Dictionary = rules.evaluate(ticks, String(next_room["kind"]),
+        var destination: Dictionary = floor["rooms"][next_id]
+        var preview: Dictionary = rules.evaluate(ticks, String(destination["kind"]),
             not visited.has(next_id), next_id)
-        var tone := Color.WHITE
-        if next_room["kind"] == "guild_hall":
-            tone = Color("#a4efe1")
-        elif next_room["kind"] == "boss":
-            tone = Color("#f5b0b0")
-        elif next_room["kind"] == "exit":
-            tone = Color("#f9d57e") if boss_defeated else Color("#c77179")
-        var midpoint := CENTER
+        var color := Color.WHITE
+        if destination["kind"] == "guild_hall": color = Color("#a4efe1")
+        elif destination["kind"] == "boss": color = Color("#f5b0b0")
+        elif destination["kind"] == "exit":
+            color = Color("#f9d57e") if boss_defeated else Color("#c77179")
+        var center := MID
         var rotation := 0.0
-        var label_pos := CENTER
+        var label := MID
         match direction:
             "N":
-                midpoint = Vector2(CENTER.x, ARENA.position.y)
-                label_pos = midpoint + Vector2(-19, 25)
+                center = Vector2(384, 0)
+                label = Vector2(361, 42)
             "S":
-                midpoint = Vector2(CENTER.x, ARENA.end.y)
+                center = Vector2(384, 768)
                 rotation = PI
-                label_pos = midpoint + Vector2(-19, -18)
+                label = Vector2(361, 738)
             "W":
-                midpoint = Vector2(ARENA.position.x, CENTER.y)
+                center = Vector2(0, 384)
                 rotation = -PI * 0.5
-                label_pos = midpoint + Vector2(28, 4)
+                label = Vector2(25, 392)
             "E":
-                midpoint = Vector2(ARENA.end.x, CENTER.y)
+                center = Vector2(768, 384)
                 rotation = PI * 0.5
-                label_pos = midpoint + Vector2(-58, 4)
-        _crypt_piece(ART_DOOR, midpoint, Vector2(64, 64), rotation, tone)
-        var net_ticks: int = int(preview["grant"]) - int(preview["cost"])
-        _text("%s%+d" % [direction, net_ticks], label_pos, 13, Color.WHITE)
-
-    if kind == "guild_hall":
-        draw_circle(CENTER, 23.0, Color(0.08, 0.47, 0.36, 0.76))
-        _text("GUILD", CENTER + Vector2(-23, 5), 12, Color.WHITE)
-    elif kind == "boss":
-        _text("BOSS CHAMBER", Vector2(CENTER.x - 71, ARENA.position.y + 47),
-            18, Color("#ffacbd"))
+                label = Vector2(690, 392)
+        _crypt_piece(DOOR_TILE, center, Vector2(64, 64), rotation, color)
+        var net: int = int(preview["grant"]) - int(preview["cost"])
+        _text("%s%+d" % [direction, net], label, 23, Color.WHITE)
+    if kind == "boss":
+        _text("BOSS ROOM", Vector2(306, 60), 26, Color("#ffb4b7"))
+    elif kind == "guild_hall":
+        _text("GUILD HALL", Vector2(300, 60), 26, Color("#b4f9d8"))
     elif kind == "exit":
-        draw_rect(Rect2(CENTER - Vector2(30, 30), Vector2(60, 60)), Color("#9c783c"))
-        _text("EXIT", CENTER + Vector2(-17, 5), 15, Color.WHITE)
+        _text("EXIT", Vector2(344, 60), 26, Color("#ffdc91"))
+
+
+func _draw_obstacle(prop: Dictionary) -> void:
+    var cell: Vector2i = prop["cell"]
+    var center: Vector2 = Contents.cell_center(cell)
+    draw_circle(center + Vector2(2, 5), 15.5, Color("#11151c"))
+    if prop["kind"] == "pillar":
+        _crypt_piece(WALL_TILE, center, Vector2(32, 32))
+        draw_rect(Rect2(center - Vector2(10, 12), Vector2(20, 5)), Color("#a39c92"))
+    else:
+        draw_colored_polygon(PackedVector2Array([
+            center + Vector2(-13, 9), center + Vector2(-11, -5),
+            center + Vector2(-2, -13), center + Vector2(10, -7),
+            center + Vector2(13, 11)]), Color("#736b66"))
+        draw_rect(Rect2(center + Vector2(-5, -7), Vector2(9, 7)), Color("#a4a09b"))
 
 
 func _draw_combat() -> void:
     for projectile in projectiles:
-        var pos: Vector2 = projectile["pos"]
-        draw_rect(Rect2(pos - Vector2(4, 4), Vector2(8, 8)), Color("#fce38a"))
-    if not enemy.is_empty():
-        var pos: Vector2 = enemy["pos"]
-        var boss_room: bool = _room()["kind"] == "boss"
-        var bounds := Vector2(96, 96) if boss_room else Vector2(48, 48)
-        _draw_facing_sprite(BOSS_SHEET if boss_room else RAT_SHEET, pos, bounds,
-            int(enemy.get("facing", 0)))
-        var hp_ratio: float = float(enemy["hp"]) / float(enemy["max_hp"])
-        draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0, 48.0, 6.0),
-            Color("#181a24"))
-        draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0,
-            48.0 * hp_ratio, 6.0), Color("#a5d49b"))
-
-    _draw_facing_sprite(PLAYER_SHEET, player_position, Vector2(48, 48), player_facing)
-    draw_line(player_position, player_position + aim_direction * 28.0, Color("#ffe0a1"), 2.0)
+        var point: Vector2 = projectile["pos"]
+        var color := Color("#ffe78b") if projectile["owner"] == "player" else Color("#d778dc")
+        draw_circle(point, 5.0, color)
+    for foe in enemies:
+        var definition: Dictionary = catalogue["enemies"][foe["definition"]]
+        var boss_sprite: bool = definition["sprite"] == "boss"
+        var sheet: Texture2D = BOSS if boss_sprite else RAT
+        var size := Vector2(96, 96) if boss_sprite else Vector2(48, 48)
+        var point: Vector2 = foe["pos"]
+        _draw_facing_sprite(sheet, point, size, int(foe["facing"]))
+        var hp_ratio: float = float(foe["hp"]) / float(foe["max_hp"])
+        draw_rect(Rect2(point.x - 24, point.y - size.y * 0.5 - 12, 48, 6), Color("#151b25"))
+        draw_rect(Rect2(point.x - 24, point.y - size.y * 0.5 - 12,
+            48 * hp_ratio, 6), Color("#a5d49b"))
+        if foe["definition"] == "spitting_rat":
+            draw_circle(point + Vector2(0, 22), 4.0, Color("#c978d4"))
+    _draw_facing_sprite(CRAWLER, player_position, Vector2(48, 48), player_facing)
+    draw_line(player_position, player_position + aim_direction * 26.0, Color("#f9dc92"), 2.0)
     if melee_flash > 0.0:
-        draw_arc(player_position, 58.0, aim_direction.angle() - 0.70,
-            aim_direction.angle() + 0.70, 12, Color("#f7e6a3"), 5.0)
-    if invincible_seconds > 0.0:
-        draw_circle(player_position, 20.0, Color(1.0, 1.0, 1.0, 0.16))
+        draw_arc(player_position, 60.0, aim_direction.angle() - 0.7,
+            aim_direction.angle() + 0.7, 14, Color("#fff1a7"), 5.0)
+    if invulnerability > 0.0:
+        draw_arc(player_position, 24.0, 0.0, TAU, 24, Color(1, 1, 1, 0.42), 2.0)
 
 
-func _crypt_piece(region: Rect2, center_point: Vector2, size: Vector2,
+func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
         rotation: float = 0.0, modulation: Color = Color.WHITE) -> void:
-    draw_set_transform(center_point, rotation, Vector2.ONE)
+    draw_set_transform(center, rotation, Vector2.ONE)
     draw_texture_rect_region(CRYPT, Rect2(-size * 0.5, size), region, modulation)
     draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func _draw_facing_sprite(sheet: Texture2D, center_point: Vector2, size: Vector2,
-        facing: int) -> void:
+func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facing: int) -> void:
     var index: int = posmod(facing, 8)
-    draw_texture_rect_region(sheet, Rect2(center_point - size * 0.5, size),
+    draw_texture_rect_region(sheet, Rect2(center - size * 0.5, size),
         Rect2(float(index) * size.x, 0.0, size.x, size.y))
 
 
-func _facing_from_vector(direction: Vector2) -> int:
-    if direction.length_squared() < 0.0001:
-        return 0
-    return posmod(int(round(direction.angle() / (PI / 4.0))), 8)
-
-
-func _update_layout() -> void:
-    var layout: Dictionary = Layout.compute(get_viewport_rect().size)
-    var previous_center: Vector2 = CENTER
-    VIEW_SIZE = layout["viewport"]
-    ROOM_COLUMNS = int(layout["columns"])
-    ROOM_ROWS = int(layout["rows"])
-    ARENA = layout["arena"]
-    CENTER = layout["center"]
-    var delta: Vector2 = CENTER - previous_center
-    player_position += delta
-    if not enemy.is_empty():
-        enemy["pos"] = Vector2(enemy["pos"]) + delta
-    for projectile in projectiles:
-        projectile["pos"] = Vector2(projectile["pos"]) + delta
-    queue_redraw()
-
-
-
 func _draw_hud() -> void:
-    var room: Dictionary = _room()
-    _text("DCC GAME | RESPONSIVE 32PX", Vector2(18, 26), 20, Color("#f5dda2"))
-    _text("SEED %d | ROOM %d (%s) | VISITED %d/%d" % [
-        initial_seed, current_room_id, String(room["kind"]).to_upper(),
-        visited.size(), (floor["rooms"] as Array).size()
-    ], Vector2(18, 47), 14, Color("#e5eef8"))
-    var tick_color := Color("#f3d18a") if ticks > 6 else Color("#fb8383")
-    _text("COLLAPSE %d TICKS  |  HP %d  |  BOSS %s" % [
-        ticks, player_hp, "CLEARED" if boss_defeated else "ACTIVE"
-    ], Vector2(18, 70), 18, tick_color)
-    _text(message, Vector2(18, 96), 12, Color("#b4d4e1"))
+    var view: Vector2 = layout["viewport"]
+    var room: Dictionary = floor["rooms"][current_room_id]
+    _text("DCC | FLOOR 1 | ROOM %d %s | TICKS %d | FOES %d" % [
+        current_room_id, String(room["kind"]).to_upper(), ticks, enemies.size()],
+        Vector2(14, 22), 17, Color("#f2da99"))
+    _text("HP %d/%d  AC %d  LV %d  XP %d/%s  PROF +%d" % [
+        maxi(0, player_hp), player_max_hp, player_ac, player_level, player_xp,
+        str(RPG.next_level_xp(player_level)) if player_level < 20 else "MAX",
+        player_proficiency], Vector2(14, 43), 15, Color("#e5eafa"))
+    var stat_parts: PackedStringArray = []
+    for ability in RPG.ABILITIES:
+        var score: int = int(ability_scores[ability])
+        stat_parts.append("%s%d(%+d)" % [ability, score, RPG.modifier(score)])
+    _text("  ".join(stat_parts), Vector2(14, 62), 12, Color("#afd4ce"))
+    _text(message, Vector2(14, 83), 12, Color("#eccba6"))
     _draw_minimap()
-    var short_window: bool = VIEW_SIZE.x < 940.0
-    _text("WASD: move | Mouse: aim | Left click: shoot | Space: melee" if short_window else
-        "WASD / arrows: move | Mouse: aim | Left click: fire | Space: melee",
-        Vector2(18, VIEW_SIZE.y - 65.0), 14, Color("#e0e9f0"))
-    _text("R: same seed | N: new seed | Doors preview ticks" if short_window else
-        "R: replay seed | N: new seed | Door labels: net collapse ticks",
-        Vector2(18, VIEW_SIZE.y - 42.0), 14, Color("#b8cfde"))
-    _text("32px tile grid | 8-direction art | Drag window edge to resize",
-        Vector2(18, VIEW_SIZE.y - 19.0), 12, Color("#97d2b7"))
+    _text("WASD / arrows: move  |  Mouse: aim  |  LMB: shoot  |  Space: melee",
+        Vector2(14, view.y - 46), 14, Color("#dce9f2"))
+    _text("R: replay seed | N: new seed | Fixed 24x24 tiles | Window scales view only",
+        Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
 
 
 func _draw_minimap() -> void:
-    var map_left: float = VIEW_SIZE.x - 225.0
-    draw_rect(Rect2(map_left, 5, 217, 104), Color("#202d38"))
-    _text("MAP", Vector2(map_left + 8.0, 21), 12, Color("#ccdde8"))
-    var rooms: Array = floor["rooms"]
-    var min_grid := Vector2i(999, 999)
-    var max_grid := Vector2i(-999, -999)
-    for room in rooms:
+    var view: Vector2 = layout["viewport"]
+    var map_origin := Vector2(view.x - 185.0, 9.0)
+    draw_rect(Rect2(map_origin, Vector2(174, 82)), Color("#222c39"))
+    _text("MAP", map_origin + Vector2(8, 13), 11, Color.WHITE)
+    var min_cell := Vector2i(999, 999)
+    var max_cell := Vector2i(-999, -999)
+    for room in floor["rooms"]:
         var cell: Vector2i = room["grid"]
-        min_grid.x = mini(min_grid.x, cell.x)
-        min_grid.y = mini(min_grid.y, cell.y)
-        max_grid.x = maxi(max_grid.x, cell.x)
-        max_grid.y = maxi(max_grid.y, cell.y)
-    var span_x: int = maxi(1, max_grid.x - min_grid.x + 1)
-    var span_y: int = maxi(1, max_grid.y - min_grid.y + 1)
-    var cell_size: float = minf(11.0, minf(196.0 / float(span_x), 77.0 / float(span_y)))
-    for room in rooms:
-        var room_id: int = int(room["id"])
-        if not visited.has(room_id) and room_id != int(floor["exit_id"]):
+        min_cell.x = mini(min_cell.x, cell.x)
+        min_cell.y = mini(min_cell.y, cell.y)
+        max_cell.x = maxi(max_cell.x, cell.x)
+        max_cell.y = maxi(max_cell.y, cell.y)
+    var span_x: int = maxi(1, max_cell.x - min_cell.x + 1)
+    var span_y: int = maxi(1, max_cell.y - min_cell.y + 1)
+    var unit: float = minf(9.0, minf(156.0 / float(span_x), 60.0 / float(span_y)))
+    for room in floor["rooms"]:
+        var id: int = int(room["id"])
+        if not visited.has(id) and id != int(floor["exit_id"]):
             continue
         var cell: Vector2i = room["grid"]
-        var position := Vector2(
-            map_left + 7.0 + float(cell.x - min_grid.x) * cell_size,
-            25.0 + float(cell.y - min_grid.y) * cell_size
-        )
-        var color := Color("#718697")
-        if room["kind"] == "guild_hall":
-            color = Color("#7ec9da")
-        elif room["kind"] == "boss":
-            color = Color("#e88995")
-        elif room["kind"] == "exit":
-            color = Color("#e5cf86")
-        if room_id == current_room_id:
-            color = Color("#ffffff")
-        draw_rect(Rect2(position, Vector2(maxf(3.0, cell_size - 2.0),
-            maxf(3.0, cell_size - 2.0))), color)
+        var p: Vector2 = map_origin + Vector2(
+            8.0 + float(cell.x - min_cell.x) * unit,
+            20.0 + float(cell.y - min_cell.y) * unit)
+        var color := Color("#788b9d")
+        if id == current_room_id: color = Color.WHITE
+        elif room["kind"] == "boss": color = Color("#ec9c9d")
+        elif room["kind"] == "exit": color = Color("#eacb7b")
+        elif room["kind"] == "guild_hall": color = Color("#a4efd6")
+        draw_rect(Rect2(p, Vector2(maxf(3.0, unit - 1.0), maxf(3.0, unit - 1.0))), color)
 
 
-func _text(value: String, position: Vector2, size: int, color: Color) -> void:
+func _text(value: String, position: Vector2, font_size: int, color: Color) -> void:
     draw_string(ThemeDB.fallback_font, position, value,
-        HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, color)
+        HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color)

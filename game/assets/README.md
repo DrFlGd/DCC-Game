@@ -8,9 +8,11 @@ Art is organized **by content family**, not one shared master atlas. New biomes,
 | --- | --- | --- |
 | Biome: Stone Crypt | [`biomes/stone_crypt/tileset.png`](biomes/stone_crypt/tileset.png) | 128×128 texture, 32px cells, plus one 64×64 door block |
 | Character: Crawler | [`characters/crawler/facing_8.png`](characters/crawler/facing_8.png) | 384×48; 8 frames of 48×48 |
-| Enemy: Rat scavenger | [`enemies/rat/facing_8.png`](enemies/rat/facing_8.png) | 384×48; 8 frames of 48×48 |
+| Enemy: Rat scavenger | [`enemies/rat/facing_8.png`](enemies/rat/facing_8.png) | **256×32**, 8 frames of 32×32; drawn at 48×48 in game |
 | Enemy: Armored brute | [`enemies/brute_boss/facing_8.png`](enemies/brute_boss/facing_8.png) | 768×96; 8 frames of 96×96 |
 | Weapons | `weapons/<weapon_id>/...` | Separate equipment sheet; no finished weapon asset yet |
+
+The rat sheet is derived from the provided `Idle_rotations_8dir.gif`, reordered from S/SE/E/NE/N/NW/W/SW into the game's **E/SE/S/SW/W/NW/N/NE** convention. The eight original frames are preserved (no regeneration) and enlarged with nearest-neighbor sampling when drawn.
 
 As a rule, biomes use modular **environment tilesets**, while characters/enemies use **directional sprite sheets** rather than TileSet terrain resources. The initial artwork is provisional pixel art made for this prototype. Production assets will need better animation, environmental edges and silhouettes.
 
@@ -40,7 +42,7 @@ Direction index across every sprite sheet, left to right:
 
 ## Responsive display
 
-`scripts/room_layout.gd` computes the size of the visible room based on the current window viewport, maintaining a **32px tile grid** with even row/column counts so the 64px portals remain centered. The scene moves the player, enemy and projectiles with its center after resizing. A minimum window size of 720×480 is set; the initial window is 960×540. `window/stretch/mode="disabled"` prevents the engine from treating every resized window as the original fixed-size drawing canvas. HUD footer and minimap are anchored to viewport edges.
+`scripts/room_layout.gd` computes the **screen scaling of a fixed 768×768 interior**, keeping its 24×24 logical tiles and 64px door gaps unchanged at all window sizes. The **24×24-tile interior is immutable**; resizing changes only display scale/centering, not the number of tiles or world-space positions. The minimum window is 720×480 and the initial window is 960×540. Mouse aiming uses inverse screen-to-world coordinates. HUD and minimap follow window edges.
 
 ## Next art tasks
 

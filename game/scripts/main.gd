@@ -6,6 +6,7 @@ const Layout = preload("res://scripts/room_layout.gd")
 const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
+const CharacterMenu = preload("res://scripts/character_menu.gd")
 
 const TILE := 32.0
 const SIZE := 24
@@ -61,6 +62,8 @@ var melee_flash := 0.0
 var invulnerability := 0.0
 var shots_fired := 0
 var melee_swings := 0
+var pending_stat_points := 0
+var character_menu
 
 
 func _ready() -> void:
@@ -77,6 +80,10 @@ func _ready() -> void:
         get_tree().quit(1)
         return
     layout = Layout.compute(get_viewport_rect().size)
+    character_menu = CharacterMenu.new()
+    add_child(character_menu)
+    character_menu.allocation_confirmed.connect(_confirm_stat_allocation)
+    character_menu.resume_requested.connect(_on_resume_game)
     _start_run(int(config.get("seed", 424242)))
 
 
@@ -97,6 +104,9 @@ func _start_run(new_seed: int) -> void:
     aim_direction = Vector2.RIGHT
     player_facing = 0
     player_xp = 0
+    pending_stat_points = 0
+    if character_menu != null:
+        character_menu.close_menu()
     ability_scores = config.get("player_ability_scores", RPG.player_base_scores()).duplicate(true)
     _sync_progression()
     player_hp = player_max_hp
@@ -137,7 +147,59 @@ func _load_room(id: int) -> void:
     enemies = state["enemies"]
 
 
+func _input(event: InputEvent) -> void:
+    if event is InputEventKey:
+        var key_event: InputEventKey = event
+        if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
+            if character_menu.mode == "pause":
+                character_menu.close_menu()
+            elif character_menu.mode == "closed" and outcome == "running":
+                character_menu.show_pause(ability_scores, _character_context())
+            get_viewport().set_input_as_handled()
+
+
+func _character_context() -> Dictionary:
+    return {
+        "room_id": current_room_id,
+        "ticks": ticks, "level": player_level, "xp": player_xp,
+        "next_xp": RPG.next_level_xp(player_level) if player_level < 20 else "MAX",
+        "hp": player_hp, "max_hp": player_max_hp, "ac": player_ac,
+        "proficiency": player_proficiency,
+        "melee_bonus": RPG.attack_bonus(ability_scores, "STR", player_level),
+        "ranged_bonus": RPG.attack_bonus(ability_scores, "DEX", player_level)
+    }
+
+
+func _on_resume_game() -> void:
+    queue_redraw()
+
+
+func _confirm_stat_allocation(changes: Dictionary) -> void:
+    if character_menu.mode != "level_up":
+        return
+    var cap: int = int(config.get("stat_score_cap", 20))
+    var next_scores: Dictionary = RPG.apply_allocation(
+        ability_scores, changes, pending_stat_points, cap
+    )
+    if next_scores.is_empty():
+        push_warning("Invalid level-up stat point allocation")
+        return
+    var old_hp_max: int = player_max_hp
+    ability_scores = next_scores
+    pending_stat_points = 0
+    _sync_progression()
+    # Increasing CON raises current HP by the same amount as max HP.
+    player_hp = mini(player_max_hp, player_hp + maxi(0, player_max_hp - old_hp_max))
+    character_menu.close_menu()
+    message = "Level %d stats confirmed. HP %d/%d  AC %d" % [
+        player_level, player_hp, player_max_hp, player_ac
+    ]
+    queue_redraw()
+
+
 func _unhandled_input(event: InputEvent) -> void:
+    if character_menu != null and character_menu.is_open():
+        return
     if event is InputEventKey:
         var key_event: InputEventKey = event
         if key_event.pressed and not key_event.echo:
@@ -150,7 +212,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
     if get_viewport_rect().size != Vector2(layout["viewport"]):
         layout = Layout.compute(get_viewport_rect().size)
-    if outcome != "running":
+    if outcome != "running" or character_menu.is_open():
         queue_redraw()
         return
     fire_cooldown = maxf(0.0, fire_cooldown - delta)
@@ -181,7 +243,8 @@ func _physics_process(delta: float) -> void:
     if Input.is_key_pressed(KEY_SPACE) and melee_cooldown <= 0.0:
         _melee()
     _update_projectiles(delta)
-    _update_enemies(delta)
+    if not character_menu.is_open():
+        _update_enemies(delta)
     queue_redraw()
 
 
@@ -297,7 +360,14 @@ func _award_xp(amount: int) -> void:
     _sync_progression()
     if player_level > prior_level:
         player_hp = mini(player_max_hp, player_hp + (player_max_hp - old_max))
-        message = "LEVEL UP! Now level %d, HP %d/%d." % [player_level, player_hp, player_max_hp]
+        var earned_levels: int = player_level - prior_level
+        pending_stat_points += earned_levels * maxi(0, int(config.get("stat_points_per_level", 2)))
+        message = "LEVEL UP! Level %d — %d ability points available." % [
+            player_level, pending_stat_points
+        ]
+        if pending_stat_points > 0 and character_menu != null:
+            character_menu.show_level_up(ability_scores, _character_context(),
+                pending_stat_points, int(config.get("stat_score_cap", 20)))
 
 
 func _update_projectiles(delta: float) -> void:

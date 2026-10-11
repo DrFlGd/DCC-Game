@@ -15,7 +15,7 @@ const MOVE_LABELS := ["N", "E", "S", "W"]
 
 var config: Dictionary = {}
 var floor: Dictionary = {}
-var rules: RefCounted
+var rules
 var current_room_id := 0
 var visited: Dictionary = {}
 var defeated: Dictionary = {}

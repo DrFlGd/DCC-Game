@@ -58,7 +58,7 @@ func run_tests() -> void:
     check(crypt != null and crypt.get_size() == Vector2(128, 128), "crypt tileset")
     for entry in [
         {"path":"res://assets/characters/crawler/facing_8.png", "frame":48},
-        {"path":"res://assets/enemies/rat/facing_8.png", "frame":48},
+        {"path":"res://assets/enemies/rat/facing_8.png", "frame":32},
         {"path":"res://assets/enemies/brute_boss/facing_8.png", "frame":96}
     ]:
         var sheet: Texture2D = load(entry["path"]) as Texture2D

@@ -3,6 +3,7 @@ extends Node2D
 
 const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
+const Layout = preload("res://scripts/room_layout.gd")
 
 const TILE_SIZE := 32.0
 var VIEW_SIZE := Vector2(960, 540)
@@ -478,19 +479,13 @@ func _facing_from_vector(direction: Vector2) -> int:
 
 
 func _update_layout() -> void:
-    var new_size: Vector2 = get_viewport_rect().size
-    if new_size.x < 1.0 or new_size.y < 1.0:
-        return
+    var layout: Dictionary = Layout.compute(get_viewport_rect().size)
     var previous_center: Vector2 = CENTER
-    VIEW_SIZE = new_size
-    # Maintain 32px alignment, even tile counts, and two-tile door gaps.
-    ROOM_COLUMNS = maxi(12, 2 * int(floorf((VIEW_SIZE.x - 96.0) / (2.0 * TILE_SIZE))))
-    ROOM_ROWS = maxi(6, 2 * int(floorf((VIEW_SIZE.y - 212.0) / (2.0 * TILE_SIZE))))
-    var content_size := Vector2(float(ROOM_COLUMNS), float(ROOM_ROWS)) * TILE_SIZE
-    ARENA = Rect2(Vector2(floorf((VIEW_SIZE.x - content_size.x) * 0.5),
-        floorf(110.0 + maxf(0.0, VIEW_SIZE.y - 212.0 - content_size.y) * 0.5)),
-        content_size)
-    CENTER = ARENA.get_center()
+    VIEW_SIZE = layout["viewport"]
+    ROOM_COLUMNS = int(layout["columns"])
+    ROOM_ROWS = int(layout["rows"])
+    ARENA = layout["arena"]
+    CENTER = layout["center"]
     var delta: Vector2 = CENTER - previous_center
     player_position += delta
     if not enemy.is_empty():
@@ -498,6 +493,7 @@ func _update_layout() -> void:
     for projectile in projectiles:
         projectile["pos"] = Vector2(projectile["pos"]) + delta
     queue_redraw()
+
 
 
 func _draw_hud() -> void:

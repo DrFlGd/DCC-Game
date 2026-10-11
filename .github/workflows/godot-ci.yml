@@ -1,0 +1,35 @@
+name: Godot prototype smoke tests
+
+on:
+  push:
+    paths:
+      - "game/**"
+      - ".github/workflows/godot-ci.yml"
+  pull_request:
+    paths:
+      - "game/**"
+      - ".github/workflows/godot-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.7.2 (GDScript)
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: false
+      - name: Verify engine
+        run: godot --version
+      - name: Import and parse game scripts
+        run: godot --headless --path game --editor --quit
+      - name: Run deterministic smoke tests
+        run: godot --headless --path game --script res://tests/smoke_test.gd
+      - name: Launch main scene briefly
+        run: godot --headless --path game --quit-after 5

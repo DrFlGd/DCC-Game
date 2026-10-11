@@ -42,7 +42,7 @@ The four content/design phases below follow the project's requested order. Techn
 
 **Phase priority:** 1 → 2 → 3 → 4, with small prototype experiments throughout. Phase 5 integrates those deliverables. Revisiting earlier phases is expected.
 
-**Latest engineering update (2026-10-11):** The [Godot prototype](../game/README.md) now uses **fixed 24×24 room interiors**, viewport-only scaling, deterministic debris with linked-exit path validation, data-driven **2–4 enemy encounters**, and six-stat d20-inspired combat/XP. See [the implementation spec](design/ROOM_ENEMY_RPG_PROTOTYPE.md). Automated tests check these rules; **human playtesting and balancing remain pending**.
+**Latest engineering update (2026-10-11):** The [Godot prototype](../game/README.md) uses fixed 24×24 rooms, safe obstacle placement, data-driven enemies, and six-stat d20-inspired combat/XP. It now includes an **automatic level-up stat allocation screen** and an **Esc pause/character-stat menu**. Godot CI checks the mechanics and menu state; **visual/UI playtesting and balancing remain pending**.
 
 ---
 
@@ -101,7 +101,10 @@ The four content/design phases below follow the project's requested order. Techn
 
 ### 1D. RPG and build systems
 - [x] Implement a first-pass RPG: six STR/DEX/CON/INT/WIS/CHA attributes, d20 roll-to-hit against AC, proficiency, XP-per-kill, cumulative level thresholds, and HP growth.
-- [ ] Tune the RPG for real-time play; choose classes/skill paths, spellcasting and rewards, ability-score upgrades, and how death resets meta-progression.
+- [x] Implement **automatic level-up allocation:** pause combat on level gain, award two configurable stat points per level, allow preview/undo/confirm across six abilities, and recompute HP/AC/attack effects.
+- [x] Implement an **Esc pause menu** with a character-stat page (attributes, modifiers, AC, HP, level, XP, proficiency, combat bonuses).
+- [ ] Tune the RPG for real-time play; choose classes/skill paths, spellcasting and rewards, ability-score upgrades versus D&D class-specific improvements, and how death resets meta-progression.
+- [ ] Playtest mouse/keyboard accessibility, readable UI at minimum window sizes, and future controller navigation for both menus.
 - [ ] Decide how skills are learned/upgraded, including prerequisites and active/passive categories.
 - [ ] Specify spells/abilities, cooldowns, mana/stamina/other costs, status effects, and stacking rules.
 - [ ] Decide what resets on death versus persists between runs (full reset, unlock-based meta-progression, or hybrid).
@@ -285,6 +288,7 @@ Keep these in a living decision log and resolve them in Phase 1 unless noted.
 | D-16 | Fixed room geometry versus display scaling | **Accepted:** 24×24 environment tiles per room (768×768 world pixels). Window dimensions alter camera/render scale and UI positioning, never room grid or game-world distances. |
 | D-17 | Data-driven enemy encounters, AI and navigation | **Prototype implemented:** JSON definitions for attack/ability/stat/XP configuration, melee vs. ranged enemies, chase/kite/guard and BFS/direct/stationary nav, 2–4 normal foes and multi-foe boss. Tune AI fairness, difficulty budgets and large-creature clearance. |
 | D-18 | D&D-inspired six-stat RPG and XP | **Prototype implemented:** six abilities, modifiers, AC, proficiency, d20 attacks, damage dice, XP per enemy and levels 1–20. **Open:** classes, skills, saving throws, spells, progression balance and deviations from tabletop conventions. |
+| D-19 | Level-up allocation and pause/character-sheet UI | **Prototype implemented:** automatically pause on level gain; 2 configurable ability points per level, cap 20, staged +/- assignment and confirm; Esc toggles pause and exposes character stats. **Open:** long-term point economy, D&D-compatible advancement, keyboard/controller support, and in-editor playtest. |
 
 Record final choices with date, alternatives, rationale, and implications under `docs/decisions/`.
 

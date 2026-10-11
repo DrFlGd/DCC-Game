@@ -37,7 +37,7 @@ func evaluate(before: int, room_kind: String, first_visit: bool, room_id: int) -
     }
 
 
-static func mandatory_budget_floor(floor: Dictionary, policy: RefCounted) -> int:
+static func mandatory_budget_floor(floor: Dictionary, policy) -> int:
     # Conservative route estimate: start -> boss -> exit, paying for first visits.
     # It is a diagnostic, not a proof of optimal cost under all item mechanics.
     var rooms: Array = floor["rooms"]

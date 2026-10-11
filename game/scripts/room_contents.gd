@@ -2,7 +2,7 @@ extends RefCounted
 ## Deterministic 24x24 obstacle/decoration map. Every linked exit is reachable
 ## from the center and from every other exit (flood fill on 4-neighbor cells).
 const SIZE := 24
-const TILE := 32.0
+const TILE := 16.0
 const DIRECTIONS := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
 
 static func portal_cells(direction: String) -> Array[Vector2i]:

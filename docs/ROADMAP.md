@@ -1,7 +1,7 @@
 # DCC Game — Development Roadmap
 
 **Status:** Planning / pre-production  
-**Last updated:** 2026-10-10  
+**Last updated:** 2026-10-11  
 **Owner:** Project team (assign individual owners as work begins)  
 **Scope:** Design research, content modelling, prototype, and eventual production for a *Dungeon Crawler Carl*-inspired game.
 

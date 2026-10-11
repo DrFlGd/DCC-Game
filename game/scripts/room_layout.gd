@@ -1,11 +1,11 @@
 extends RefCounted
 ## Fixed 24x24 room in world pixels; window resize changes scale, never tile count.
-const TILE_SIZE := 32
+const TILE_SIZE := 16
 const COLUMNS := 24
 const ROWS := 24
-const ARENA := Rect2(0.0, 0.0, 768.0, 768.0)
+const ARENA := Rect2(0.0, 0.0, 384.0, 384.0)
 const MIN_WINDOW := Vector2(720.0, 480.0)
-const BORDER := 32.0
+const BORDER := 16.0
 
 static func compute(window_size: Vector2) -> Dictionary:
     var view := Vector2(maxf(MIN_WINDOW.x, window_size.x), maxf(MIN_WINDOW.y, window_size.y))

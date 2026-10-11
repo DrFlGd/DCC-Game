@@ -7,6 +7,7 @@ A game-design and development project inspired by **Dungeon Crawler Carl**. The 
 ## Start here
 
 - **[Project roadmap](docs/ROADMAP.md)** — phases, deliverables, completion criteria, design questions, and first actionable tasks.
+- **[D-01 engine and platform decision](docs/decisions/ADR-001-engine-and-platform.md)** — Godot recommendation, alternatives, licensing references, and prototype acceptance gate.
 - The first goal is to **define and test the core gameplay loop** before committing to an engine or building a large content library.
 - The second goal is a **source-referenced canon catalogue** of Carl's and companions' interactions, equipment, enemies, skills, and other mechanics.
 - The third and fourth goals are a **game-ready item/ability catalogue** and a **tiered enemy roster**.

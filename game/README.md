@@ -1,6 +1,6 @@
 # DCC Game — Godot 32×32 Stone-Crypt Prototype
 
-This is the **D-01 Option A technical spike**, not a finished game. The first environment now uses a **32×32 logical tile grid** and a compact atlas of original placeholder pixel-art assets. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
+This is the **D-01 Option A technical spike**, not a finished game. The first environment uses **32×32 logical tiles** and separate graphics files for the stone-crypt biome, player, and two enemy types. All three actors have eight direction-dependent idle sprites. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
 
 ## Engine
 
@@ -11,7 +11,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 1. Install Godot 4.7.2 standard.
 2. Open Godot Project Manager and **Import** `game/project.godot` from this repository.
 3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project.
-4. Walk toward the decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
+4. Resize the game window by dragging an edge; the number of 32px room tiles changes to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
 
 | Input | Action |
 | --- | --- |
@@ -32,16 +32,20 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 - Visible tick/health HUD, door preview of net tick effects, and end-of-run/restart handling.
 - Omnidirectional aim; ranged fire and directional melee; basic damage and enemy AI; enemy health/state maintained across revisits.
 - A seeded smoke-test suite covering topology, deterministic generation, room tags, policies, and a route-budget diagnostic.
-- **32×32 stone floor and rotated masonry wall tiles**, two-tile door gaps, direction-rotated doors, and original player/rat-scavenger/boss sprite placeholders. See [the atlas specification](assets/README.md).
+- **Correctly assigned stone floor and masonry wall tiles**, dedicated corner pieces, two-tile door gaps, and direction-rotated doors.
+- **Eight-way facing sprites** for the player (mouse aim), rat enemy, and armored boss (AI pursuit direction).
+- **Separate per-biome and per-character/enemy assets** rather than a master atlas. See [asset conventions](assets/README.md).
+- **Responsive room and HUD** tied to window size, with 32px tile alignment and even tile counts; minimum supported window is 720×480.
 
 ## Visual and tile layout
 
-The room interior is **24 columns × 10 rows = 768 × 320 logical pixels**, with one 32-pixel wall ring outside the floor. Doors occupy a **64-pixel (two-tile) opening** centered on each side where the procedural room graph provides a connection. Walls are rotated 0°/180°/±90° depending on the side; floor tiles rotate by 90° increments to vary repetition. Doors likewise rotate to face the direction of travel.
+D-13 selects **32×32 environment tiles**. Floor and wall textures have been corrected: the brown cracked-stone slab is used for walkable floor, the cool gray masonry for perimeter walls. A special corner tile (rotated 90° on other corners) joins perpendicular sides. Each connected room has a **two-tile, 64px doorway**, decorated by a rotated 64×64 door image.
 
-The sprite atlas uses a deliberately limited palette and nearest-neighbor filtering. The default player and regular enemy are drawn at **48×48 pixels** (1.5 tiles), while the boss is **96×96 pixels** (3 tiles). These are render footprints, **not final collision radii or finalized animation resolutions**. The source artwork was downscaled from larger exploratory pixel-art images and is provisional; final production tilesets will require cleaned-up edge transitions and animation frames. The game currently has 32px tile *drawing* and simple bounding-area traversal, not Godot TileMapLayer physics or collision-per-tile.
+Unlike the original fixed 24×10 room, the number of visible columns and rows **adjusts to your window size** while keeping tiles at 32 logical pixels. The Godot project launches at 960×540, can be resized down to 720×480, and expands the room grid as the window grows. The viewport no longer stretches a fixed 960×540 drawing surface. HUD and minimap positions follow the window edges. Resize calculations live in `scripts/room_layout.gd`.
 
-The 64-pixel door image is opaque and decorative, so connected doors currently look closed even when they permit travel. Real door-state sprites and animations are on the art backlog.
+The crawler and rat are drawn from separate **384×48** sprite sheets, and the boss from a **768×96** sprite sheet. Each contains eight compass views, in order E, SE, S, SW, W, NW, N, NE. The player chooses the frame from **mouse aim** and enemies choose it from their **movement direction**. The 8 views are first-pass placeholders, not animated walking cycles, and gameplay hit detection remains based on simple collision radii.
 
+See the [per-category art file layout](assets/README.md). The door appears visually closed although it permits travel when connected and not gated; proper door states are a subsequent asset task.
 
 ## Editing the clock and floor
 
@@ -74,12 +78,17 @@ game/
 ├── project.godot
 ├── README.md
 ├── assets/
-│   ├── README.md              # 32px atlas layout and rotations
-│   └── crypt_atlas.png        # floor, wall, door, player, enemy, boss
+│   ├── README.md              # separate categories, 8-way contract
+│   ├── biomes/stone_crypt/tileset.png
+│   ├── characters/crawler/facing_8.png
+│   ├── enemies/rat/facing_8.png
+│   ├── enemies/brute_boss/facing_8.png
+│   └── weapons/README.md      # future weapon-specific sprite files
 ├── scenes/Main.tscn
 ├── scripts/
 │   ├── main.gd                 # renderer, input, room transitions, combat & HUD
 │   ├── floor_generator.gd      # deterministic graph and route queries
+│   ├── room_layout.gd          # responsive window-to-tile-grid calculations
 │   └── collapse_policy.gd     # room-specific timing policy and ledger
 ├── data/prototype_rules.json # tweakable floor/combat/timer configuration
 └── tests/smoke_test.gd       # headless logic checks
@@ -87,11 +96,12 @@ game/
 
 ### Important scope limits
 
-This is a **minimal engine-validation build**, not the Phase 5 vertical slice: combat uses a simple chasing enemy, room interiors have a starter tiling treatment rather than finished level art, there is only one floor, and there are no inventory/skills, companion AI, animation frames, audio, or saves. The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **minimal engine-validation build**, not the Phase 5 vertical slice: combat uses a simple chasing enemy, room interiors have a starter tiling treatment rather than finished level art, there is only one floor, and there are no inventory/skills, companion AI, movement/attack animation cycles, audio, or saves. The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 
 - If Godot cannot locate the main scene, make sure you imported/opened the **game/** directory, not the repository root.
 - If controls do not respond, click inside the running game window.
+- Resize the window by dragging its border. The floor grid should add/remove complete 32px tiles while the player, doors and overlays retain their placement.
 - Replaying with **R** repeats the graph exactly but moment-to-moment mouse and keyboard inputs are not recorded.
 - If an edited JSON file is invalid, the game reports an error and exits; use the headless smoke-test command after making rule changes.

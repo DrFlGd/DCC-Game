@@ -7,6 +7,7 @@ const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Main = preload("res://scripts/main.gd")
+const CharacterMenu = preload("res://scripts/character_menu.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -89,6 +90,44 @@ func run_tests() -> void:
     var attack: Dictionary = RPG.roll_to_hit(dice, 4, 12)
     check(int(attack["d20"]) >= 1 and int(attack["d20"]) <= 20, "d20 roll range")
     check(RPG.roll_damage(dice, 6, 2, false) >= 1, "weapon die and ability damage")
+
+    # Allocation is exact, capped, nonnegative, and cannot invent new stat keys.
+    var two_points: Dictionary = {"STR": 1, "CON": 1}
+    var allocated: Dictionary = RPG.apply_allocation(stats, two_points, 2, 20)
+    check(not allocated.is_empty(), "valid level-up allocation accepted")
+    check(int(allocated["STR"]) == 15 and int(allocated["CON"]) == 15,
+        "point allocation changes intended ability scores")
+    check(RPG.apply_allocation(stats, {"STR": 3}, 2, 20).is_empty(),
+        "overspending points is rejected")
+    check(RPG.apply_allocation(stats, {"STR": -1, "DEX": 3}, 2, 20).is_empty(),
+        "negative point allocations are rejected")
+    check(RPG.apply_allocation(stats, {"LCK": 2}, 2, 20).is_empty(),
+        "unknown abilities rejected")
+    var capped: Dictionary = stats.duplicate(true)
+    capped["STR"] = 20
+    check(RPG.apply_allocation(capped, {"STR": 1, "DEX": 1}, 2, 20).is_empty(),
+        "ability cap enforced")
+    check(RPG.player_hp_at_level(3, {"CON": 16}) >
+        RPG.player_hp_at_level(3, {"CON": 14}), "CON upgrades affect maximum HP")
+    check(RPG.armor_class({"DEX": 16}) > RPG.armor_class({"DEX": 14}),
+        "DEX upgrades affect armor class")
+    check(RPG.level_for_xp(2700) - RPG.level_for_xp(0) == 3,
+        "multi-level XP awards preserve all earned levels")
+
+    # Modal view model refuses overspending and gates confirming until points spent.
+    var menu = CharacterMenu.new()
+    menu.show_level_up(stats, {"level": 2}, 2, 20)
+    check(menu.mode == "level_up" and menu.remaining_points() == 2,
+        "level-up menu starts with available points")
+    check(menu.stage_point("STR", 1) and menu.stage_point("DEX", 1),
+        "point buttons stage legitimate choices")
+    check(menu.remaining_points() == 0, "staged points exhaust pool")
+    check(not menu.stage_point("STR", 1), "no extra points after spending pool")
+    check(menu.stage_point("STR", -1) and menu.remaining_points() == 1,
+        "minus button refunds a staged point")
+    menu.show_pause(stats, {"level": 2, "xp": 300})
+    check(menu.mode == "pause", "pause page opens")
+    menu.free()
 
     # Enemy templates and AI definitions are editable data, not hard-coded encounters.
     var catalog: Dictionary = Enemies.load_catalogue()

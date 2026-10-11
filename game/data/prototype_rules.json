@@ -2,7 +2,7 @@
   "seed": 424242,
   "room_count": 22,
   "start_ticks": 26,
-  "player_speed": 210,
+  "player_speed": 105,
   "collapse": {
     "default": {
       "first_entry_cost": 2,

@@ -1,17 +1,17 @@
 # ADR-001 — Game Engine, Language, and Initial Target Platform
 
-- **Status:** Proposed — awaiting project owner selection / prototype validation
+- **Status:** Accepted — Godot + GDScript selected by project owner on 2026-10-10; runtime validation pending
 - **Date:** 2026-10-10
 - **Decision ID:** D-01
 - **Related:** [Development Roadmap](../ROADMAP.md), particularly Phase 1E
 - **Decision owner:** Project owner
-- **Proposed default:** Godot 4.x (pin stable patch version before implementation), GDScript, desktop-PC-first prototype
+- **Selected stack:** **Godot 4.7.2 stable (standard/GDScript)**, desktop-PC-first prototype; Windows is the initial planned export target (no export generated yet)
 
 ## Context
 
 DCC Game is intended to be a top-down, 16-bit-inspired pixel-art roguelike with unusually large procedurally generated room-grid floors, per-entry collapse pressure, omnidirectional ranged and melee combat, data-driven RPG progression and equipment, many enemy types, and eventually companions. The game needs **repeatable seeds**, a **tunable collapse policy per room type**, and code/content architecture that can grow without rewriting every scene.
 
-As of this ADR, the repository holds planning documentation only. We have **not** chosen an engine or started a prototype, and the project owner's OS, coding experience, team size, and release ambitions are not yet confirmed. These may change the selection.
+**Implementation update (2026-10-10):** The owner chose Option A. A Godot project now lives under [`game/`](../../game/README.md) and implements seeded room graphs, transitions, a boss gate and guild-hall policy, omni-directional combat, and a collapse ledger. The developer's OS, team background, and release ambitions remain unconfirmed. The project requires an interactive smoke test before the technical spike is considered validated.
 
 ### Important design constraint: collapse must be tunable
 
@@ -54,7 +54,7 @@ Licensing terms, package pricing, and engine versions may change. Recheck before
 
 ## Proposed decision
 
-**Prototype in Godot 4.x using GDScript with a desktop-first build.**
+**Accepted: Prototype in Godot 4.7.2 stable using GDScript, with desktop-first targets.**
 
 Why this wins under current assumptions:
 
@@ -64,7 +64,7 @@ Why this wins under current assumptions:
 4. GDScript minimizes setup/iteration overhead for early game mechanics; use typed GDScript where practical and automated validation for data-driven content.
 5. Windows is a convenient **initial distributable test target**, not a restriction on the developer's workstation or a long-term exclusivity commitment. Export to the team’s development OS first for convenience; evaluate macOS/Linux builds after core-playable.
 
-**No engine is selected or installed by this document.** The recommendation becomes an **Accepted** ADR only after the project owner approves it (or authorizes the recommendation) and the spike passes its gate.
+**Owner selection is recorded, but gameplay validation is not complete.** The repository now contains the Godot project and headless test commands; the project has not been executed locally within this authoring environment. The acceptance gate for D-01's **technology selection** is satisfied; the separate **prototype quality gate** still requires Godot CI and a human playtest.
 
 ## Alternatives / decision paths for the project owner
 
@@ -117,8 +117,20 @@ Avoid prematurely building an abstract "universal engine"; these are modular res
 
 ## Approval record
 
-- **Project owner choice:** _Pending_
-- **Engine/version:** _Pending_
-- **Language:** _Pending_
-- **First target platform:** _Proposed: Windows desktop prototype; adapt to actual developer OS_
-- **Decision outcome:** _Pending technical spike and acceptance_
+- **Project owner choice:** _Option A: Godot/GDScript selected on 2026-10-10_
+- **Engine/version:** _Godot 4.7.2 stable, standard build_
+- **Language:** _GDScript_
+- **First target platform:** _Desktop PC, Windows export planned; run in editor on developer OS_
+- **Decision outcome:** _Engine accepted and prototype scaffolded; execution/quality checks pending_
+
+
+## Implementation record — 2026-10-10
+
+- Godot project: [`game/project.godot`](../../game/project.godot)
+- Scene and gameplay: [`game/scenes/Main.tscn`](../../game/scenes/Main.tscn), [`game/scripts/main.gd`](../../game/scripts/main.gd)
+- Deterministic room generator: [`game/scripts/floor_generator.gd`](../../game/scripts/floor_generator.gd)
+- Data-driven clock policy: [`game/scripts/collapse_policy.gd`](../../game/scripts/collapse_policy.gd), [`game/data/prototype_rules.json`](../../game/data/prototype_rules.json)
+- Smoke tests: [`game/tests/smoke_test.gd`](../../game/tests/smoke_test.gd)
+- CI: [`.github/workflows/godot-ci.yml`](../../.github/workflows/godot-ci.yml)
+
+**Verification:** File creation and repository read-back succeeded. Godot runtime execution and graphics/input playtest were **not performed in this workspace** because Godot is not installed and the runtime could not be fetched. GitHub Actions is configured to run a headless import, smoke tests, and a brief scene launch after relevant pushes, but its execution result has not been independently confirmed. Do not mark the prototype spike as fully validated until those pass and the controls/room transitions are tested in the editor.

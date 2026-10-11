@@ -1,28 +1,30 @@
 extends Node2D
-## DCC Game greybox vertical traversal spike.
-## Rooms are drawn programmatically to avoid external assets in the first prototype.
+## DCC Game technical prototype; modular 32px biome tiles and eight-way facing sprites.
 
 const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 
-const VIEW_SIZE := Vector2(960, 540)
 const TILE_SIZE := 32.0
-const ROOM_COLUMNS := 24
-const ROOM_ROWS := 10
-const ARENA := Rect2(96.0, 112.0, 768.0, 320.0)
-const CENTER := Vector2(480, 272)
+var VIEW_SIZE := Vector2(960, 540)
+var ROOM_COLUMNS := 24
+var ROOM_ROWS := 10
+var ARENA := Rect2(96.0, 112.0, 768.0, 320.0)
+var CENTER := Vector2(480, 272)
 const DOOR_HALF_WIDTH := 32.0
 const PLAYER_RADIUS := 11.0
 const BULLET_SPEED := 445.0
 const MOVE_LABELS := ["N", "E", "S", "W"]
 
-const ATLAS = preload("res://assets/crypt_atlas.png")
-const ART_FLOOR := Rect2(0.0, 0.0, 32.0, 32.0)
-const ART_WALL := Rect2(32.0, 0.0, 32.0, 32.0)
-const ART_DOOR := Rect2(64.0, 0.0, 64.0, 64.0)
-const ART_PLAYER := Rect2(0.0, 64.0, 48.0, 48.0)
-const ART_ENEMY := Rect2(48.0, 64.0, 48.0, 48.0)
-const ART_BOSS := Rect2(96.0, 64.0, 96.0, 96.0)
+const CRYPT = preload("res://assets/biomes/stone_crypt/tileset.png")
+const PLAYER_SHEET = preload("res://assets/characters/crawler/facing_8.png")
+const RAT_SHEET = preload("res://assets/enemies/rat/facing_8.png")
+const BOSS_SHEET = preload("res://assets/enemies/brute_boss/facing_8.png")
+const ART_FLOOR := Rect2(0, 0, 32, 32)
+const ART_FLOOR_VARIANT := Rect2(32, 0, 32, 32)
+const ART_WALL := Rect2(64, 0, 32, 32)
+const ART_CORNER := Rect2(96, 0, 32, 32)
+const ART_DOOR := Rect2(64, 64, 64, 64)
+const DIRECTIONS_8 := ["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
 
 var config: Dictionary = {}
 var floor: Dictionary = {}
@@ -34,7 +36,8 @@ var saved_enemy_hp: Dictionary = {}
 var tick_ledger: Array[Dictionary] = []
 var ticks := 0
 var initial_seed := 0
-var player_position := CENTER
+var player_position := Vector2(480, 272)
+var player_facing := 0
 var player_hp := 8
 var boss_defeated := false
 var outcome := "running"
@@ -60,6 +63,7 @@ func _ready() -> void:
         get_tree().quit(1)
         return
     config = parsed
+    _update_layout()
     _start_run(int(config.get("seed", 424242)))
 
 
@@ -75,6 +79,7 @@ func _start_run(seed_value: int) -> void:
     tick_ledger.clear()
     projectiles.clear()
     player_position = CENTER
+    player_facing = 0
     player_hp = int(config.get("player_max_hp", 8))
     boss_defeated = false
     enemy.clear()
@@ -107,6 +112,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+    # Layout follows actual window dimensions rather than a fixed 960x540 drawing canvas.
+    if get_viewport_rect().size != VIEW_SIZE:
+        _update_layout()
     if outcome != "running":
         queue_redraw()
         return
@@ -134,6 +142,7 @@ func _physics_process(delta: float) -> void:
     var target: Vector2 = get_global_mouse_position() - player_position
     if target.length_squared() > 9.0:
         aim_direction = target.normalized()
+        player_facing = _facing_from_vector(aim_direction)
     if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and fire_cooldown <= 0.0:
         _fire()
     if Input.is_key_pressed(KEY_SPACE) and melee_cooldown <= 0.0:
@@ -232,7 +241,8 @@ func _spawn_enemy() -> void:
         "hp": int(saved_enemy_hp.get(current_room_id, max_hp)),
         "max_hp": max_hp,
         "radius": 23.0 if kind == "boss" else 14.0,
-        "speed": float(config.get("enemy_speed", 56.0)) * (0.75 if kind == "boss" else 1.0)
+        "speed": float(config.get("enemy_speed", 56.0)) * (0.75 if kind == "boss" else 1.0),
+        "facing": 4
     }
 
 
@@ -295,6 +305,7 @@ func _move_enemy(delta: float) -> void:
     var enemy_pos: Vector2 = enemy["pos"]
     var displacement: Vector2 = player_position - enemy_pos
     if displacement.length_squared() > 100.0:
+        enemy["facing"] = _facing_from_vector(displacement)
         enemy_pos += displacement.normalized() * float(enemy["speed"]) * delta
     enemy_pos.x = clampf(enemy_pos.x, ARENA.position.x + 24.0, ARENA.end.x - 24.0)
     enemy_pos.y = clampf(enemy_pos.y, ARENA.position.y + 24.0, ARENA.end.y - 24.0)
@@ -326,15 +337,16 @@ func _draw() -> void:
 
 func _draw_room() -> void:
     var kind: String = String(_room()["kind"])
-    # Use 32x32 source tiles; rotate alternating slabs to reduce obvious repeats.
+    # Corrected visual mapping: floor = warm worn stone slab; wall = grey masonry.
     for y in range(ROOM_ROWS):
         for x in range(ROOM_COLUMNS):
             var cell_center: Vector2 = ARENA.position + Vector2(
-                float(x) * TILE_SIZE + TILE_SIZE * 0.5,
-                float(y) * TILE_SIZE + TILE_SIZE * 0.5
+                (float(x) + 0.5) * TILE_SIZE,
+                (float(y) + 0.5) * TILE_SIZE
             )
-            var rotation: float = float((x * 7 + y * 11) % 4) * PI * 0.5
-            _atlas_piece(ART_FLOOR, cell_center, Vector2(32, 32), rotation)
+            var region: Rect2 = ART_FLOOR_VARIANT if (x * 17 + y * 13) % 9 == 0 else ART_FLOOR
+            _crypt_piece(region, cell_center, Vector2(32, 32),
+                float((x + y * 3) % 4) * PI * 0.5)
 
     var tint := Color.TRANSPARENT
     match kind:
@@ -347,24 +359,30 @@ func _draw_room() -> void:
     if tint.a > 0.0:
         draw_rect(ARENA, tint)
 
-    # A 32px wall ring, with 64px-wide physical gaps where graph links exist.
-    # Rotate the same masonry to keep its stone-edge orientation consistent.
     var links: Dictionary = _room()["neighbors"]
-    for x in range(-1, ROOM_COLUMNS + 1):
-        if not (links.has("N") and (x == ROOM_COLUMNS / 2 - 1 or x == ROOM_COLUMNS / 2)):
-            _atlas_piece(ART_WALL, Vector2(ARENA.position.x + (float(x) + 0.5) * TILE_SIZE,
-                ARENA.position.y - 16.0), Vector2(32, 32))
-        if not (links.has("S") and (x == ROOM_COLUMNS / 2 - 1 or x == ROOM_COLUMNS / 2)):
-            _atlas_piece(ART_WALL, Vector2(ARENA.position.x + (float(x) + 0.5) * TILE_SIZE,
-                ARENA.end.y + 16.0), Vector2(32, 32), PI)
-
+    var middle_x: int = ROOM_COLUMNS / 2
+    var middle_y: int = ROOM_ROWS / 2
+    # Wall perimeter: two empty 32px cells per traversable connection.
+    for x in range(ROOM_COLUMNS):
+        var px: float = ARENA.position.x + (float(x) + 0.5) * TILE_SIZE
+        if not (links.has("N") and (x == middle_x - 1 or x == middle_x)):
+            _crypt_piece(ART_WALL, Vector2(px, ARENA.position.y - 16), Vector2(32, 32))
+        if not (links.has("S") and (x == middle_x - 1 or x == middle_x)):
+            _crypt_piece(ART_WALL, Vector2(px, ARENA.end.y + 16), Vector2(32, 32), PI)
     for y in range(ROOM_ROWS):
-        if not (links.has("W") and (y == ROOM_ROWS / 2 - 1 or y == ROOM_ROWS / 2)):
-            _atlas_piece(ART_WALL, Vector2(ARENA.position.x - 16.0,
-                ARENA.position.y + (float(y) + 0.5) * TILE_SIZE), Vector2(32, 32), -PI * 0.5)
-        if not (links.has("E") and (y == ROOM_ROWS / 2 - 1 or y == ROOM_ROWS / 2)):
-            _atlas_piece(ART_WALL, Vector2(ARENA.end.x + 16.0,
-                ARENA.position.y + (float(y) + 0.5) * TILE_SIZE), Vector2(32, 32), PI * 0.5)
+        var py: float = ARENA.position.y + (float(y) + 0.5) * TILE_SIZE
+        if not (links.has("W") and (y == middle_y - 1 or y == middle_y)):
+            _crypt_piece(ART_WALL, Vector2(ARENA.position.x - 16, py), Vector2(32, 32), -PI * 0.5)
+        if not (links.has("E") and (y == middle_y - 1 or y == middle_y)):
+            _crypt_piece(ART_WALL, Vector2(ARENA.end.x + 16, py), Vector2(32, 32), PI * 0.5)
+
+    # Dedicated masonry corner ensures all four sides meet without a square hole.
+    _crypt_piece(ART_CORNER, ARENA.position - Vector2(16, 16), Vector2(32, 32))
+    _crypt_piece(ART_CORNER, Vector2(ARENA.end.x + 16, ARENA.position.y - 16),
+        Vector2(32, 32), PI * 0.5)
+    _crypt_piece(ART_CORNER, ARENA.end + Vector2(16, 16), Vector2(32, 32), PI)
+    _crypt_piece(ART_CORNER, Vector2(ARENA.position.x - 16, ARENA.end.y + 16),
+        Vector2(32, 32), -PI * 0.5)
 
     for direction in MOVE_LABELS:
         if not links.has(direction):
@@ -399,7 +417,7 @@ func _draw_room() -> void:
                 midpoint = Vector2(ARENA.end.x, CENTER.y)
                 rotation = PI * 0.5
                 label_pos = midpoint + Vector2(-58, 4)
-        _atlas_piece(ART_DOOR, midpoint, Vector2(64, 64), rotation, tone)
+        _crypt_piece(ART_DOOR, midpoint, Vector2(64, 64), rotation, tone)
         var net_ticks: int = int(preview["grant"]) - int(preview["cost"])
         _text("%s%+d" % [direction, net_ticks], label_pos, 13, Color.WHITE)
 
@@ -407,7 +425,8 @@ func _draw_room() -> void:
         draw_circle(CENTER, 23.0, Color(0.08, 0.47, 0.36, 0.76))
         _text("GUILD", CENTER + Vector2(-23, 5), 12, Color.WHITE)
     elif kind == "boss":
-        _text("BOSS CHAMBER", Vector2(409, 159), 18, Color("#ffacbd"))
+        _text("BOSS CHAMBER", Vector2(CENTER.x - 71, ARENA.position.y + 47),
+            18, Color("#ffacbd"))
     elif kind == "exit":
         draw_rect(Rect2(CENTER - Vector2(30, 30), Vector2(60, 60)), Color("#9c783c"))
         _text("EXIT", CENTER + Vector2(-17, 5), 15, Color.WHITE)
@@ -421,15 +440,15 @@ func _draw_combat() -> void:
         var pos: Vector2 = enemy["pos"]
         var boss_room: bool = _room()["kind"] == "boss"
         var bounds := Vector2(96, 96) if boss_room else Vector2(48, 48)
-        _atlas_piece(ART_BOSS if boss_room else ART_ENEMY, pos, bounds)
+        _draw_facing_sprite(BOSS_SHEET if boss_room else RAT_SHEET, pos, bounds,
+            int(enemy.get("facing", 0)))
         var hp_ratio: float = float(enemy["hp"]) / float(enemy["max_hp"])
         draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0, 48.0, 6.0),
             Color("#181a24"))
-        draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0, 48.0 * hp_ratio, 6.0),
-            Color("#a5d49b"))
+        draw_rect(Rect2(pos.x - 24.0, pos.y - bounds.y * 0.5 - 12.0,
+            48.0 * hp_ratio, 6.0), Color("#a5d49b"))
 
-    _atlas_piece(ART_PLAYER, player_position, Vector2(48, 48))
-    # This aim line and melee arc remain prototype indicators, not final animations.
+    _draw_facing_sprite(PLAYER_SHEET, player_position, Vector2(48, 48), player_facing)
     draw_line(player_position, player_position + aim_direction * 28.0, Color("#ffe0a1"), 2.0)
     if melee_flash > 0.0:
         draw_arc(player_position, 58.0, aim_direction.angle() - 0.70,
@@ -438,16 +457,52 @@ func _draw_combat() -> void:
         draw_circle(player_position, 20.0, Color(1.0, 1.0, 1.0, 0.16))
 
 
-func _atlas_piece(region: Rect2, center_point: Vector2, size: Vector2,
+func _crypt_piece(region: Rect2, center_point: Vector2, size: Vector2,
         rotation: float = 0.0, modulation: Color = Color.WHITE) -> void:
     draw_set_transform(center_point, rotation, Vector2.ONE)
-    draw_texture_rect_region(ATLAS, Rect2(-size * 0.5, size), region, modulation)
+    draw_texture_rect_region(CRYPT, Rect2(-size * 0.5, size), region, modulation)
     draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_facing_sprite(sheet: Texture2D, center_point: Vector2, size: Vector2,
+        facing: int) -> void:
+    var index: int = posmod(facing, 8)
+    draw_texture_rect_region(sheet, Rect2(center_point - size * 0.5, size),
+        Rect2(float(index) * size.x, 0.0, size.x, size.y))
+
+
+func _facing_from_vector(direction: Vector2) -> int:
+    if direction.length_squared() < 0.0001:
+        return 0
+    return posmod(int(round(direction.angle() / (PI / 4.0))), 8)
+
+
+func _update_layout() -> void:
+    var new_size: Vector2 = get_viewport_rect().size
+    if new_size.x < 1.0 or new_size.y < 1.0:
+        return
+    var previous_center: Vector2 = CENTER
+    VIEW_SIZE = new_size
+    # Maintain 32px alignment, even tile counts, and two-tile door gaps.
+    ROOM_COLUMNS = maxi(12, 2 * int(floorf((VIEW_SIZE.x - 96.0) / (2.0 * TILE_SIZE))))
+    ROOM_ROWS = maxi(6, 2 * int(floorf((VIEW_SIZE.y - 212.0) / (2.0 * TILE_SIZE))))
+    var content_size := Vector2(float(ROOM_COLUMNS), float(ROOM_ROWS)) * TILE_SIZE
+    ARENA = Rect2(Vector2(floorf((VIEW_SIZE.x - content_size.x) * 0.5),
+        floorf(110.0 + maxf(0.0, VIEW_SIZE.y - 212.0 - content_size.y) * 0.5)),
+        content_size)
+    CENTER = ARENA.get_center()
+    var delta: Vector2 = CENTER - previous_center
+    player_position += delta
+    if not enemy.is_empty():
+        enemy["pos"] = Vector2(enemy["pos"]) + delta
+    for projectile in projectiles:
+        projectile["pos"] = Vector2(projectile["pos"]) + delta
+    queue_redraw()
 
 
 func _draw_hud() -> void:
     var room: Dictionary = _room()
-    _text("DCC GAME | 32PX CRYPT ART", Vector2(18, 26), 20, Color("#f5dda2"))
+    _text("DCC GAME | RESPONSIVE 32PX", Vector2(18, 26), 20, Color("#f5dda2"))
     _text("SEED %d | ROOM %d (%s) | VISITED %d/%d" % [
         initial_seed, current_room_id, String(room["kind"]).to_upper(),
         visited.size(), (floor["rooms"] as Array).size()
@@ -457,18 +512,20 @@ func _draw_hud() -> void:
         ticks, player_hp, "CLEARED" if boss_defeated else "ACTIVE"
     ], Vector2(18, 70), 18, tick_color)
     _text(message, Vector2(18, 96), 12, Color("#b4d4e1"))
-    _draw_minimap()
+    if VIEW_SIZE.x >= 900.0:
+        _draw_minimap()
     _text("WASD / arrows: move  |  mouse: aim  |  left click: fire  |  space: melee",
-        Vector2(18, 475), 15, Color("#e0e9f0"))
+        Vector2(18, VIEW_SIZE.y - 65.0), 15, Color("#e0e9f0"))
     _text("R: replay seed  |  N: new seed  |  Door labels: net collapse ticks",
-        Vector2(18, 498), 14, Color("#b8cfde"))
-    _text("Stone crypt 32px tiles | Boss unlocks exit | Rules: data/prototype_rules.json",
-        Vector2(18, 521), 12, Color("#97d2b7"))
+        Vector2(18, VIEW_SIZE.y - 42.0), 14, Color("#b8cfde"))
+    _text("32px tiles | Boss unlocks exit | Eight-way facing | Window resize enabled",
+        Vector2(18, VIEW_SIZE.y - 19.0), 12, Color("#97d2b7"))
 
 
 func _draw_minimap() -> void:
-    draw_rect(Rect2(735, 5, 217, 104), Color("#202d38"))
-    _text("MAP", Vector2(743, 21), 12, Color("#ccdde8"))
+    var map_left: float = VIEW_SIZE.x - 225.0
+    draw_rect(Rect2(map_left, 5, 217, 104), Color("#202d38"))
+    _text("MAP", Vector2(map_left + 8.0, 21), 12, Color("#ccdde8"))
     var rooms: Array = floor["rooms"]
     var min_grid := Vector2i(999, 999)
     var max_grid := Vector2i(-999, -999)
@@ -487,7 +544,7 @@ func _draw_minimap() -> void:
             continue
         var cell: Vector2i = room["grid"]
         var position := Vector2(
-            742.0 + float(cell.x - min_grid.x) * cell_size,
+            map_left + 7.0 + float(cell.x - min_grid.x) * cell_size,
             25.0 + float(cell.y - min_grid.y) * cell_size
         )
         var color := Color("#718697")

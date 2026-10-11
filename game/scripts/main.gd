@@ -524,9 +524,12 @@ func _draw_combat() -> void:
 
 func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
         rotation: float = 0.0, modulation: Color = Color.WHITE) -> void:
-    draw_set_transform(center, rotation, Vector2.ONE)
+    # Draw transforms are absolute; compose the room's screen transform here.
+    var offset: Vector2 = layout["offset"]
+    var scale: float = float(layout["scale"])
+    draw_set_transform(offset + center * scale, rotation, Vector2.ONE * scale)
     draw_texture_rect_region(CRYPT, Rect2(-size * 0.5, size), region, modulation)
-    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+    draw_set_transform(offset, 0.0, Vector2.ONE * scale)
 
 
 func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facing: int) -> void:

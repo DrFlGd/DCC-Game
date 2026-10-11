@@ -2,13 +2,14 @@
 
 A game-design and development project inspired by **Dungeon Crawler Carl**. The intended experience is a top-down, room-based roguelike dungeon crawler with a 16-bit-inspired pixel-art aesthetic, expanded procedural floors, tactical pressure from a floor-collapse clock, action combat, RPG progression, and optional companions.
 
-> **Project status:** Pre-production / foundational rules and research. No gameplay implementation has been started in this repository.
+> **Project status:** Pre-production with a **Godot 4.7.2/GDScript technical prototype** committed in `game/`. Source content and full gameplay systems are not yet implemented; runtime playtesting is pending.
 
 ## Start here
 
 - **[Project roadmap](docs/ROADMAP.md)** — phases, deliverables, completion criteria, design questions, and first actionable tasks.
-- **[D-01 engine and platform decision](docs/decisions/ADR-001-engine-and-platform.md)** — Godot recommendation, alternatives, licensing references, and prototype acceptance gate.
-- The first goal is to **define and test the core gameplay loop** before committing to an engine or building a large content library.
+- **[D-01 engine and platform decision](docs/decisions/ADR-001-engine-and-platform.md)** — Godot 4.7.2 + GDScript selected; implementation record and test gate.
+- **[Godot prototype: setup and controls](game/README.md)** — import `game/project.godot`, play the seeded dungeon-room spike, and run smoke tests.
+- The team has selected **Godot 4.7.2 and GDScript** for a desktop-first technical prototype. The next step is to run the engine checks and playtest the core room-to-room loop before building a large content library.
 - The second goal is a **source-referenced canon catalogue** of Carl's and companions' interactions, equipment, enemies, skills, and other mechanics.
 - The third and fourth goals are a **game-ready item/ability catalogue** and a **tiered enemy roster**.
 
@@ -29,6 +30,6 @@ A game-design and development project inspired by **Dungeon Crawler Carl**. The 
 
 ## Current next step
 
-Work through **Phase 1: Foundational gameplay rules** in [the roadmap](docs/ROADMAP.md). In particular, decide exactly how the collapse clock works, how large and navigable floors should be, and what counts as success or failure in a run.
+Run the **Godot 4.7.2 prototype** using [the game setup instructions](game/README.md), validate the controls and headless smoke tests, and continue **Phase 1: Foundational gameplay rules** in [the roadmap](docs/ROADMAP.md). Collapse values are configuration-driven hypotheses to tune through boss rooms, guild halls, and other room mechanics.
 
 As the project grows, add more detailed design specifications, source catalogues, and structured content data under `docs/` and `data/` as outlined in the roadmap.

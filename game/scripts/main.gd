@@ -508,13 +508,15 @@ func _draw_hud() -> void:
         ticks, player_hp, "CLEARED" if boss_defeated else "ACTIVE"
     ], Vector2(18, 70), 18, tick_color)
     _text(message, Vector2(18, 96), 12, Color("#b4d4e1"))
-    if VIEW_SIZE.x >= 900.0:
-        _draw_minimap()
-    _text("WASD / arrows: move  |  mouse: aim  |  left click: fire  |  space: melee",
-        Vector2(18, VIEW_SIZE.y - 65.0), 15, Color("#e0e9f0"))
-    _text("R: replay seed  |  N: new seed  |  Door labels: net collapse ticks",
+    _draw_minimap()
+    var short_window: bool = VIEW_SIZE.x < 940.0
+    _text("WASD: move | Mouse: aim | Left click: shoot | Space: melee" if short_window else
+        "WASD / arrows: move | Mouse: aim | Left click: fire | Space: melee",
+        Vector2(18, VIEW_SIZE.y - 65.0), 14, Color("#e0e9f0"))
+    _text("R: same seed | N: new seed | Doors preview ticks" if short_window else
+        "R: replay seed | N: new seed | Door labels: net collapse ticks",
         Vector2(18, VIEW_SIZE.y - 42.0), 14, Color("#b8cfde"))
-    _text("32px tiles | Boss unlocks exit | Eight-way facing | Window resize enabled",
+    _text("32px tile grid | 8-direction art | Drag window edge to resize",
         Vector2(18, VIEW_SIZE.y - 19.0), 12, Color("#97d2b7"))
 
 

@@ -20,6 +20,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Hold left mouse button | Shoot projectiles |
 | Hold Space | Melee attack in aim direction |
 | Esc | Open pause menu, or resume from pause / character stats |
+| F9 (prototype debug) | Award XP up to the next level so you can test the level-up menu immediately |
 | Mouse in level-up menu | Assign and refund points with + / −, then confirm |
 | R | Restart using same seed |
 | N | Restart using a new seed |
@@ -59,7 +60,7 @@ See [the gameplay systems specification](../docs/design/ROOM_ENEMY_RPG_PROTOTYPE
 
 ## Level-up and pause menus
 
-When XP crosses a level threshold, combat stops and a **Level Up** overlay appears. The default is **2 free ability points per level gained** (this is a game-design adaptation, **not** D&D's class-specific Ability Score Improvement rule). The screen shows each of the six ability scores and its modifier, with **+** and **−** buttons to stage/undo points. Points are only applied when you select **Confirm allocation**, and confirmation remains disabled until all available points are assigned. Level jumps grant points for every level earned in that XP award. Scores cannot exceed the configured cap (default **20**).
+When XP crosses a level threshold, combat stops and a **Level Up** overlay appears. For quick testing, press **F9 during gameplay** to jump to the next level (debug-only shortcut). The default is **2 free ability points per level gained** (this is a game-design adaptation, **not** D&D's class-specific Ability Score Improvement rule). The screen shows each of the six ability scores and its modifier, with **+** and **−** buttons to stage/undo points. Points are only applied when you select **Confirm allocation**, and confirmation remains disabled until all available points are assigned. Level jumps grant points for every level earned in that XP award. Scores cannot exceed the configured cap (default **20**).
 
 New scores immediately update AC (DEX), max HP (CON), STR-based melee and DEX-based ranged attack bonuses, and any relevant damage modifiers on new attacks. Raising CON grants the corresponding max-HP increase to current HP. All points are lost on starting a new run.
 

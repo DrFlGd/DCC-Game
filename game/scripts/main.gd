@@ -91,6 +91,7 @@ func _ready() -> void:
     add_child(character_menu)
     character_menu.allocation_confirmed.connect(_confirm_stat_allocation)
     character_menu.resume_requested.connect(_on_resume_game)
+    character_menu.resolution_requested.connect(_apply_resolution)
     _start_run(int(config.get("seed", 424242)))
 
 
@@ -168,6 +169,7 @@ func _input(event: InputEvent) -> void:
 func _character_context() -> Dictionary:
     return {
         "room_id": current_room_id,
+        "window_size": get_window().size,
         "ticks": ticks, "level": player_level, "xp": player_xp,
         "next_xp": RPG.next_level_xp(player_level) if player_level < 20 else "MAX",
         "hp": player_hp, "max_hp": player_max_hp, "ac": player_ac,
@@ -175,6 +177,19 @@ func _character_context() -> Dictionary:
         "melee_bonus": RPG.attack_bonus(ability_scores, "STR", player_level),
         "ranged_bonus": RPG.attack_bonus(ability_scores, "DEX", player_level)
     }
+
+
+func _apply_resolution(resolution: Vector2i) -> void:
+    if not CharacterMenu.RESOLUTION_PRESETS.has(resolution):
+        return
+    var window: Window = get_window()
+    window.mode = Window.MODE_WINDOWED
+    window.size = resolution
+    if not DisplayServer.get_name() == "headless":
+        window.move_to_center()
+    layout = Layout.compute(get_viewport_rect().size)
+    character_menu.current_resolution = window.size
+    queue_redraw()
 
 
 func _on_resume_game() -> void:

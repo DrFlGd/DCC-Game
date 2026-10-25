@@ -11,6 +11,8 @@ signal settings_requested
 signal abandon_requested
 
 const RPG = preload("res://scripts/rpg_rules.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
+const Profile = preload("res://scripts/core/profile.gd")
 const Settings = preload("res://scripts/core/settings.gd")
 ## Kept as an alias so callers and tests can keep using CharacterMenu's name;
 ## the list itself lives in settings.gd.
@@ -198,6 +200,8 @@ func _refresh() -> void:
         _character_content(content)
     elif page == "abandon":
         _abandon_content(content)
+    elif page == "achievements":
+        _achievements_content(content)
     else:
         _pause_content(content)
 
@@ -285,6 +289,7 @@ func _pause_content(content: VBoxContainer) -> void:
     row.add_theme_constant_override("separation", 10)
     content.add_child(row)
     row.add_child(_button("Settings", func(): settings_requested.emit()))
+    row.add_child(_button("Achievements", Callable(self, "_open_achievements_page")))
     row.add_child(_button("Abandon run", Callable(self, "_open_abandon_page")))
     var resume := _button("Resume game  (Esc)", Callable(self, "_resume"))
     content.add_child(resume)
@@ -324,6 +329,46 @@ func _character_content(content: VBoxContainer) -> void:
             Color.WHITE))
         grid.add_child(_text("%d    modifier %+d" % [score, RPG.modifier(score)],
             15, Color("#a9e7c5")))
+    content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
+    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+
+
+## Achievements page (Wave 2G): every definition, unlocked ones from the profile.
+func _open_achievements_page() -> void:
+    if mode == "pause":
+        page = "achievements"
+        _refresh()
+
+
+func _achievements_content(content: VBoxContainer) -> void:
+    var definitions: Array = Achievements.default_definitions()
+    var unlocked: Dictionary = Profile.unlocked()
+    var earned := 0
+    for definition in definitions:
+        if unlocked.has(String(definition.get("id", ""))):
+            earned += 1
+    content.add_child(_text("ACHIEVEMENTS   %d / %d" % [earned, definitions.size()], 25,
+        Color("#f6d48d")))
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size = Vector2(538, 290)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    content.add_child(scroll)
+    var rows := VBoxContainer.new()
+    rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    rows.add_theme_constant_override("separation", 1)
+    scroll.add_child(rows)
+    for definition in definitions:
+        var got: bool = unlocked.has(String(definition.get("id", "")))
+        var hidden: bool = not got and bool(definition.get("secret", false))
+        rows.add_child(_text("%s  %s" % ["[x]" if got else "[  ]",
+            "???" if hidden else String(definition.get("title", ""))], 15,
+            Color("#a9e7c5") if got else Color("#b4c4d2")))
+        var detail := _text("Classified until earned." if hidden else String(
+            definition.get("quip" if got else "description", "")), 12,
+            Color("#e2c78e") if got else Color("#8ea3b3"))
+        detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        detail.custom_minimum_size.x = 510
+        rows.add_child(detail)
     content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
     content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
 

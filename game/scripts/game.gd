@@ -50,6 +50,7 @@ const SettingsScreen = preload("res://scripts/ui/settings_screen.gd")
 const CollapseClock = preload("res://scripts/collapse_clock.gd")
 const RoomServices = preload("res://scripts/room_services.gd")
 const FloorMap = preload("res://scripts/ui/floor_map.gd")
+const Announcer = preload("res://scripts/ui/announcer.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -77,6 +78,8 @@ var services: RoomServices
 var floor_map: FloorMap
 ## Shared player settings (Settings.shared()), loaded and applied in _ready.
 var settings
+## Dungeon-system announcer, achievements, profile and telemetry (Wave 2G).
+var announcer: Announcer
 
 
 func _ready() -> void:
@@ -108,6 +111,7 @@ func _ready() -> void:
     services.modal_closed.connect(_on_modal_closed)
     settings = Settings.shared()
     settings.apply_window(get_window())
+    announcer = _ensure_child("Announcer", Announcer) as Announcer
     combat.setup(player, catalogue)
     renderer.setup(player, combat, null, catalogue)
     _relayout()

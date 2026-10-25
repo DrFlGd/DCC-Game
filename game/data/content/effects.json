@@ -1,0 +1,898 @@
+{
+  "schema_version": 1,
+  "stats": [
+    "STR",
+    "DEX",
+    "CON",
+    "INT",
+    "WIS",
+    "CHA",
+    "max_hp",
+    "ac",
+    "move_speed",
+    "attack_bonus",
+    "damage_bonus",
+    "melee_damage_bonus",
+    "ranged_damage_bonus",
+    "melee_cooldown",
+    "ranged_cooldown",
+    "melee_reach",
+    "arc_degrees",
+    "projectile_speed",
+    "projectile_count",
+    "spread_degrees",
+    "pierce",
+    "knockback",
+    "range",
+    "crit_threshold",
+    "dodge_cooldown",
+    "damage_taken_mult",
+    "heal_mult",
+    "xp_mult",
+    "pickup_radius"
+  ],
+  "projectile_stats": [
+    "projectile_speed",
+    "projectile_count",
+    "spread_degrees",
+    "pierce",
+    "knockback",
+    "range",
+    "damage_bonus"
+  ],
+  "cooldown_keys": [
+    "melee",
+    "ranged",
+    "items",
+    "skills",
+    "dodge",
+    "all"
+  ],
+  "statuses": [
+    {
+      "id": "burning",
+      "name": "Burning",
+      "kind": "debuff",
+      "periodic": "damage",
+      "tick_interval": 1.0,
+      "default_magnitude": 2,
+      "default_duration": 3,
+      "default_stacking": "stack_count:3",
+      "stat_modifiers": [],
+      "flags": [],
+      "tags": [
+        "fire"
+      ],
+      "description": "Takes magnitude x stacks damage every second."
+    },
+    {
+      "id": "poisoned",
+      "name": "Poisoned",
+      "kind": "debuff",
+      "periodic": "damage",
+      "tick_interval": 1.0,
+      "default_magnitude": 1,
+      "default_duration": 5,
+      "default_stacking": "stack_count:5",
+      "stat_modifiers": [],
+      "flags": [],
+      "tags": [
+        "toxic"
+      ],
+      "description": "Takes magnitude x stacks damage every second. Lasts longer than burning."
+    },
+    {
+      "id": "bleeding",
+      "name": "Bleeding",
+      "kind": "debuff",
+      "periodic": "damage",
+      "tick_interval": 0.5,
+      "default_magnitude": 1,
+      "default_duration": 3,
+      "default_stacking": "stack_count:5",
+      "stat_modifiers": [],
+      "flags": [],
+      "tags": [
+        "physical"
+      ],
+      "description": "Takes magnitude x stacks damage every half second."
+    },
+    {
+      "id": "slowed",
+      "name": "Slowed",
+      "kind": "debuff",
+      "periodic": "none",
+      "tick_interval": 0,
+      "default_magnitude": 0,
+      "default_duration": 1.5,
+      "default_stacking": "refresh",
+      "stat_modifiers": [
+        {
+          "stat": "move_speed",
+          "operation": "multiply",
+          "magnitude": 0.6
+        }
+      ],
+      "flags": [],
+      "tags": [
+        "control"
+      ],
+      "description": "Moves at 60% speed."
+    },
+    {
+      "id": "stunned",
+      "name": "Stunned",
+      "kind": "debuff",
+      "periodic": "none",
+      "tick_interval": 0,
+      "default_magnitude": 0,
+      "default_duration": 0.6,
+      "default_stacking": "ignore",
+      "stat_modifiers": [],
+      "flags": [
+        "blocks_actions"
+      ],
+      "tags": [
+        "control"
+      ],
+      "description": "Cannot move or attack. Ignores re-application so it cannot chain."
+    },
+    {
+      "id": "shielded",
+      "name": "Shielded",
+      "kind": "buff",
+      "periodic": "none",
+      "tick_interval": 0,
+      "default_magnitude": 6,
+      "default_duration": 5,
+      "default_stacking": "refresh",
+      "stat_modifiers": [],
+      "flags": [
+        "absorbs_damage"
+      ],
+      "tags": [
+        "defense"
+      ],
+      "description": "Magnitude is a pool of damage absorbed before HP. Removed when the pool is empty."
+    },
+    {
+      "id": "hasted",
+      "name": "Hasted",
+      "kind": "buff",
+      "periodic": "none",
+      "tick_interval": 0,
+      "default_magnitude": 0,
+      "default_duration": 3,
+      "default_stacking": "refresh",
+      "stat_modifiers": [
+        {
+          "stat": "move_speed",
+          "operation": "multiply",
+          "magnitude": 1.3
+        },
+        {
+          "stat": "melee_cooldown",
+          "operation": "multiply",
+          "magnitude": 0.85
+        },
+        {
+          "stat": "ranged_cooldown",
+          "operation": "multiply",
+          "magnitude": 0.85
+        }
+      ],
+      "flags": [],
+      "tags": [
+        "mobility"
+      ],
+      "description": "Moves 30% faster and attacks 15% more often."
+    },
+    {
+      "id": "evasive",
+      "name": "Evasive",
+      "kind": "buff",
+      "periodic": "none",
+      "tick_interval": 0,
+      "default_magnitude": 0,
+      "default_duration": 0.3,
+      "default_stacking": "ignore",
+      "stat_modifiers": [],
+      "flags": [
+        "invulnerable"
+      ],
+      "tags": [
+        "mobility"
+      ],
+      "description": "Ignores incoming hits (dodge i-frames)."
+    },
+    {
+      "id": "concealed",
+      "name": "Concealed",
+      "kind": "buff",
+      "periodic": "none",
+      "tick_interval": 0,
+      "default_magnitude": 0,
+      "default_duration": 3,
+      "default_stacking": "ignore",
+      "stat_modifiers": [],
+      "flags": [
+        "untargetable"
+      ],
+      "tags": [
+        "stealth"
+      ],
+      "description": "Enemies lose track of you and attack your decoy position instead."
+    }
+  ],
+  "effects": [
+    {
+      "id": "fx_bleed_on_hit_25",
+      "trigger": "on_hit",
+      "condition": {
+        "chance": 0.25
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "bleeding",
+      "magnitude": 1,
+      "duration": 3,
+      "stacking": "stack_count:5",
+      "description": "25% chance per hit to open a bleeding wound (1 damage per stack every 0.5s)."
+    },
+    {
+      "id": "fx_stun_on_hit_10",
+      "trigger": "on_hit",
+      "condition": {
+        "chance": 0.1
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "stunned",
+      "magnitude": 0,
+      "duration": 0.6,
+      "stacking": "ignore",
+      "description": "10% chance per hit to stun the target for 0.6s. Cannot be re-applied while stunned."
+    },
+    {
+      "id": "fx_slow_on_hit_35",
+      "trigger": "on_hit",
+      "condition": {
+        "chance": 0.35
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "slowed",
+      "magnitude": 0,
+      "duration": 1.5,
+      "stacking": "refresh",
+      "description": "35% chance per hit to slow the target for 1.5s."
+    },
+    {
+      "id": "fx_hobble_on_hit",
+      "trigger": "on_hit",
+      "target": "target",
+      "operation": "apply_status",
+      "status": "slowed",
+      "magnitude": 0,
+      "duration": 1.2,
+      "stacking": "refresh",
+      "description": "Every hit slows the target for 1.2s."
+    },
+    {
+      "id": "fx_poison_on_hit_20",
+      "trigger": "on_hit",
+      "condition": {
+        "chance": 0.2
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "poisoned",
+      "magnitude": 1,
+      "duration": 5,
+      "stacking": "stack_count:5",
+      "description": "20% chance per hit to poison the target (1 damage per stack per second)."
+    },
+    {
+      "id": "fx_ignite_on_hit_15",
+      "trigger": "on_hit",
+      "condition": {
+        "chance": 0.15
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "burning",
+      "magnitude": 2,
+      "duration": 3,
+      "stacking": "stack_count:3",
+      "description": "15% chance per hit to set the target burning (2 damage per stack per second)."
+    },
+    {
+      "id": "fx_grant_ticks_2",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "grant_ticks",
+      "magnitude": 2,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Adds 2 ticks back to the floor's collapse clock."
+    },
+    {
+      "id": "fx_shockwave_damage",
+      "trigger": "on_use",
+      "target": "enemies_in_radius",
+      "radius": 64,
+      "operation": "damage",
+      "magnitude": 2,
+      "die": 6,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Deals 1d6+2 damage to every enemy within 64px. Auto-hits (no attack roll)."
+    },
+    {
+      "id": "fx_shockwave_slow",
+      "trigger": "on_use",
+      "target": "enemies_in_radius",
+      "radius": 64,
+      "operation": "apply_status",
+      "status": "slowed",
+      "magnitude": 0,
+      "duration": 2,
+      "stacking": "refresh",
+      "description": "Slows every enemy within 64px for 2s."
+    },
+    {
+      "id": "fx_decoy_conceal",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "concealed",
+      "magnitude": 0,
+      "duration": 3,
+      "stacking": "ignore",
+      "description": "Conceals you for 3s; enemies target the decoy left at your position instead."
+    },
+    {
+      "id": "fx_emergency_shield",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "shielded",
+      "magnitude": 8,
+      "duration": 5,
+      "stacking": "refresh",
+      "description": "Grants a shield that absorbs 8 damage for 5s."
+    },
+    {
+      "id": "fx_ac_plus_1",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "ac",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "stack_count:2",
+      "description": "+1 Armor Class."
+    },
+    {
+      "id": "fx_max_hp_plus_4",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "max_hp",
+      "magnitude": 4,
+      "duration": 0,
+      "stacking": "stack_count:3",
+      "description": "+4 maximum HP."
+    },
+    {
+      "id": "fx_move_speed_x112",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "multiply",
+      "stat": "move_speed",
+      "magnitude": 1.12,
+      "duration": 0,
+      "stacking": "stack_count:2",
+      "description": "Movement speed x1.12."
+    },
+    {
+      "id": "fx_dodge_haste",
+      "trigger": "on_dodge",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "hasted",
+      "magnitude": 0,
+      "duration": 1.5,
+      "stacking": "refresh",
+      "cooldown": 4,
+      "description": "After a dodge, become hasted for 1.5s. 4s internal cooldown."
+    },
+    {
+      "id": "fx_melee_bleed_on_hit_30",
+      "trigger": "on_hit",
+      "condition": {
+        "slot": "melee",
+        "chance": 0.3
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "bleeding",
+      "magnitude": 1,
+      "duration": 3,
+      "stacking": "stack_count:5",
+      "description": "Melee hits have a 30% chance to cause bleeding."
+    },
+    {
+      "id": "fx_melee_bleed_on_hit_10",
+      "trigger": "on_hit",
+      "condition": {
+        "slot": "melee",
+        "chance": 0.1
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "bleeding",
+      "magnitude": 1,
+      "duration": 3,
+      "stacking": "stack_count:5",
+      "description": "Melee hits have a 10% chance to cause bleeding."
+    },
+    {
+      "id": "fx_ranged_ignite_on_hit_20",
+      "trigger": "on_hit",
+      "condition": {
+        "slot": "ranged",
+        "chance": 0.2
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "burning",
+      "magnitude": 2,
+      "duration": 3,
+      "stacking": "stack_count:3",
+      "description": "Ranged hits have a 20% chance to set the target burning."
+    },
+    {
+      "id": "fx_ranged_ignite_on_hit_10",
+      "trigger": "on_hit",
+      "condition": {
+        "slot": "ranged",
+        "chance": 0.1
+      },
+      "target": "target",
+      "operation": "apply_status",
+      "status": "burning",
+      "magnitude": 2,
+      "duration": 3,
+      "stacking": "stack_count:3",
+      "description": "Ranged hits have a 10% chance to set the target burning."
+    },
+    {
+      "id": "fx_projectile_pierce_plus_1",
+      "trigger": "passive",
+      "target": "projectile",
+      "operation": "spawn_projectile_modifier",
+      "stat": "pierce",
+      "apply": "add",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "stack_count:2",
+      "description": "Your projectiles pass through one additional enemy."
+    },
+    {
+      "id": "fx_spite_discharge",
+      "trigger": "on_damage_taken",
+      "target": "enemies_in_radius",
+      "radius": 48,
+      "operation": "damage",
+      "magnitude": 3,
+      "duration": 0,
+      "stacking": "ignore",
+      "cooldown": 2,
+      "description": "When you take damage, deal 3 damage to enemies within 48px. 2s internal cooldown."
+    },
+    {
+      "id": "fx_heal_on_kill_2",
+      "trigger": "on_kill",
+      "target": "self",
+      "operation": "heal",
+      "magnitude": 2,
+      "duration": 0,
+      "stacking": "stack_count:2",
+      "description": "Heal 2 HP whenever you kill an enemy."
+    },
+    {
+      "id": "fx_low_hp_melee_haste",
+      "trigger": "passive",
+      "condition": {
+        "hp_below_pct": 35
+      },
+      "target": "self",
+      "operation": "multiply",
+      "stat": "melee_cooldown",
+      "magnitude": 0.8,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "While below 35% HP, melee cooldown x0.8."
+    },
+    {
+      "id": "fx_low_hp_ranged_haste",
+      "trigger": "passive",
+      "condition": {
+        "hp_below_pct": 35
+      },
+      "target": "self",
+      "operation": "multiply",
+      "stat": "ranged_cooldown",
+      "magnitude": 0.8,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "While below 35% HP, ranged cooldown x0.8."
+    },
+    {
+      "id": "fx_room_clear_tick_chance",
+      "trigger": "on_room_clear",
+      "condition": {
+        "chance": 0.2
+      },
+      "target": "self",
+      "operation": "grant_ticks",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "20% chance to add 1 tick to the collapse clock when a room is cleared."
+    },
+    {
+      "id": "fx_damage_bonus_plus_1",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "damage_bonus",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "stack_count:2",
+      "description": "+1 damage on every weapon hit."
+    },
+    {
+      "id": "fx_attack_bonus_plus_1",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "attack_bonus",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "stack_count:2",
+      "description": "+1 to attack rolls."
+    },
+    {
+      "id": "fx_trophy_regen",
+      "trigger": "periodic",
+      "target": "self",
+      "operation": "heal",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "ignore",
+      "interval": 6,
+      "description": "Heal 1 HP every 6 seconds."
+    },
+    {
+      "id": "fx_room_enter_shield",
+      "trigger": "on_room_enter",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "shielded",
+      "magnitude": 4,
+      "duration": 6,
+      "stacking": "refresh",
+      "description": "Entering a room grants a 4-point shield for 6s."
+    },
+    {
+      "id": "fx_heal_6",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "heal",
+      "magnitude": 6,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Restore 6 HP."
+    },
+    {
+      "id": "fx_heal_1d6_plus_6",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "heal",
+      "magnitude": 6,
+      "die": 6,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Restore 1d6+6 HP."
+    },
+    {
+      "id": "fx_cleanse_poisoned",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "set",
+      "status": "poisoned",
+      "magnitude": 0,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Removes all stacks of poisoned."
+    },
+    {
+      "id": "fx_cleanse_bleeding",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "set",
+      "status": "bleeding",
+      "magnitude": 0,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Removes all stacks of bleeding."
+    },
+    {
+      "id": "fx_draught_haste",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "hasted",
+      "magnitude": 0,
+      "duration": 8,
+      "stacking": "refresh",
+      "description": "Become hasted for 8s."
+    },
+    {
+      "id": "fx_grant_ticks_1",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "grant_ticks",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Adds 1 tick back to the floor's collapse clock."
+    },
+    {
+      "id": "fx_popper_stun",
+      "trigger": "on_use",
+      "target": "enemies_in_radius",
+      "radius": 56,
+      "operation": "apply_status",
+      "status": "stunned",
+      "magnitude": 0,
+      "duration": 1.0,
+      "stacking": "ignore",
+      "description": "Stuns every enemy within 56px for 1s."
+    },
+    {
+      "id": "fx_iron_gut_1",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "max_hp",
+      "magnitude": 3,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+3 maximum HP."
+    },
+    {
+      "id": "fx_iron_gut_2",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "max_hp",
+      "magnitude": 6,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+6 maximum HP."
+    },
+    {
+      "id": "fx_iron_gut_3",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "max_hp",
+      "magnitude": 9,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+9 maximum HP."
+    },
+    {
+      "id": "fx_level_up_heal_5",
+      "trigger": "on_level_up",
+      "target": "self",
+      "operation": "heal",
+      "magnitude": 5,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Heal 5 HP on top of the normal level-up HP gain."
+    },
+    {
+      "id": "fx_steady_aim_1",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "ranged_damage_bonus",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+1 ranged damage."
+    },
+    {
+      "id": "fx_steady_aim_2",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "ranged_damage_bonus",
+      "magnitude": 2,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+2 ranged damage."
+    },
+    {
+      "id": "fx_projectile_speed_x115",
+      "trigger": "passive",
+      "target": "projectile",
+      "operation": "spawn_projectile_modifier",
+      "stat": "projectile_speed",
+      "apply": "multiply",
+      "magnitude": 1.15,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Projectile speed x1.15."
+    },
+    {
+      "id": "fx_brawler_dmg_1",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "melee_damage_bonus",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+1 melee damage."
+    },
+    {
+      "id": "fx_brawler_dmg_2",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "add",
+      "stat": "melee_damage_bonus",
+      "magnitude": 2,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "+2 melee damage."
+    },
+    {
+      "id": "fx_melee_cooldown_x090",
+      "trigger": "passive",
+      "target": "self",
+      "operation": "multiply",
+      "stat": "melee_cooldown",
+      "magnitude": 0.9,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Melee cooldown x0.9."
+    },
+    {
+      "id": "fx_open_wounds_1",
+      "trigger": "on_hit",
+      "condition": {
+        "status_present": "bleeding"
+      },
+      "target": "target",
+      "operation": "damage",
+      "magnitude": 1,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Hits against a bleeding target deal 1 extra damage."
+    },
+    {
+      "id": "fx_open_wounds_2",
+      "trigger": "on_hit",
+      "condition": {
+        "status_present": "bleeding"
+      },
+      "target": "target",
+      "operation": "damage",
+      "magnitude": 2,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Hits against a bleeding target deal 2 extra damage."
+    },
+    {
+      "id": "fx_sidestep_evasive",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "evasive",
+      "magnitude": 0,
+      "duration": 0.3,
+      "stacking": "ignore",
+      "description": "Dodge: invulnerable for 0.3s while dashing."
+    },
+    {
+      "id": "fx_sidestep_evasive_long",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "evasive",
+      "magnitude": 0,
+      "duration": 0.45,
+      "stacking": "ignore",
+      "description": "Dodge: invulnerable for 0.45s while dashing."
+    },
+    {
+      "id": "fx_hype_slow",
+      "trigger": "on_use",
+      "target": "enemies_in_radius",
+      "radius": 80,
+      "operation": "apply_status",
+      "status": "slowed",
+      "magnitude": 0,
+      "duration": 2,
+      "stacking": "refresh",
+      "description": "Slows enemies within 80px for 2s."
+    },
+    {
+      "id": "fx_hype_haste",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "hasted",
+      "magnitude": 0,
+      "duration": 3,
+      "stacking": "refresh",
+      "description": "Become hasted for 3s."
+    },
+    {
+      "id": "fx_hype_shield",
+      "trigger": "on_use",
+      "target": "self",
+      "operation": "apply_status",
+      "status": "shielded",
+      "magnitude": 5,
+      "duration": 4,
+      "stacking": "refresh",
+      "description": "Gain a 5-point shield for 4s."
+    },
+    {
+      "id": "fx_burning_kill_spread",
+      "trigger": "on_kill",
+      "condition": {
+        "status_present": "burning"
+      },
+      "target": "enemies_in_radius",
+      "radius": 40,
+      "operation": "apply_status",
+      "status": "burning",
+      "magnitude": 2,
+      "duration": 3,
+      "stacking": "stack_count:3",
+      "description": "Killing a burning enemy spreads burning to enemies within 40px."
+    },
+    {
+      "id": "fx_panic_mode_haste",
+      "trigger": "on_room_enter",
+      "condition": {
+        "ticks_below": 6
+      },
+      "target": "self",
+      "operation": "apply_status",
+      "status": "hasted",
+      "magnitude": 0,
+      "duration": 4,
+      "stacking": "refresh",
+      "description": "Entering a room with fewer than 6 collapse ticks left makes you hasted for 4s."
+    },
+    {
+      "id": "fx_skill_cooldown_refund",
+      "trigger": "on_kill",
+      "target": "self",
+      "operation": "cooldown_reduction",
+      "stat": "skills",
+      "magnitude": 0.5,
+      "duration": 0,
+      "stacking": "ignore",
+      "description": "Each kill takes 0.5s off your active skill cooldowns."
+    }
+  ]
+}

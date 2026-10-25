@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {
+      "id": "skl_iron_gut",
+      "name": "Iron Gut",
+      "kind": "passive",
+      "max_rank": 3,
+      "cost": 1,
+      "unlock_level": 1,
+      "prerequisites": [],
+      "ranks": [
+        {
+          "effects": [
+            "fx_iron_gut_1"
+          ]
+        },
+        {
+          "effects": [
+            "fx_iron_gut_2"
+          ]
+        },
+        {
+          "effects": [
+            "fx_iron_gut_3",
+            "fx_level_up_heal_5"
+          ]
+        }
+      ],
+      "tags": [
+        "defense",
+        "con"
+      ],
+      "description": "You have eaten dungeon food and lived. Your body has stopped asking questions.",
+      "adaptation_type": "original",
+      "synergy_notes": "Juggernaut root. Gate for Mandatory Hype."
+    },
+    {
+      "id": "skl_steady_aim",
+      "name": "Steady Aim",
+      "kind": "passive",
+      "max_rank": 3,
+      "cost": 1,
+      "unlock_level": 1,
+      "prerequisites": [],
+      "ranks": [
+        {
+          "effects": [
+            "fx_steady_aim_1"
+          ]
+        },
+        {
+          "effects": [
+            "fx_steady_aim_2"
+          ]
+        },
+        {
+          "effects": [
+            "fx_steady_aim_2",
+            "fx_projectile_speed_x115"
+          ]
+        }
+      ],
+      "tags": [
+        "ranged",
+        "dex"
+      ],
+      "description": "Breathe in. Breathe out. Ignore the screaming. Pull the trigger.",
+      "adaptation_type": "original",
+      "synergy_notes": "Kiter/Arsonist root. Gate for Arson Enthusiast."
+    },
+    {
+      "id": "skl_brawler",
+      "name": "Brawler",
+      "kind": "passive",
+      "max_rank": 3,
+      "cost": 1,
+      "unlock_level": 1,
+      "prerequisites": [],
+      "ranks": [
+        {
+          "effects": [
+            "fx_brawler_dmg_1"
+          ]
+        },
+        {
+          "effects": [
+            "fx_brawler_dmg_1",
+            "fx_melee_cooldown_x090"
+          ]
+        },
+        {
+          "effects": [
+            "fx_brawler_dmg_2",
+            "fx_melee_cooldown_x090"
+          ]
+        }
+      ],
+      "tags": [
+        "melee",
+        "str"
+      ],
+      "description": "Bar fights were good practice. These bars have more teeth.",
+      "adaptation_type": "original",
+      "synergy_notes": "Melee root for both Bleeder and Juggernaut. Gate for Open Wounds."
+    },
+    {
+      "id": "skl_open_wounds",
+      "name": "Open Wounds",
+      "kind": "passive",
+      "max_rank": 2,
+      "cost": 1,
+      "unlock_level": 3,
+      "prerequisites": [
+        {
+          "skill": "skl_brawler",
+          "rank": 1
+        }
+      ],
+      "ranks": [
+        {
+          "effects": [
+            "fx_open_wounds_1"
+          ]
+        },
+        {
+          "effects": [
+            "fx_open_wounds_2",
+            "fx_melee_bleed_on_hit_10"
+          ]
+        }
+      ],
+      "tags": [
+        "bleed",
+        "melee"
+      ],
+      "description": "You have learned exactly where it hurts. You aim there now. Every time.",
+      "adaptation_type": "original",
+      "synergy_notes": "Bleeder capstone: bonus damage against bleeding targets."
+    },
+    {
+      "id": "skl_sidestep",
+      "name": "Sidestep Protocol",
+      "kind": "active",
+      "max_rank": 2,
+      "cost": 1,
+      "unlock_level": 2,
+      "prerequisites": [],
+      "cooldown": 3.0,
+      "stamina_cost": 20,
+      "ranks": [
+        {
+          "effects": [
+            "fx_sidestep_evasive"
+          ]
+        },
+        {
+          "effects": [
+            "fx_sidestep_evasive_long"
+          ],
+          "cooldown": 2.4
+        }
+      ],
+      "tags": [
+        "mobility",
+        "dodge"
+      ],
+      "description": "A short dash with a brief moment of invulnerability. The System rates your form 'adequate'.",
+      "adaptation_type": "original",
+      "synergy_notes": "Fires the on_dodge trigger, which powers Knockoff Running Shoes. Universal survival pick."
+    },
+    {
+      "id": "skl_mandatory_hype",
+      "name": "Mandatory Hype",
+      "kind": "active",
+      "max_rank": 2,
+      "cost": 2,
+      "unlock_level": 3,
+      "prerequisites": [
+        {
+          "skill": "skl_iron_gut",
+          "rank": 1
+        }
+      ],
+      "cooldown": 14,
+      "stamina_cost": 30,
+      "ranks": [
+        {
+          "effects": [
+            "fx_hype_slow",
+            "fx_hype_haste"
+          ]
+        },
+        {
+          "effects": [
+            "fx_hype_slow",
+            "fx_hype_haste",
+            "fx_hype_shield"
+          ],
+          "cooldown": 11
+        }
+      ],
+      "tags": [
+        "shout",
+        "control"
+      ],
+      "description": "You scream your own name. Nearby monsters slow down to process the audacity. You feel great about it.",
+      "adaptation_type": "original",
+      "synergy_notes": "Juggernaut active: slows a crowd so cleave and Spite Battery connect."
+    },
+    {
+      "id": "skl_arson_enthusiast",
+      "name": "Arson Enthusiast",
+      "kind": "passive",
+      "max_rank": 2,
+      "cost": 2,
+      "unlock_level": 4,
+      "prerequisites": [
+        {
+          "skill": "skl_steady_aim",
+          "rank": 2
+        }
+      ],
+      "ranks": [
+        {
+          "effects": [
+            "fx_burning_kill_spread"
+          ]
+        },
+        {
+          "effects": [
+            "fx_burning_kill_spread",
+            "fx_ranged_ignite_on_hit_10"
+          ]
+        }
+      ],
+      "tags": [
+        "fire",
+        "ranged"
+      ],
+      "description": "Some people collect stamps. You collect scorch marks.",
+      "adaptation_type": "original",
+      "synergy_notes": "Arsonist capstone: kills spread burning, rank 2 adds ignite chance."
+    },
+    {
+      "id": "skl_panic_mode",
+      "name": "Panic Mode",
+      "kind": "passive",
+      "max_rank": 1,
+      "cost": 1,
+      "unlock_level": 5,
+      "prerequisites": [],
+      "ranks": [
+        {
+          "effects": [
+            "fx_panic_mode_haste",
+            "fx_skill_cooldown_refund"
+          ]
+        }
+      ],
+      "tags": [
+        "collapse",
+        "speed"
+      ],
+      "description": "When the floor starts falling apart, so do your inhibitions. You move faster. You think less.",
+      "adaptation_type": "original",
+      "synergy_notes": "Clock-runner reward for playing on the edge. Does not grant ticks, only speed."
+    }
+  ]
+}

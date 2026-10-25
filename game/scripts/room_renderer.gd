@@ -1,5 +1,8 @@
 extends Node2D
 ## Immediate-mode world renderer for the current 24x24 room.
+## Wave 2D: hit feedback from `combat.fx` (shake offset, flashes, numbers,
+## death bursts), the i-frame blink and dodge trail, and sealed doors from
+## `door_lock`, each drawn by its own _draw_* function below.
 ##
 ## Draws floor and wall tiles, props, doors with net tick previews, enemy and
 ## player sprites, projectiles, ground hazards, enemy attack telegraphs, the
@@ -50,6 +53,8 @@ var combat
 ## CollapsePolicy instance used for the door previews.
 var rules
 var catalogue: Dictionary = {}
+## DoorLock node (Wave 2D); null draws every door open.
+var door_lock
 ## sprite id -> {texture: Texture2D, render: Vector2}, loaded on first use.
 var _sheets: Dictionary = {}
 
@@ -76,7 +81,7 @@ func _draw() -> void:
     var base_offset: Vector2 = layout.get("offset", Vector2.ZERO)
     var scale: float = float(layout.get("scale", 1.0))
     # Wave 2E: grace-period screen shake (presentation only; restored below).
-    layout["offset"] = base_offset + grace_shake() * scale
+    layout["offset"] = base_offset + (grace_shake() + feel_shake()) * scale
     var offset: Vector2 = layout["offset"]
     draw_set_transform(offset, 0.0, Vector2.ONE * scale)
     _draw_room()
@@ -239,6 +244,7 @@ func _draw_door(direction: String, next_id: int) -> void:
     var door_offset := Vector2(TILE * 0.5, 0).rotated(rotation)
     _crypt_piece(DOOR_TILE, door_center - door_offset, Vector2(TILE, TILE), rotation, color)
     _crypt_piece(DOOR_TILE, door_center + door_offset, Vector2(TILE, TILE), rotation, color)
+    _draw_door_lock(door_center, rotation)
     var net_ticks: int = door_net_ticks(rules, RunState.ticks, kind,
         not RunState.visited.has(next_id), next_id)
     # Wave 2E: red "!" when the door would leave the clock at 0; during grace
@@ -273,12 +279,14 @@ func _draw_actors() -> void:
         _draw_enemy(foe)
     var at: Vector2 = player.world_position
     var aim: Vector2 = player.aim_direction
-    _draw_facing_sprite(CRAWLER, at, Vector2(24, 24), player.facing)
+    _draw_dodge_trail(at)
+    _draw_facing_sprite(CRAWLER, at, Vector2(24, 24), player.facing, _crawler_modulation())
     draw_line(at, at + aim * 13.0, Color("#f9dc92"), 1.0)
     if player.melee_flash > 0.0:
         draw_arc(at, 30.0, aim.angle() - 0.7, aim.angle() + 0.7, 14, Color("#fff1a7"), 3.0)
     if player.invulnerability > 0.0:
         draw_arc(at, 12.0, 0.0, TAU, 24, Color(1, 1, 1, 0.42), 1.0)
+    _draw_fx()
 
 
 func _sheet(sprite: String) -> Dictionary:
@@ -308,6 +316,7 @@ func _draw_enemy(foe: Dictionary) -> void:
         _draw_telegraph(foe, attack, cue)
     if float(foe.get("dormant", 0.0)) > 0.0:
         modulation.a = 0.55
+    modulation = _flash_modulation(String(foe.get("instance_id", "")), modulation)
     if float(foe.get("invulnerable", 0.0)) > 0.0:
         draw_arc(point, sprite_size.x * 0.5 + 3.0, 0.0, TAU, 28, Color(1, 1, 1, 0.6), 1.0)
     if sheet["texture"] != null:
@@ -382,3 +391,86 @@ func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facin
 func _text(value: String, position: Vector2, font_size: int, color: Color) -> void:
     draw_string(ThemeDB.fallback_font, position, value,
         HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color)
+
+
+# --- Combat feel (Wave 2D) -------------------------------------------------------
+
+## Hit-feedback shake in world pixels (already scaled by the screen-shake setting).
+func feel_shake() -> Vector2:
+    if combat == null or combat.fx == null:
+        return Vector2.ZERO
+    return combat.fx.shake_offset()
+
+
+## `modulation` pushed toward the fx flash colour of `key` (HDR white for enemies).
+func _flash_modulation(key: String, modulation: Color) -> Color:
+    if combat == null or key == "":
+        return modulation
+    var amount: float = combat.fx.flash_amount(key)
+    if amount <= 0.0:
+        return modulation
+    var flashed: Color = combat.fx.flash_color(key)
+    flashed.a = modulation.a
+    return modulation.lerp(flashed, amount)
+
+
+## Crawler tint: red hit flash, and a blink while any i-frames run.
+func _crawler_modulation() -> Color:
+    var modulation: Color = _flash_modulation("player", Color.WHITE)
+    if player.is_invulnerable():
+        var t: float = float(Time.get_ticks_msec()) / 1000.0
+        modulation.a = 0.35 if int(t * 16.0) % 2 == 0 else 0.9
+    return modulation
+
+
+## Fading afterimages behind the crawler while it dashes.
+func _draw_dodge_trail(at: Vector2) -> void:
+    if not player.is_dodging():
+        return
+    var back: Vector2 = -player.dodge_direction
+    for i in range(3):
+        var ghost := Color(0.75, 0.9, 1.0, 0.32 - 0.09 * float(i))
+        _draw_facing_sprite(CRAWLER, at + back * (5.0 + 6.0 * float(i)), Vector2(24, 24),
+            player.facing, ghost)
+
+
+## Floating damage numbers and death-burst particles.
+func _draw_fx() -> void:
+    if combat == null:
+        return
+    for burst in combat.fx.bursts:
+        var t: float = clampf(float(burst["age"]) / float(burst["life"]), 0.0, 1.0)
+        var color: Color = burst["color"]
+        color.a = 1.0 - t
+        for particle in burst["particles"]:
+            var size: float = float(particle["size"]) * (1.0 - 0.5 * t)
+            var point: Vector2 = Vector2(burst["pos"]) + Vector2(particle["dir"]) \
+                * float(particle["speed"]) * float(burst["life"]) * (1.0 - (1.0 - t) * (1.0 - t))
+            draw_rect(Rect2(point - Vector2(size, size) * 0.5, Vector2(size, size)), color)
+    var font: Font = ThemeDB.fallback_font
+    for entry in combat.fx.numbers:
+        var pose: Dictionary = combat.fx.number_pose(entry)
+        var text: String = String(entry["text"])
+        var size: int = int(entry["size"])
+        var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+        var at: Vector2 = Vector2(pose["pos"]) + Vector2(-width * 0.5, -12.0)
+        var color: Color = entry["color"]
+        color.a = float(pose["alpha"])
+        draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, 3,
+            Color(0.05, 0.05, 0.08, color.a))
+        draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, color)
+
+
+## Sealed-door overlay (D-07): a red lock tint over both leaves and an iron
+## bar across the opening, faded by door_lock.visual (doors animate open).
+func _draw_door_lock(door_center: Vector2, rotation: float) -> void:
+    if door_lock == null or float(door_lock.visual) <= 0.0:
+        return
+    var amount: float = float(door_lock.visual)
+    var across: Vector2 = Vector2(TILE, 0).rotated(rotation)
+    var inward: Vector2 = Vector2(0, TILE * 0.5).rotated(rotation)
+    var half: Vector2 = Vector2(TILE, TILE * 0.5).rotated(rotation).abs()
+    draw_rect(Rect2(door_center + inward * 0.5 - half, half * 2.0), Color(0.75, 0.08, 0.1, 0.38 * amount))
+    draw_line(door_center + inward * 0.5 - across, door_center + inward * 0.5 + across,
+        Color(0.2, 0.2, 0.24, amount), 3.0)
+    draw_circle(door_center + inward * 0.5, 2.5, Color(1.0, 0.82, 0.35, amount))

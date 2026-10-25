@@ -303,6 +303,12 @@
       {"text": "New hazard deployed. We call it 'interactive scenery'.", "weight": 1.0, "priority": 2, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
       {"text": "Something nasty just appeared. It was not in the brochure.", "weight": 1.0, "priority": 2, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
       {"text": "Hazard online. Please treat it as a suggestion to leave.", "weight": 1.0, "priority": 2, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"}
+    ],
+    "room_cleared": [
+      {"text": "Room clear. The doors have agreed to resume being doors.", "weight": 1.0, "priority": 2, "cooldown_seconds": 8, "once_per_run": false, "category": "celebration"},
+      {"text": "Hostiles processed. Please collect your dignity on the way out.", "weight": 1.0, "priority": 2, "cooldown_seconds": 8, "once_per_run": false, "category": "celebration"},
+      {"text": "Area secured. Our insurers would like a word about the mess.", "weight": 1.0, "priority": 2, "cooldown_seconds": 8, "once_per_run": false, "category": "sponsor"},
+      {"text": "Clear! The audience at home has upgraded you to 'mildly interesting'.", "weight": 1.0, "priority": 2, "cooldown_seconds": 8, "once_per_run": false, "category": "celebration"}
     ]
   }
 }

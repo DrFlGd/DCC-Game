@@ -22,7 +22,7 @@ const FIXED_TRIGGERS := ["run_started", "floor_started", "first_blood", "level_u
     "player_damaged_big", "boss_room_entered", "boss_defeated", "floor_cleared", "ticks_low",
     "grace_started", "grace_stabilised", "run_ended.defeated", "run_ended.collapsed",
     "run_ended.victory", "run_ended.abandoned", "idle", "chest_opened", "shrine_used",
-    "guild_rested", "achievement_unlocked", "hazard_spawned"]
+    "guild_rested", "achievement_unlocked", "hazard_spawned", "room_cleared"]
 const OPTIONAL_TRIGGERS := ["run_ended.abandoned", "hazard_spawned"]
 ## Triggers that fire often enough to need at least COMMON_MINIMUM variants.
 ## Every other required trigger needs REQUIRED_MINIMUM.

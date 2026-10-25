@@ -18,7 +18,7 @@ const DEFAULT_SEED := 424242
 ## in-floor grant (first-entry grants, positive add_ticks).
 const TELEMETRY_KEYS := ["rooms_entered", "shots_fired", "melee_swings", "kills",
     "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds",
-    "floors_cleared", "ticks_granted"]
+    "floors_cleared", "ticks_granted", "dodges", "failsafe_despawns"]
 ## Telemetry keys snapshotted per floor for the intermission recap.
 const FLOOR_KEYS := ["rooms_entered", "kills", "damage_dealt", "damage_taken",
     "ticks_spent", "ticks_granted", "run_time_seconds"]
@@ -75,6 +75,12 @@ var inventory: Dictionary = {}
 var skills: Array = []
 ## Counters for tuning; see TELEMETRY_KEYS. Updated from Events signals.
 var telemetry: Dictionary = {}
+## Wave 2D stamina pool (COMBAT_AND_RPG §3): spent by dodge and skills only,
+## refilled at every floor start. Tunables in `feel.stamina`.
+var stamina := 100.0
+var max_stamina := 100.0
+## Seconds since the last spend_stamina(); regen waits for `regen_delay`.
+var stamina_idle := 0.0
 ## Telemetry values when the current floor started (see floor_stats()).
 var _floor_baseline: Dictionary = {}
 var _floor_closed := false
@@ -93,6 +99,7 @@ func _enter_tree() -> void:
     _connect(Events.enemy_killed, _on_enemy_killed)
     _connect(Events.room_entered, _on_room_entered)
     _connect(Events.floor_cleared, _on_floor_cleared)
+    _connect(Events.dodged, _on_dodged)
 
 
 func load_config(path: String = CONFIG_PATH) -> bool:
@@ -153,10 +160,63 @@ func reset_for_floor(new_depth: int, budget: int = -1) -> void:
         floor_budget = budget
         _bump("ticks_granted", budget)
         _set_ticks(budget, "floor %d budget" % depth)
+    refill_stamina()
     _floor_closed = false
     _floor_baseline = {}
     for key in FLOOR_KEYS:
         _floor_baseline[key] = telemetry.get(key, 0)
+
+
+# --- Stamina (Wave 2D) ---------------------------------------------------------
+
+## `feel.stamina` with defaults (max 100, 30/s after 0.6 s, +10 % per WIS mod).
+func stamina_config() -> Dictionary:
+    var result := {"max": 100.0, "regen_per_second": 30.0, "regen_delay": 0.6,
+        "wis_regen_per_mod": 0.1}
+    result.merge(config.get("feel", {}).get("stamina", {}), true)
+    return result
+
+
+## Spends `cost` stamina if the pool holds that much. Returns false (and spends
+## nothing) otherwise. Any spend restarts the regen delay.
+func spend_stamina(cost: float) -> bool:
+    if cost <= 0.0:
+        return true
+    if stamina + 0.0001 < cost:
+        return false
+    stamina = maxf(0.0, stamina - cost)
+    stamina_idle = 0.0
+    Events.stamina_changed.emit(stamina, max_stamina)
+    return true
+
+
+## Regen per second: regen_per_second x (1 + wis_regen_per_mod x positive WIS mod).
+func stamina_regen_rate() -> float:
+    var settings: Dictionary = stamina_config()
+    var wis: int = maxi(0, RPG.modifier(int(ability_scores.get("WIS", 10))))
+    return float(settings["regen_per_second"]) * (1.0 + float(settings["wis_regen_per_mod"]) * wis)
+
+
+## Game calls this only while RUNNING (and not during hit-stop).
+func regen_stamina(delta: float) -> void:
+    stamina_idle += delta
+    if stamina >= max_stamina:
+        return
+    var delay: float = float(stamina_config()["regen_delay"])
+    if stamina_idle < delay:
+        return
+    var usable: float = minf(delta, stamina_idle - delay)
+    var before: float = stamina
+    stamina = minf(max_stamina, stamina + stamina_regen_rate() * usable)
+    if int(stamina) != int(before) or stamina >= max_stamina:
+        Events.stamina_changed.emit(stamina, max_stamina)
+
+
+func refill_stamina() -> void:
+    max_stamina = float(stamina_config()["max"])
+    stamina = max_stamina
+    stamina_idle = 0.0
+    Events.stamina_changed.emit(stamina, max_stamina)
 
 
 ## True while the zero-clock grace period runs (doors unlock, entries free).
@@ -400,6 +460,15 @@ func _on_enemy_damaged(_instance_id: String, amount: int, _critical: bool) -> vo
 
 func _on_enemy_killed(_definition_id: String, _xp: int, _position: Vector2) -> void:
     _bump("kills")
+
+
+func _on_dodged(_direction: Vector2) -> void:
+    _bump("dodges")
+
+
+## Door-lock failsafe (COMBAT_AND_RPG §9): `count` unreachable hostiles removed.
+func record_failsafe_despawn(count: int) -> void:
+    _bump("failsafe_despawns", count)
 
 
 func _on_floor_cleared(_depth: int) -> void:

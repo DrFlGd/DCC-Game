@@ -1,6 +1,6 @@
 # Combat and RPG — rules v1
 
-- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Everything labelled *Proposed default* is the target for Wave 2D (feel), 2B (inventory) and 2F (skills).
+- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2D implemented §3 (dodge, stamina, movement penalties), the knockback step of §6, §8 (hit feedback) and §9 (D-07 door lock); each section lists its deviations. Everything else labelled *Proposed default* is the target for 2B (inventory) and 2F (skills).
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 1C and 1D
 - **Decisions covered:** D-02 (aim input), D-07 (door lock), D-09 (inventory and resources), D-10 (companions), D-14 (melee ruleset)
@@ -64,6 +64,15 @@ Rows marked *1A* are bound in `project.godot` today. Rows marked *proposed* are 
 Gamepad aim keeps the last direction when the stick is released (deadzone 0.25). Aim assist is off; an optional 8° magnetism setting is an open question.
 
 ## 3. Movement, dodge and stamina
+
+**Implemented in Wave 2D** (`player.gd` dodge/dash state and attack phases, `RunState` stamina, `Game.try_dodge`, `Combat.player_move_multiplier`; tunables in `prototype_rules.json` `feel.stamina`, `feel.dodge`, `feel.attack_timing`, `feel.attack_move_multipliers`). Deviations:
+
+- The roll follows an ease-out curve (fast start), covering exactly 48 px in 0.25 s.
+- I-frames are a dedicated `player.dodge_iframes` timer that blocks every damage source, DoT included. The `evasive` status is not applied yet, because actors have no status map until 2B; `Combat.on_player_dodged()` carries a TODO for it.
+- The prototype melee and ranged attacks still resolve instantly, so they have no wind-up. Melee has 0.10 s active and 0.18 s recovery (arc defaults), and ranged has 0.28 s recovery, so holding `fire` keeps the 85 % speed. 2B's patterns call `player.begin_attack(pattern, windup, active, recovery)`.
+- A dodge press is buffered for 0.12 s, so a press during recovery still fires.
+- WIS scaling is +10 % regen per positive modifier, so the starting WIS 12 regenerates 33/s. The two-chain rule holds: the third dodge is ready 0.75 s after the second.
+- The content stat `dodge_cooldown` is `player.dodge_gap` (from `feel.dodge.cooldown`, 0); the items team sets it from loadout modifiers.
 
 - **Move:** 105 px/s. Movement speed while attacking: arc 60 %, thrust 40 %, spin 50 %, ranged 85 %.
 - **Dodge roll (Proposed default, `dodge` action):** travels 48 px (3 tiles) over 0.25 s in the movement direction, or the aim direction when standing still.
@@ -136,6 +145,7 @@ Wave 1A made `combat.gd` `apply_damage(target, amount, context)` the **only** pl
 | 5. **Armour** | `apply_damage` | Subtract flat damage reduction (enemy `dr`), but never below 1. Apply the type multiplier: resist ×0.5, weak ×1.5, immune ×0. Then the `shielded` pool absorbs damage before HP. |
 | 6. **Finalise** | `apply_damage` | Round down. The minimum is 1 on a hit unless the target is immune. Change HP, emit the signals, then run `on_hit`, `on_kill` and `on_damage_taken` effects, then knockback. |
 
+- **Knockback step — Implemented (2D)** in `Combat._apply_knockback`, after the signals and `_feedback()`, on a surviving target only. It reads `context.knockback` in px; a melee hit without one uses `feel.knockback.default_melee` (20 px), +5 % per positive STR mod. The direction is `context.direction`, otherwise away from `context.origin` or the crawler. Enemies go through `Enemies.apply_knockback`, which applies `knockback_resist`, stops at walls and interrupts interruptible wind-ups. Bosses take at most ×0.25 (`feel.knockback.boss_mult`, or `boss_knockback_mult` on the definition): the effective factor is min(1 − resist, cap). The crawler is pushed through `Enemies.push`. Enemy strike knockback now enters through `hit_player(..., extra)` and the same step. Deviations: the push is applied instantly rather than over 0.12 s. A wall slam deals no damage. A push stops at obstacles and at the room edge, so it can never carry an actor through a doorway, whether the door is locked or not.
 - **Proposed `context` keys:** `critical`, `source` and `index` exist today. v1 adds `damage_type`, `slot` (`melee`/`ranged`), `attacker` and `breakdown`, an array of `{step, delta}` that floating numbers and telemetry can read.
 - **AC vs armour:** AC decides **whether** a hit lands, and armour DR decides **how much** gets through. Both exist on purpose.
 - **Status ticks and `damage` effects** (1B: auto-hit, no AC) enter at step 4 with `context.source = "status:<id>"` or `"effect:<id>"`.
@@ -187,7 +197,23 @@ Wave 1A made `combat.gd` `apply_damage(target, amount, context)` the **only** pl
 
 Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen shake* is a 0–100 % slider. Hit-stop stays on, because it carries timing information.
 
+**Implemented in Wave 2D:** `scripts/fx.gd` holds the state (pure, no RNG). Combat owns `combat.fx` and calls `_feedback()` in the finalise step. Game freezes the simulation while `combat.hitstop` runs and simulates only the remainder of the frame that ends it. `room_renderer.gd` draws the cues in self-contained functions (`_draw_fx`, `_flash_modulation`, `_crawler_modulation`, `_draw_dodge_trail`, `feel_shake`). Values and deviations:
+
+- **Hit-stop.** Only hits by the crawler stop time: 40 ms for a hit, 70 ms for a crit, 90 ms for a kill. A boss phase change gives 90 ms, the crawler being hit 50 ms, and a room clear 120 ms. Requests take the longest, not the sum, and stay within the 120 ms per 0.5 s budget; only the room clear is forced past it. DoT never stops time.
+- **Flash.** 0.08 s. Enemies go HDR-white and the crawler red. The crawler also blinks during hit and dodge i-frames.
+- **Damage numbers.** Gated by `settings.show_damage_numbers`. A crit is larger and yellow, `MISS` is grey, DoT (`source = "status:*"`) is small, the crawler's numbers are red and heals green. Numbers on one target merge within 0.1 s.
+- **Shake.** Hits 0.6 px / 0.06 s, crits and kills 1 px / 0.08 s, crawler damage 2 px / 0.15 s, boss phase changes and grace start 4 px / 0.25 s. It is scaled by `settings.screen_shake` and added to the grace shake as a renderer offset.
+- **Death bursts.** 8 squares, 0.3 s, in the elite tint (else bone, red for bosses).
+- **Room clear.** The 120 ms hit-stop, a ~1.1 s "ROOM CLEAR" HUD banner with the gold border pulse, doors fading open over 0.5 s, and an announcer `room_cleared` line. There is no sound yet (audio is Wave 3).
+
 ## 9. D-07 — Door lock and room persistence
+
+**Implemented in Wave 2D** (`scripts/door_lock.gd`, a child node of Game; tunables in `feel.door_lock`). The lock emits `Events.doors_locked(room_id)` and `doors_unlocked(room_id, reason)`, where `reason` is `cleared`, `grace` or `failsafe`. `_enter_neighbor` refuses while the doors are sealed, and the HUD prompt reads *Sealed until clear*. Sealed doors are drawn with a red tint, an iron bar and a gold lock, and they fade open. Deviations:
+
+- **Inside.** The crawler counts as "inside" when it is ≥ 24 px from *every linked doorway*, not from every wall, so hugging a far wall cannot keep the doors open.
+- **Grace.** The grace unlock always wins. If grace ends by stabilising while hostiles live, the doors seal again.
+- **Failsafe path test.** It uses plain grid connectivity, which is the enemy pathfinder's fallback, from the crawler's cell to each hostile's cell or a cell next to it. It runs every 0.25 s while sealed.
+- **Failsafe despawn.** It emits no `enemy_killed` and no `room_cleared`, so no XP, clear grant or achievement is awarded. A despawned boss still sets `boss_defeated`, so the floor cannot softlock. The despawn is logged with `push_warning` and the `failsafe_despawns` telemetry counter.
 
 **Proposed default (D-07):** doors lock until the room is cleared in rooms that contain hostiles, and never in safe rooms.
 
@@ -201,7 +227,7 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 
 ## 10. Enemy telegraph rule
 
-**Implemented in Wave 2C** for every enemy attack (data fields `wind_up`, `recovery` and `telegraph` ∈ `arc | line | circle | dash`; see [ENEMY_TIERS.md §8](ENEMY_TIERS.md#8-data-schema-enemiesjson-schema_version-2-implemented)). Room-entry dormancy (§9) is implemented too; the door lock is not.
+**Implemented in Wave 2C** for every enemy attack (data fields `wind_up`, `recovery` and `telegraph` ∈ `arc | line | circle | dash`; see [ENEMY_TIERS.md §8](ENEMY_TIERS.md#8-data-schema-enemiesjson-schema_version-2-implemented)). Room-entry dormancy (§9) is implemented too; the door lock followed in Wave 2D.
 
 **Rule:** every enemy attack has a visible wind-up of at least **0.35 s at band I**. Validation tests enforce the per-band minimum ([ENEMY_TIERS.md §4](ENEMY_TIERS.md#4-stat-guardrails-per-band)): 0.35 / 0.30 / 0.28 / 0.25 / 0.22 s for bands I–V. Boss heavy attacks and any area attack need **≥ 0.5 s** at every band.
 

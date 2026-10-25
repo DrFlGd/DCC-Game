@@ -11,7 +11,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 1. Install Godot 4.7.2 standard.
 2. Open Godot Project Manager and **Import** `game/project.godot` from this repository.
 3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project. The game opens on the **title screen**: choose **New run** (random seed), type a whole number and choose **Seeded run**, open **Settings**, or **Quit**. Keyboard (arrows + Enter) and gamepad (D-pad + A) move between buttons.
-4. Resize the game window by dragging an edge; the room remains **24×24 tiles** and scales to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
+4. Resize the game window by dragging an edge; the room remains **24×24 tiles** and scales to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable; doors **sealed** by a fight (D-07) get a red tint, an iron bar and a gold lock, and fade open when the room is cleared.
 
 | Input (keyboard / mouse) | Gamepad default | Input Map action | Effect |
 | --- | --- | --- | --- |
@@ -19,6 +19,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Mouse | — (right stick reserved as `aim_*`) | — | Aim freely in any direction |
 | Hold left mouse button | Hold RT | `fire` | Shoot projectiles |
 | Hold Space | Hold RB | `melee` | Melee attack in aim direction |
+| Shift | B | `dodge` | Dodge roll: 48 px in the move direction (aim direction when standing still), i-framed for 0.2 s, costs 35 stamina |
 | Esc | Start | `pause` | Open pause menu, view character stats, or resume; closes the settings page |
 | Pause → Display resolution | — | — | Choose a common windowed resolution and click **Apply resolution** (saved to settings) |
 | Pause → Settings / Abandon run | — | — | Open the settings page; abandon the run (asks to confirm, ends as *abandoned*) |
@@ -32,7 +33,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc also closes it) |
 | 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc walks away without using it |
 
-Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). Reserved actions with default bindings for Wave 2 features: `dodge` (Shift / B), `use_item` (Q / LB), `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Aiming is still mouse-only.
+Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). Reserved actions with default bindings for Wave 2 features: `use_item` (Q / LB), `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Aiming is still mouse-only.
 
 **Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms spend a **threat budget that grows with depth** (2–4 enemies on floors 1–2, up to 6 by floor 5); every enemy attack has a visible **wind-up telegraph** you can dodge, and enemies wait 0.6 s when you enter. Boss rooms hold the depth's boss (Armored Brute on floors 1–2, Sump Warden from floor 3) plus an escort; bosses change phase at HP thresholds and show an HP bar at the top. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
@@ -56,6 +57,24 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 - **Data-driven enemy roster** (9 archetypes across 7 roles, 2 elite modifiers, 2 phased bosses), depth-scaled threat budgets, telegraphed attacks, hazards and summons, and a six-ability d20-inspired XP/level system.
 - **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
 - **Esc pause menu and character-stat page** with HP, AC, level, XP, proficiency, six scores/modifiers, and derived melee/ranged attack bonuses.
+
+## Feel
+
+Combat feel lives in Wave 2D. Design: [COMBAT_AND_RPG.md §3, §8, §9](../docs/design/COMBAT_AND_RPG.md#3-movement-dodge-and-stamina).
+
+- **Dodge roll.** Press **Shift** (gamepad **B**) to roll 48 px in 0.25 s. The roll passes through enemies, slides along obstacles and cannot pass a sealed door. The first 0.2 s are invulnerable, and a 0.1 s recovery follows in which you cannot attack or dodge. A dodge cancels attack recovery but not an attack's wind-up or active frames.
+- **Stamina.** The roll uses the pool shown as the bar under the HP line: 100 stamina, 35 per roll, refilling at 30/s (+10 % per positive WIS modifier) after 0.6 s without spending. That is two rolls back to back, then a third about 0.75 s later.
+- **Attack movement penalty.** Attacking slows you: melee arcs to 60 % (thrust 40 %, spin 50 %), shooting to 85 %.
+- **Knockback.** Melee hits knock enemies back, 20 px by default. `knockback_resist` reduces this, and bosses take a quarter at most. A push stops at walls without wall-slam damage, and it interrupts a bell acolyte's chant.
+- **Hit feedback.** Your hits stop time briefly (40 ms, 70 ms on a crit, 90 ms on a kill or boss phase change) and flash the target. Damage floats up as numbers: yellow for a crit, grey `MISS`, red on you. The screen shakes and kills burst into particles. The *Damage numbers* and *Screen shake* settings control those two cues.
+- **Sealed rooms (D-07).** In normal, elite, boss and trap rooms with enemies, the doors seal 0.5 s after you are 24 px past the doorway. They open on clear with a **ROOM CLEAR** moment, or as soon as the collapse grace starts. A 15 s failsafe removes enemies that cannot reach you (with no XP) and logs it as a generator bug.
+- **For skills and items.**
+  - `RunState.spend_stamina(cost) -> bool` spends stamina.
+  - `Events.dodged(direction)` and `Events.stamina_changed(current, max)` report rolls and stamina.
+  - `Events.doors_locked(room_id)` and `doors_unlocked(room_id, reason)` report the door lock.
+  - `combat.on_player_dodged(direction)` is the `on_dodge` hook.
+  - `combat.fx` triggers feedback: `request_hitstop(s)`, `hitstop_for(cue)`, `shake(Fx.SHAKE_*)`, `number(key, pos, value, style)`, `flash(key, color)` and `burst(pos, color)`.
+  - A skill dash is `player.start_dash(direction, distance, duration, iframes, recovery)` followed by `combat.on_player_dodged(direction)`.
 
 ## Visual and tile layout
 
@@ -113,6 +132,12 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 - `hazards.spike_plate` / `drain_plate` / `trap_plates`: pressure-plate hazards in trap rooms (spikes: 3 damage after 0.5 s, rearm 2 s; drain: −1 tick after 0.6 s if you are still on it, one-shot; 2–4 plates per room, 1–2 of them drains).
 - `room_obstacle_caps`: obstacle cap per kind (13 for start, guild hall, exit, treasure and shrine; 20 trap; 30 elite; boss and normal use `obstacle_count`).
 - `interaction.radius` (26 px), `shrine_ticks` (+2), `shrine_heal_ratio` (0.5 of max HP).
+- `feel.stamina` (`max` 100, `regen_per_second` 30, `regen_delay` 0.6, `wis_regen_per_mod` 0.1).
+- `feel.dodge` (`cost` 35, `distance` 48, `duration` 0.25, `iframes` 0.2, `recovery` 0.1, `cooldown` 0, the input `buffer` 0.12).
+- `feel.attack_timing` (melee active / recovery 0.1 / 0.18 s, ranged recovery 0.28 s) and `feel.attack_move_multipliers` (arc 0.6, thrust 0.4, spin 0.5, ranged 0.85).
+- `feel.knockback` (`default_melee` 20 px, `boss_mult` 0.25, `str_bonus_per_mod` 0.05).
+- `feel.hitstop`: seconds per cue, plus the `window` / `window_budget` cap of 120 ms per 0.5 s.
+- `feel.door_lock` (`delay` 0.5, `inset` 24, `failsafe_seconds` 15, `locking_kinds`).
 
 **The collapse clock (v1, [COLLAPSE_SYSTEM.md](../docs/design/COLLAPSE_SYSTEM.md)).** Doors are never refused for lack of ticks; only the sealed exit refuses. A cost larger than what is left takes the clock to 0. When the clock reaches 0 by anything other than the exit, a **10 s grace period** starts: the tick counter becomes a red countdown, doors stay unlocked, entering rooms is free (first-entry grants still apply) and falling-debris markers telegraph for 0.8 s before dealing 2 damage (a dodge's i-frames avoid them). Regaining any ticks (guild hall, shrine, elite clear, items) stabilises the floor; a second zero on the same floor gives 5 s, a third collapses at once. The timer running out ends the run as **collapsed**. The unsealed exit always resolves first, so leaving with exactly the last tick, or during grace, clears the floor. Pause, level-up, the map and the shrine prompt freeze the grace timer and hazards. The HUD counter turns amber at ≤ 6 and red at ≤ 3, and a door label ends in a red `!` when walking through would leave the clock at 0. No values are final; each floor's room count, route cost and budget are printed to the console when it starts.
 
@@ -164,6 +189,7 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `announcer_test.gd` | Announcer data validator, placeholders, seeded selection, cooldowns, once-per-run, preemption, rate limit, modal suppression; live toasts, log, achievements page and telemetry in `Main.tscn` |
 | `collapse_test.gd` | Collapse clock v1: never-refused doors, grace lifecycle (10 s, stabilise, 5 s, third zero), debris waves vs the wave table, exit during grace, modal freeze, hazards module, `budget_for` (26 for 424242; 30/36/40/46/50 for depths 2–6), route sweep, feasibility re-roll |
 | `rooms_test.gd` | Special-room placement over 20 seeds × 6 depths, interiors and obstacle caps, chest / shrine / guild rest / trap plates on the live game, the interaction registry, the floor map overlay |
+| `combat_feel_test.gd` | Wave 2D: dodge distance, timing and i-frames, stamina cost/delay/regen and the two-chain rule, dodge refusals, knockback (resist, walls, interrupts, boss cap, crawler), hit-stop freeze and budget, damage numbers and the setting, movement penalties, door lock timing/kinds/grace/clear, locked-door dodge, 15 s failsafe |
 | `achievements_test.gd` | Achievements on scripted event sequences (never twice), profile save/load and corrupt-file recovery, telemetry report keys and 50-file retention |
 
 **Writing tests that touch autoloads.** In `--script` mode (Godot 4.7.2) the `Events` and `RunState` autoload nodes already exist under `/root` when `_initialize()` runs (their `_ready()` runs a frame later), but their global identifiers are **not** visible to the test script or anything it `preload`s, because those compile before autoloads are registered. A compile error there makes Godot hang instead of exiting. So: fetch autoloads with `get_root().get_node("RunState")`, and `load()` game scripts or `res://scenes/Main.tscn` at runtime instead of `preload`ing them. Pure-logic modules that never mention an autoload can still be preloaded.
@@ -195,8 +221,10 @@ game/
 │   ├── hazards.gd              # ground hazards: telegraph -> active -> expire, drawing (pure)
 │   ├── interactables.gd        # interactable entries (chest, shrine, rest, sign...) (pure)
 │   ├── room_services.gd        # interact registry + prompts, chest/shrine/rest/sign, trap plates
-│   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames (Input Map)
-│   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage()
+│   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames, dodge/dash, attack phases
+│   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage() + feedback/knockback
+│   ├── fx.gd                   # hit feedback state: hit-stop, shake, flashes, numbers, death bursts (pure)
+│   ├── door_lock.gd            # D-07 door lock, unreachable-enemy failsafe, room-clear moment
 │   ├── room_renderer.gd        # immediate-mode drawing of the room, doors (tick previews), actors
 │   ├── ui/hud.gd               # status lines (FLOOR d/target), clock / grace countdown, prompt, minimap
 │   ├── ui/floor_map.gd         # full floor map overlay (M); build_model() is pure

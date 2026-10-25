@@ -11,6 +11,7 @@ const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Player = preload("res://scripts/player.gd")
+const Hazards = preload("res://scripts/hazards.gd")
 
 const PLAYER_SHOT_SPEED := 215.0
 const PLAYER_SHOT_TTL := 2.0
@@ -26,6 +27,10 @@ const HIT_SLOP := 3.0
 ## Live projectiles: {pos, velocity, ttl, owner ("player"/"enemy"), die, bonus,
 ## attack_bonus, source}. Cleared on every room transition.
 var projectiles: Array[Dictionary] = []
+## Live ground hazards of the current room (hazards.gd entry shape: pos, radius,
+## telegraph_remaining, damage, duration, source, kind, ...). Shared by grace
+## debris, trap plates and enemy puddles. Cleared on every room transition.
+var hazards: Array[Dictionary] = []
 var player: Player
 var catalogue: Dictionary = {}
 
@@ -49,6 +54,40 @@ func definition_of(foe: Dictionary) -> Dictionary:
 
 func clear_projectiles() -> void:
     projectiles.clear()
+
+
+# --- Ground hazards (Wave 2E) -------------------------------------------------
+
+## Adds a hazard entry (normalised by hazards.gd) and emits `hazard_spawned`.
+func spawn_hazard(entry: Dictionary) -> Dictionary:
+    Hazards.normalize(entry)
+    hazards.append(entry)
+    Events.hazard_spawned.emit(entry)
+    return entry
+
+
+func clear_hazards() -> void:
+    hazards.clear()
+
+
+## Steps every hazard and applies its hits: flat damage through apply_damage()
+## (i-frames skip the crawler inside hazards.gd) and tick drains through
+## RunState.add_ticks(-n, source).
+func update_hazards(delta: float) -> void:
+    if hazards.is_empty():
+        return
+    var hits: Array[Dictionary] = Hazards.step(hazards, delta, {
+        "pos": player.world_position, "radius": Player.RADIUS,
+        "invulnerable": player.invulnerability > 0.0}, enemies())
+    for hit in hits:
+        var source: String = String(hit["entry"]["source"])
+        if hit["target"] is String:
+            if int(hit["damage"]) > 0 and RunState.hp > 0:
+                apply_damage(player, int(hit["damage"]), {"source": source})
+            if int(hit["ticks"]) > 0:
+                RunState.add_ticks(-int(hit["ticks"]), source)
+        elif int(hit["target"]["hp"]) > 0:
+            apply_damage(hit["target"], int(hit["damage"]), {"source": source})
 
 
 ## Spawns a player bolt along the current aim (cooldown is the Player's job).

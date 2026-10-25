@@ -23,7 +23,7 @@ signal run_started(seed: int)
 ## (rooms, start_id, boss_id, exit_id, guild_id, seed).
 signal floor_started(depth: int, floor: Dictionary)
 ## The player entered `room_id` of type `kind` ("start", "normal", "boss",
-## "guild_hall", "exit"). `ledger_entry` is the CollapsePolicy.evaluate() result
+## "guild_hall", "exit", "treasure", "elite", "trap", "shrine"). `ledger_entry` is the CollapsePolicy.evaluate() result
 ## that paid for the transition (empty for the floor's start room).
 ## `first_visit` is true the first time this room is entered on this floor.
 signal room_entered(room_id: int, kind: String, ledger_entry: Dictionary, first_visit: bool)
@@ -46,6 +46,28 @@ signal run_ended(outcome: String, summary: Dictionary)
 ## "TITLE", "RUNNING", "LEVEL_UP", "PAUSED", "INTERMISSION", "SUMMARY".
 ## For UI, audio and the announcer to follow screens without polling Game.
 signal game_state_changed(previous: String, current: String)
+
+# --- Collapse clock and rooms (Wave 2E) ---------------------------------------
+
+## The clock reached 0 through a non-exit event and a grace period of
+## `seconds` began (10 s the first time on a floor, 5 s the second). Doors
+## unlock, entries are free, debris falls. Emitted after RunState.grace is set.
+signal grace_started(seconds: float)
+## The grace period ended. `stabilised` is true when ticks were regained (the
+## floor is safe again); false when it ended by hard collapse, the exit or
+## death (RunState.grace.outcome says which).
+signal grace_ended(stabilised: bool)
+## A ground hazard was added to Combat.hazards. `data` is the live entry
+## (hazards.gd shape: pos, radius, telegraph_remaining, damage, duration,
+## source, kind, ...); mutate it only through the hazards module.
+signal hazard_spawned(data: Dictionary)
+## A treasure chest in `room_id` was opened and rolled `loot_ids` (content
+## ids from the treasure_room loot table). Inventory is the items team's job.
+signal chest_opened(room_id: int, loot_ids: Array)
+## A shrine was used; `choice` is "stabilise" (+ticks) or "mend" (heal).
+signal shrine_used(choice: String)
+## The crawler rested at a guild hall (full heal, once per floor).
+signal guild_rested()
 
 # --- Combat ------------------------------------------------------------------
 

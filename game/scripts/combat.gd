@@ -176,8 +176,12 @@ func player_fire() -> void:
         "beam":
             fire_beam(profile, player.world_position, aim)
         _:
-            for angle in spread_angles(int(profile["projectile_count"]),
-                    float(profile["spread_degrees"])):
+            # Extra projectiles from modifiers on a no-spread weapon fan 8 degrees apart.
+            var count: int = int(profile["projectile_count"])
+            var spread: float = float(profile["spread_degrees"])
+            if spread <= 0.0 and count > 1:
+                spread = 8.0 * float(count - 1)
+            for angle in spread_angles(count, spread):
                 _spawn_player_shot(profile, aim.rotated(deg_to_rad(angle)))
 
 
@@ -571,7 +575,8 @@ func update_projectiles(delta: float) -> void:
                     break
         elif position.distance_to(player.world_position) < Player.RADIUS + HIT_SLOP:
             hit_player(int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]),
-                String(bullet.get("source", "enemy")), float(bullet.get("mult", 1.0)))
+                String(bullet.get("source", "enemy")), float(bullet.get("mult", 1.0)),
+                String(bullet.get("status", "")))
             collided = true
         if collided and i < projectiles.size() and is_same(projectiles[i], bullet):
             projectiles.remove_at(i)
@@ -663,7 +668,8 @@ func _resolve_enemy_action(foe: Dictionary, definition: Dictionary, action: Dict
                     "velocity": shot * float(attack.get("projectile_speed", 125.0)),
                     "ttl": ENEMY_SHOT_TTL, "owner": "enemy", "die": int(numbers["die"]),
                     "bonus": int(numbers["bonus"]), "attack_bonus": int(numbers["to_hit"]),
-                    "source": source, "mult": float(numbers["mult"])
+                    "source": source, "mult": float(numbers["mult"]),
+                    "status": String(attack.get("status", ""))
                 }
                 projectiles.append(bullet)
                 Events.projectile_fired.emit("enemy", bullet)

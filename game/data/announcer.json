@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "settings": {"rate_limit_seconds": 2.5, "bypass_priority": 4, "max_visible": 2, "min_on_screen_seconds": 1.0, "toast_seconds": 2.5, "toast_max_seconds": 5.0, "seconds_per_char": 0.04, "fade_seconds": 0.4, "queue_size": 8, "queue_ttl_seconds": 4.0, "log_size": 50, "idle_seconds": 25.0, "kill_streak_thresholds": [3, 5, 8, 12], "low_hp_fraction": 0.3, "low_hp_rearm_fraction": 0.5, "big_hit_fraction": 0.25, "ticks_low": 4},
+  "lines": {
+    "run_started": [
+      {"text": "Welcome, crawler. Your survival is not guaranteed, but it is being recorded.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Run {seed} is now live. Please keep your limbs inside the dungeon at all times.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Good news: the dungeon is open. Bad news: it is open downward.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Crawler registered. Next-of-kin field left blank. Bold choice.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "This descent is brought to you by our sponsors, who would like you to keep moving.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "sponsor"},
+      {"text": "Orientation has been skipped to save time. You will learn by doing, briefly.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Seed {seed} loaded. Management has reviewed your odds and is smiling politely.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Reminder: every room costs ticks, and every tick is somebody's quarterly target.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"}
+    ],
+    "floor_started": [
+      {"text": "Floor {depth} unlocked. The elevator music was cut for budget reasons.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Welcome to floor {depth}. The previous tenants left in a hurry. And in pieces.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Floor {depth}: same dungeon, worse lighting, higher stakes. Enjoy.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Descending to floor {depth}. Please note the stairs only go one way.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"},
+      {"text": "Floor {depth}. Our sponsors have doubled the ambient dread at no extra cost.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "sponsor"},
+      {"text": "You are now on floor {depth}. Morale is optional. Movement is mandatory.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "system"}
+    ],
+    "room_entered.start": [
+      {"text": "Back at the start. Nostalgia is free. The ticks you spent getting here were not.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "The starting room remembers you. It is not impressed.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "Returning to the beginning is not the same as a fresh start.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "Ah, the lobby. Do browse, but the exit is not here.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "Familiar walls. Unfamiliar sense of progress.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"}
+    ],
+    "room_entered.normal": [
+      {"text": "Room {room}. Contents: hostile. Decor: also hostile.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "Another room. Another chance to justify your oxygen.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "This room has been rated 'adequate' by people who did not survive it.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "Please do not feed the locals. They prefer to feed themselves.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "New room discovered. The audience leans forward slightly.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "You have {ticks} ticks left. The room has no opinion about that.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "Floor plan updated. Your odds were not consulted.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"},
+      {"text": "Fresh room, same policy: survive or become scenery.", "weight": 1.0, "priority": 1, "cooldown_seconds": 12, "once_per_run": false, "category": "flavour"}
+    ],
+    "room_entered.treasure": [
+      {"text": "A treasure room. Please resist the urge to lick the gold.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Loot detected. Terms and conditions also detected.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Shiny objects ahead. Statistically, at least one is not a trap.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "This room is sponsored. Smile for the loot box.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "sponsor"},
+      {"text": "Treasure! Management takes a modest cut of your gratitude.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"}
+    ],
+    "room_entered.trap": [
+      {"text": "Mind your step. Actually, mind all of your steps.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "This room is a trap. We are legally required to say that now.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "The floor tiles in here are load-bearing and grudge-bearing.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "Hazard zone. Your insurance policy has just quietly expired.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "Trap room. The architect was paid by the scream.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"}
+    ],
+    "room_entered.shrine": [
+      {"text": "A shrine. Offerings accepted. Refunds are not.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Shrine located. Please pray in an orderly queue of one.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "The shrine hums. It may grant favour. It may grant fees.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Holy ground, conditionally. Read the small print on the altar.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "A quiet shrine. The quiet costs extra.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"}
+    ],
+    "room_entered.elite": [
+      {"text": "Elite occupant detected. It has a performance review to ace.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "Something tougher lives here. It has heard about you. It is unbothered.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "Warning: above-average hostility. Above-average loot. Probably.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "This one was promoted for violence. Please congratulate it carefully.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"},
+      {"text": "Elite room. The audience paid extra for this part.", "weight": 1.0, "priority": 3, "cooldown_seconds": 10, "once_per_run": false, "category": "warning"}
+    ],
+    "room_entered.guild_hall": [
+      {"text": "Guild hall. Catch your breath. It is the only free thing down here.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "A safe room! Terms, conditions and the word 'safe' may vary.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "The guild welcomes members, guests and anyone still breathing.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Rest stop reached. Complimentary ticks, complimentary dread.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Guild hall open. Please wipe your boots of whatever that is.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"}
+    ],
+    "room_entered.exit": [
+      {"text": "The stairs down. Up was never on the menu.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Exit located. Leaving is easy. Arriving is the problem.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "The way down. Management thanks you for your continued descent.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Exit reached. Somewhere below, a worse floor clears its throat.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"},
+      {"text": "Stairwell confirmed. Please hold the railing. There is no railing.", "weight": 1.0, "priority": 2, "cooldown_seconds": 10, "once_per_run": false, "category": "flavour"}
+    ],
+    "room_entered.boss": [
+      {"text": "The boss room, now under new management: you.", "weight": 1.0, "priority": 1, "cooldown_seconds": 20, "once_per_run": false, "category": "taunt"},
+      {"text": "The arena is closed for cleaning. You made the mess, after all.", "weight": 1.0, "priority": 1, "cooldown_seconds": 20, "once_per_run": false, "category": "taunt"},
+      {"text": "It is very quiet in here now. You did that.", "weight": 1.0, "priority": 1, "cooldown_seconds": 20, "once_per_run": false, "category": "taunt"}
+    ],
+    "boss_room_entered": [
+      {"text": "Boss chamber. Please hold all applause until someone stops moving.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Main event! The odds board just updated, and not in your favour.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "You have entered the boss room. The door has opinions about leaving.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Tonight's headliner is large, armoured and contractually angry.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Boss detected. Our sponsors remind you that heroism is not covered.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "sponsor"},
+      {"text": "This is the part the trailer was cut from. Try to look good.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"}
+    ],
+    "first_blood": [
+      {"text": "First kill of the run. The {enemy} will be filing a complaint, posthumously.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": true, "category": "celebration"},
+      {"text": "And we have first blood! The {enemy} has been removed from the leaderboard.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": true, "category": "celebration"},
+      {"text": "First blood. The paperwork for that {enemy} is already being shredded.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": true, "category": "celebration"},
+      {"text": "Kill number one. Only several hundred to go, roughly.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": true, "category": "celebration"},
+      {"text": "The {enemy} is down. Our first casualty is, thankfully, not you.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": true, "category": "celebration"},
+      {"text": "First takedown logged. Please pace yourself; the dungeon has plenty more.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": true, "category": "celebration"}
+    ],
+    "kill_streak.3": [
+      {"text": "Three in a row without a scratch. The analysts are recalculating.", "weight": 1.0, "priority": 2, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Triple! Your efficiency has been noted and will be held against you.", "weight": 1.0, "priority": 2, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Streak of {streak}. A modest start. We grade on a curve.", "weight": 1.0, "priority": 2, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "{streak} kills, zero injuries. Suspicious. Carry on.", "weight": 1.0, "priority": 2, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "kill_streak.5": [
+      {"text": "Five clean kills. Somebody upstairs just lost a bet.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Streak of {streak}! The local wildlife is forming a union.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "{streak} without a hit. The audience asks you to slow down for the replay.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Five-chain. Management is drafting a polite counterstrategy.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "kill_streak.8": [
+      {"text": "{streak} kills untouched. The dungeon is filing a performance concern.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Eight straight. We have had to open a second column on the scoreboard.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Streak of {streak}. Please stop before the monsters demand hazard pay.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "kill_streak.12": [
+      {"text": "Twelve! The ratings department is on fire. Not literally. Yet.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "{streak} clean kills. This was not in the forecast.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "A {streak}-kill streak. Our insurers have asked us to stop showing this.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "enemy_killed.rat_scavenger": [
+      {"text": "Rat neutralised. The ecosystem shrugs.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "One fewer scavenger. Several more are reviewing your file.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "The rat has left the dungeon. Feet first. All four of them.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.spitting_rat": [
+      {"text": "Spitting rat silenced. Please wipe your face.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "That rat had range and attitude. Now it has neither.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "No more spit from that one. The cleaning crew thanks you.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.hulking_rat": [
+      {"text": "The hulking rat is down. Its gym membership lapses today.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Large rat, larger thud. Nicely done.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "That was a lot of rat. Now it is a lot of floor.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "level_up": [
+      {"text": "Level {level}! You are now slightly harder to kill. Congratulations, conditionally.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Level {level} reached. Your stats have improved. Your situation has not.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Promoted to level {level}. No raise, but the monsters will take you seriously.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Level {level}. Please allocate your points before something allocates you.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Ding. Level {level}. The dungeon has adjusted its expectations upward.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Level {level}. Our sponsors are thrilled to keep you on the payroll.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "sponsor"}
+    ],
+    "low_hp": [
+      {"text": "Health critical. Now would be a great time for a plan.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "You are at {hp} HP. Statistically, that is a cliffhanger.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Vital signs: optional, apparently. Please reconsider.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Low health. The audience is on the edge of their seats. You are on the edge.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "{hp} of {max_hp} HP left. We have pre-written a few obituaries. Just in case.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Warning: you appear to be leaking. Kindly stop.", "weight": 1.0, "priority": 4, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"}
+    ],
+    "player_damaged_big": [
+      {"text": "Ouch. That {enemy} hit for {damage}. The replay is already trending.", "weight": 1.0, "priority": 2, "cooldown_seconds": 15, "once_per_run": false, "category": "taunt"},
+      {"text": "{damage} damage in one go. You will want to avoid doing that again.", "weight": 1.0, "priority": 2, "cooldown_seconds": 15, "once_per_run": false, "category": "taunt"},
+      {"text": "That one landed. The {enemy} is very proud of itself.", "weight": 1.0, "priority": 2, "cooldown_seconds": 15, "once_per_run": false, "category": "taunt"},
+      {"text": "Big hit! Please remember: blocking with your face is not a strategy.", "weight": 1.0, "priority": 2, "cooldown_seconds": 15, "once_per_run": false, "category": "taunt"},
+      {"text": "Heavy damage taken. Your medical plan covers none of it.", "weight": 1.0, "priority": 2, "cooldown_seconds": 15, "once_per_run": false, "category": "taunt"}
+    ],
+    "boss_defeated": [
+      {"text": "Boss down! The {enemy} has been reassigned to the floor. Permanently.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "The {enemy} is defeated. The exit unlocks with a resentful click.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Headliner eliminated. Please exit via the stairwell, and the gift shop if found.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Boss defeated! Our sponsors now claim they believed in you all along.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "sponsor"},
+      {"text": "The {enemy} falls. Management is surprised and slightly inconvenienced.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "That was the boss. You are now the scariest thing in this room. Congrats?", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "floor_cleared": [
+      {"text": "Floor {depth} cleared with {ticks} ticks to spare. Your reward: a lower floor.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Floor {depth} complete. The next one is already disappointed in you.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "You survived floor {depth}. The stairs are waiting, smugly.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Floor {depth} done. Please rate your experience from one to doom.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Floor cleared. {kills} kills so far. The dungeon is keeping a tally too.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "ticks_low": [
+      {"text": "Only {ticks} ticks left. The ceiling is getting ideas.", "weight": 1.0, "priority": 4, "cooldown_seconds": 15, "once_per_run": false, "category": "warning"},
+      {"text": "{ticks} ticks remaining. Dawdling is now a lifestyle choice with consequences.", "weight": 1.0, "priority": 4, "cooldown_seconds": 15, "once_per_run": false, "category": "warning"},
+      {"text": "The floor is running low on patience. {ticks} ticks, to be precise.", "weight": 1.0, "priority": 4, "cooldown_seconds": 15, "once_per_run": false, "category": "warning"},
+      {"text": "Clock check: {ticks} ticks. Somewhere, a support beam sighs.", "weight": 1.0, "priority": 4, "cooldown_seconds": 15, "once_per_run": false, "category": "warning"},
+      {"text": "Warning: {ticks} ticks left. Structural integrity is entering its villain era.", "weight": 1.0, "priority": 4, "cooldown_seconds": 15, "once_per_run": false, "category": "warning"},
+      {"text": "Time is short. So is the list of rooms you can still afford.", "weight": 1.0, "priority": 4, "cooldown_seconds": 15, "once_per_run": false, "category": "warning"}
+    ],
+    "grace_started": [
+      {"text": "Collapse imminent! A brief grace period has been granted. Very brief.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "warning"},
+      {"text": "The floor is coming down. You have a moment. Spend it running.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "warning"},
+      {"text": "Grace period active. Management calls this mercy. Accounting calls it a delay.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "warning"},
+      {"text": "Structural failure in progress. Please evacuate in an orderly sprint.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "warning"},
+      {"text": "This is your final courtesy notice from the ceiling.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "warning"}
+    ],
+    "grace_stabilised": [
+      {"text": "You outran the collapse. The ceiling will remember this.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Grace period survived. The dungeon is grudgingly impressed.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Stabilised. For now. The word 'now' is doing a lot of work.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "The collapse missed you. The audience exhales in unison.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Out of the danger zone. Please continue into a different danger zone.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "run_ended.defeated": [
+      {"text": "Crawler down on floor {depth}. The {enemy} accepts the trophy with grace.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "And that is the run. Cause of death: {enemy}. Contributing factor: optimism.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "You have died. Your {kills} kills are being donated to the dungeon archive.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Run over at level {level}. The {enemy} would like to thank its agent.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Defeated. On the bright side, you no longer owe the dungeon any ticks.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Vital signs discontinued. Please enjoy this complimentary moment of silence.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"}
+    ],
+    "run_ended.collapsed": [
+      {"text": "The floor collapsed. It was nothing personal. It was structural.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Out of ticks, out of floor, out of luck. Thank you for crawling.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Collapse complete. Floor {depth} has been archived, with you in it.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "The ceiling has met the floor. You were the awkward bit in between.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Time is up. The dungeon reclaims its square footage.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Structural collapse on floor {depth}. Management cites 'crawler dawdling'.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"}
+    ],
+    "run_ended.victory": [
+      {"text": "Floor {depth} escaped! You are now, technically, a success story.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Victory. The dungeon will be updating its security in response to you.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "You made it out with {ticks} ticks left. The audience demands a sequel.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Escape confirmed. Our sponsors would like a word about endorsement deals.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "sponsor"},
+      {"text": "Clear! {kills} kills, level {level}, and only mildly traumatised.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
+      {"text": "Run complete. Please collect your complimentary dignity at the door.", "weight": 1.0, "priority": 5, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"}
+    ],
+    "run_ended.abandoned": [
+      {"text": "Run abandoned. The dungeon pretends not to be hurt.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Leaving so soon? Your spot has already been sublet.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"},
+      {"text": "Abandoned on floor {depth}. The rooms will gossip about this.", "weight": 1.0, "priority": 3, "cooldown_seconds": 0, "once_per_run": false, "category": "obituary"}
+    ],
+    "idle": [
+      {"text": "Still there? The monsters are starting to worry about you.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "Standing still is a valid strategy. It is not a good one.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "The dungeon does not do intermissions. Kindly crawl.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "{idle} seconds of stillness. The audience is riveted, apparently.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "Gentle reminder: ticks do not spend themselves. Neither do you, it seems.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "If you are thinking, please think faster.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "Pausing for dramatic effect? The effect has landed. Please move.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"},
+      {"text": "This silence has been noted in your permanent record.", "weight": 1.0, "priority": 1, "cooldown_seconds": 30, "once_per_run": false, "category": "taunt"}
+    ],
+    "chest_opened": [
+      {"text": "Chest opened! Your loot box has been delivered, minus handling fees.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "celebration"},
+      {"text": "Unboxing complete. Please enjoy your contents responsibly.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "celebration"},
+      {"text": "A loot box! Statistically, one of these will be great someday.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "celebration"},
+      {"text": "Chest cracked. The sponsors hope you love it, or at least use it.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "sponsor"},
+      {"text": "Loot acquired. The chest is now just a box with regrets.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "celebration"}
+    ],
+    "shrine_used": [
+      {"text": "Shrine used. Your offering has been processed. Blessing pending.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "The shrine accepts your devotion and your ticks, in that order.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "Blessing applied. Side effects may include confidence.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "Prayer received. Please allow three to five floors for results.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "The shrine glows. That is either good news or very bright bad news.", "weight": 1.0, "priority": 3, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"}
+    ],
+    "guild_rested": [
+      {"text": "Rested at the guild. Your wounds are fewer and your bill is larger.", "weight": 1.0, "priority": 2, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "A short rest. The dungeon waited. Impatiently.", "weight": 1.0, "priority": 2, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "Refreshed! The guild thanks you for your patronage and your blood.", "weight": 1.0, "priority": 2, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "Rest complete. Please return your pillow to the nearest skeleton.", "weight": 1.0, "priority": 2, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"},
+      {"text": "Guild rest logged. Do try not to need another one immediately.", "weight": 1.0, "priority": 2, "cooldown_seconds": 5, "once_per_run": false, "category": "flavour"}
+    ],
+    "achievement_unlocked": [
+      {"text": "Achievement filed: {achievement}\n{quip}", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "achievement"},
+      {"text": "Accolade registered: {achievement}\n{quip}", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "achievement"},
+      {"text": "New honour on record: {achievement}\n{quip}", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "achievement"},
+      {"text": "The board has approved: {achievement}\n{quip}", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "achievement"},
+      {"text": "Achievement earned: {achievement}\n{quip}", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "achievement"}
+    ],
+    "hazard_spawned": [
+      {"text": "New hazard deployed. We call it 'interactive scenery'.", "weight": 1.0, "priority": 2, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Something nasty just appeared. It was not in the brochure.", "weight": 1.0, "priority": 2, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"},
+      {"text": "Hazard online. Please treat it as a suggestion to leave.", "weight": 1.0, "priority": 2, "cooldown_seconds": 20, "once_per_run": false, "category": "warning"}
+    ]
+  }
+}

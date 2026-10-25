@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/room_renderer.gd" id="2_renderer"]
@@ -6,6 +6,10 @@
 [ext_resource type="Script" path="res://scripts/combat.gd" id="4_combat"]
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="5_hud"]
 [ext_resource type="Script" path="res://scripts/character_menu.gd" id="6_menu"]
+[ext_resource type="Script" path="res://scripts/ui/title_screen.gd" id="7_title"]
+[ext_resource type="Script" path="res://scripts/ui/intermission_screen.gd" id="8_intermission"]
+[ext_resource type="Script" path="res://scripts/ui/summary_screen.gd" id="9_summary"]
+[ext_resource type="Script" path="res://scripts/ui/settings_screen.gd" id="10_settings"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_game")
@@ -24,3 +28,15 @@ script = ExtResource("5_hud")
 
 [node name="CharacterMenu" type="CanvasLayer" parent="."]
 script = ExtResource("6_menu")
+
+[node name="TitleScreen" type="CanvasLayer" parent="."]
+script = ExtResource("7_title")
+
+[node name="IntermissionScreen" type="CanvasLayer" parent="."]
+script = ExtResource("8_intermission")
+
+[node name="SummaryScreen" type="CanvasLayer" parent="."]
+script = ExtResource("9_summary")
+
+[node name="SettingsScreen" type="CanvasLayer" parent="."]
+script = ExtResource("10_settings")

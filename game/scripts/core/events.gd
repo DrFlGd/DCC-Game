@@ -35,11 +35,17 @@ signal room_cleared(room_id: int)
 signal ticks_changed(before: int, after: int, reason: String)
 ## The boss of the current floor died; the exit is now unlocked.
 signal boss_defeated(definition_id: String)
-## The player reached the exit of floor `depth`.
+## The player took the unsealed exit of floor `depth`. Emitted before the
+## intermission opens, and also on the final floor right before
+## run_ended("victory").
 signal floor_cleared(depth: int)
-## The run is over. `outcome` is "escaped", "collapsed" or "defeated";
-## `summary` is RunState.summary().
+## The run is over. `outcome` is "victory", "collapsed", "defeated" or
+## "abandoned"; `summary` is RunState.summary() (its "cause" says why).
 signal run_ended(outcome: String, summary: Dictionary)
+## Game's state machine moved between states, named as in game.gd's State enum:
+## "TITLE", "RUNNING", "LEVEL_UP", "PAUSED", "INTERMISSION", "SUMMARY".
+## For UI, audio and the announcer to follow screens without polling Game.
+signal game_state_changed(previous: String, current: String)
 
 # --- Combat ------------------------------------------------------------------
 
@@ -68,6 +74,9 @@ signal xp_gained(amount: int, total: int)
 signal level_up(level: int, pending_points: int)
 ## Ability scores changed (level-up allocation, future items/curses).
 signal stats_changed(scores: Dictionary)
+## Achievement `id` (data/achievements.json) was earned for the first time.
+## Emitted by the Announcer (2G); it saves the profile and shows a toast.
+signal achievement_unlocked(id: String)
 
 # --- Feature-team stubs (declared now so teams can wire them in parallel) ----
 
@@ -79,6 +88,16 @@ signal item_used(item_id: String)
 signal skill_learned(skill_id: String)
 
 # --- Presentation ------------------------------------------------------------
+
+## Player settings changed and were saved. `settings` is Settings.to_dict()
+## (resolution, fullscreen, master_volume, show_damage_numbers, screen_shake).
+signal settings_changed(settings: Dictionary)
+
+## Asks the dungeon-system announcer for a line. `trigger` is a key in
+## data/announcer.json; `context` fills its {placeholders}. With no lines for
+## `trigger`, context["text"] is shown verbatim (context "priority" 1-5 and
+## "category" optional). Flavour only: terse gameplay status stays on `message`.
+signal announcement_requested(trigger: String, context: Dictionary)
 
 ## A one-line status message for the HUD. `category` is one of "info",
 ## "combat", "progression", "collapse" or "outcome". The newest message wins.

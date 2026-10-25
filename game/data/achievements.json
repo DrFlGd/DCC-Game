@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "achievements": [
+    {"id": "first_blood", "title": "Opening Number", "description": "Kill your first enemy.", "quip": "Everyone remembers their first. The enemy, briefly.", "event": "enemy_killed", "requires": {"run.kills": {">=": 1}}, "secret": false},
+    {"id": "not_a_scratch", "title": "Not a Scratch", "description": "Clear a room of enemies without taking damage.", "quip": "Clean work. The janitors appreciate it.", "event": "room_cleared", "requires": {"room.kills": {">=": 1}, "room.damage_taken": {"==": 0}}, "secret": false},
+    {"id": "one_hp_wonder", "title": "Technically Alive", "description": "Clear a room with exactly 1 HP left.", "quip": "Technically alive is the best kind of alive.", "event": "room_cleared", "requires": {"hp": {"==": 1}}, "secret": false},
+    {"id": "photo_finish", "title": "Photo Finish", "description": "Clear a floor with 2 or fewer ticks left.", "quip": "The ceiling missed you by a rounding error.", "event": "floor_cleared", "requires": {"ticks": {"<=": 2}}, "secret": false},
+    {"id": "exit_interview", "title": "Exit Interview", "description": "Clear a floor.", "quip": "Please return your keycard and any remaining optimism.", "event": "floor_cleared", "requires": {}, "secret": false},
+    {"id": "untouchable", "title": "Untouchable", "description": "Clear a floor without taking any damage.", "quip": "The monsters are reviewing the footage frame by frame.", "event": "floor_cleared", "requires": {"floor.damage_taken": {"==": 0}}, "secret": false},
+    {"id": "no_takebacks", "title": "No Takebacks", "description": "Clear a floor without re-entering a room.", "quip": "Commitment issues? Never heard of them.", "event": "floor_cleared", "requires": {"floor.revisits": {"==": 0}}, "secret": false},
+    {"id": "express_elevator", "title": "Express Elevator", "description": "Clear a floor in under 90 seconds.", "quip": "Speed is a virtue. So is not dying. Pick one.", "event": "floor_cleared", "requires": {"floor.seconds": {"<": 90}}, "secret": false},
+    {"id": "unboxing", "title": "Unboxing Video", "description": "Open a chest.", "quip": "Like, subscribe, and do not ask about the drop rates.", "event": "chest_opened", "requires": {"run.chests": {">=": 1}}, "secret": false},
+    {"id": "devout_ish", "title": "Devout-ish", "description": "Use a shrine.", "quip": "The shrine accepts ticks, blood and vague hope.", "event": "shrine_used", "requires": {"run.shrines": {">=": 1}}, "secret": false},
+    {"id": "union_break", "title": "Union Break", "description": "Rest at a guild hall.", "quip": "Mandated rest period observed. Grudgingly.", "event": "guild_rested", "requires": {"run.guild_rests": {">=": 1}}, "secret": false},
+    {"id": "rubble_rouser", "title": "Rubble Rouser", "description": "Survive a collapse grace period.", "quip": "The floor fell. You declined to.", "event": "grace_ended", "requires": {"outcome": {"==": "running"}, "hp": {">=": 1}}, "secret": false},
+    {"id": "down_to_the_wire", "title": "Down to the Wire", "description": "Defeat a boss with 20% HP or less.", "quip": "Thrilling for everyone except your health bar.", "event": "boss_defeated", "requires": {"hp_fraction": {"<=": 0.2}}, "secret": false},
+    {"id": "middle_management", "title": "Middle Management", "description": "Reach level 5 in one run.", "quip": "More responsibility. Same number of hit points, roughly.", "event": "level_up", "requires": {"event.level": {">=": 5}}, "secret": false},
+    {"id": "basement_tenant", "title": "Basement Tenant", "description": "Reach floor 3.", "quip": "Rent is cheaper down here. So is life.", "event": "floor_started", "requires": {"event.depth": {">=": 3}}, "secret": false},
+    {"id": "subterranean_executive", "title": "Subterranean Executive", "description": "Reach floor 6.", "quip": "Corner office. No windows. Many teeth.", "event": "floor_started", "requires": {"event.depth": {">=": 6}}, "secret": false},
+    {"id": "quarterly_quota", "title": "Quarterly Quota", "description": "Kill 25 enemies in one run.", "quip": "Productivity is up. Population is down.", "event": "enemy_killed", "requires": {"run.kills": {">=": 25}}, "secret": false},
+    {"id": "untouched_ten", "title": "Untouched Ten", "description": "Kill 10 enemies in a row without taking damage.", "quip": "Monsters are now advised to travel in larger groups.", "event": "enemy_killed", "requires": {"run.streak": {">=": 10}}, "secret": false},
+    {"id": "door_enthusiast", "title": "Door Enthusiast", "description": "Walk through 25 doors in one run.", "quip": "The doors have filed a complaint.", "event": "room_entered", "requires": {"run.doors": {">=": 25}}, "secret": false},
+    {"id": "rodent_review", "title": "Rodent Review", "description": "Die on floor 1 to a rat.", "quip": "The rat will be telling this story for weeks.", "event": "run_ended", "requires": {"event.outcome": {"==": "defeated"}, "depth": {"==": 1}, "run.cause": {"contains": "rat"}}, "secret": true},
+    {"id": "structural_feedback", "title": "Structural Feedback", "description": "Get caught in a floor collapse.", "quip": "Your notes on the building have been forwarded.", "event": "run_ended", "requires": {"event.outcome": {"==": "collapsed"}}, "secret": false},
+    {"id": "career_exterminator", "title": "Career Exterminator", "description": "Kill 100 enemies across all runs.", "quip": "Long-service award. No pension.", "event": "enemy_killed", "requires": {"life.kills": {">=": 100}}, "secret": false},
+    {"id": "loyalty_program", "title": "Loyalty Program", "description": "Finish 5 runs.", "quip": "Your loyalty card is full. It is redeemable for nothing.", "event": "run_ended", "requires": {"life.runs": {">=": 5}}, "secret": false}
+  ]
+}

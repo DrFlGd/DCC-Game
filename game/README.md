@@ -15,7 +15,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 
 | Input (keyboard / mouse) | Gamepad default | Input Map action | Effect |
 | --- | --- | --- | --- |
-| WASD or arrow keys | Left stick or D-pad | `move_up/down/left/right` | Move |
+| WASD or arrow keys | Left stick | `move_up/down/left/right` | Move (the D-pad is the consumable belt since Wave 2B) |
 | Mouse | — (right stick reserved as `aim_*`) | — | Aim freely in any direction |
 | Hold left mouse button | Hold RT | `fire` | Shoot projectiles |
 | Hold Space | Hold RB | `melee` | Melee attack in aim direction |
@@ -29,11 +29,14 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | R | — | `restart_seed` | Restart using same seed (during a run or on the run summary) |
 | N | — | `new_seed` | Restart using a new seed (during a run or on the run summary) |
 | L | L3 (left stick press) | `toggle_log` | Show / hide the system log (see [The System](#the-system)) |
-| E | A | `interact` | Use the feature in reach when the HUD shows a prompt: open a chest, pray at a shrine, rest at the guild hall, read the shop sign |
+| E | A | `interact` | Use the feature in reach when the HUD shows a prompt: open a chest, pray at a shrine, rest at the guild hall, browse the shop, pick up a weapon / active item / loot box, swap a belt slot |
+| Q | LB | `use_item` | Use the active item (when charged) |
+| C | D-pad down | `use_consumable` | Use the selected consumable belt slot |
+| V | D-pad right | `next_consumable` | Select the next belt slot |
 | M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc also closes it) |
 | 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc walks away without using it |
 
-Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). Reserved actions with default bindings for Wave 2 features: `use_item` (Q / LB), `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Aiming is still mouse-only.
+Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). `use_item`, `use_consumable` and `next_consumable` are live (Wave 2B). Reserved actions with default bindings: `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Free gamepad inputs: X, LT, R3, D-pad up / left. `tests/inventory_test.gd` fails if two gameplay actions share a key or button. Aiming is still mouse-only.
 
 **Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms spend a **threat budget that grows with depth** (2–4 enemies on floors 1–2, up to 6 by floor 5); every enemy attack has a visible **wind-up telegraph** you can dodge, and enemies wait 0.6 s when you enter. Boss rooms hold the depth's boss (Armored Brute on floors 1–2, Sump Warden from floor 3) plus an escort; bosses change phase at HP thresholds and show an HP bar at the top. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
@@ -41,7 +44,7 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 
 - Seeded 2D procedural room graph with branches and adjacency-created loops, plus start/boss/guild-hall/exit tags and side-room **treasure, elite, trap and shrine** rooms; infeasible layouts are re-rolled deterministically.
 - **Collapse clock v1:** never-refused doors, a zero-clock grace period with escalating debris, stabilising by regaining ticks, and a hard collapse when the grace runs out.
-- **Interactions** (E): treasure chests, shrines, the guild-hall rest station and shop sign; spike and tick-drain pressure plates in trap rooms.
+- **Interactions** (E): treasure chests, shrines, the guild-hall rest station and shop; spike and tick-drain pressure plates in trap rooms.
 - **Floor map** (M): visited and scouted rooms by kind, door costs from the current room.
 - Room transitions via matching cardinal doors, room discovery, and an exit locked until the boss is defeated.
 - Editable collapse rules for first entry, revisits, boss rooms, guild halls, and exit, with an entry ledger printed to Godot's **Output** panel.
@@ -57,6 +60,19 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 - **Data-driven enemy roster** (9 archetypes across 7 roles, 2 elite modifiers, 2 phased bosses), depth-scaled threat budgets, telegraphed attacks, hazards and summons, and a six-ability d20-inspired XP/level system.
 - **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
 - **Esc pause menu and character-stat page** with HP, AC, level, XP, proficiency, six scores/modifiers, and derived melee/ranged attack bonuses.
+
+## Items and loot
+
+Wave 2B wires the content layer (`data/content/*.json`, Wave 1B) into play. Design: [CONTENT_RULES.md §10](../docs/design/CONTENT_RULES.md) and [COMBAT_AND_RPG.md §5, §7, §12](../docs/design/COMBAT_AND_RPG.md#12-d-09--inventory-and-resources).
+
+- **Loadout.** You hold 1 melee weapon, 1 ranged weapon, 1 active item, any number of passives (stacked up to `stack_max`) and a 6-slot consumable belt. A run starts with the crowbar and the nail pistol (`run.starting_loadout`), which reproduce the prototype attacks exactly. The HUD's loadout panel (bottom right) shows weapons, the active item's recharge, the belt with the selected slot, credits and your statuses. **Esc → Inventory** lists everything with descriptions.
+- **Weapons.** Each weapon's `attack_pattern` decides the attack: melee `arc`, `thrust` (a lane, nearest first, through `pierce`) or `spin`; ranged `single`, `spread`, `burst` or `beam` (hitscan). Damage, cooldown, reach, knockback and pierce come from the weapon record, plus passives and statuses (`Loadout.attack_profile`).
+- **Pickups.** Loot lies on the floor as a rarity-coloured diamond; standing on it shows its card as a tooltip. Passives and consumables are picked up on contact. Weapons, active items and loot boxes need **E**; the replaced weapon or active drops where you stand. With a full belt, **E** swaps the selected slot for the new consumable. A **NEW ITEM** card slides in at the right for every pickup.
+- **Where loot comes from.** A `floor_start` package at the start of every floor; `room_normal_clear` when a normal, elite or trap room is cleared (80 % on floors 1–2, 90 % on 3–4, always from 5); chests drop their roll as pickups around the chest; a boss leaves a **loot box** (one more roll at CHA modifier +3 or higher). Loot rolls use their own seeded RNG (seed, depth, room, salt), never `RunState.rng`, so loot never changes the combat dice.
+- **Credits** come from kills (a tenth of the XP, at least 1) and room clears (normal 4, elite 10, trap 4, boss 20). The guild-hall **shop** (E) offers 3 items from `guild_hall_shop`. Prices rise with rarity, and each positive CHA modifier takes 10 % off, up to half. Bought items are marked sold out.
+- **Statuses** (`burning`, `poisoned`, `bleeding`, `slowed`, `stunned`, `shielded`, `hasted`, `evasive`, `concealed`) work on you and on enemies. They are shown as coloured pips above HP bars. Enemy attacks and hazards can apply them (spore puddles poison, firebombs burn). Bosses ignore stun and root, and slows last half as long on them.
+- **Triggers.** Item effects fire on `on_hit`, `on_kill`, `on_damage_taken`, `on_room_enter`, `on_room_clear`, `on_level_up`, `on_dodge`, `on_use` and `periodic`. A clock-touching item (`grant_ticks`) also stabilises the collapse grace like any other tick gain.
+- **For other systems.** `Loadout.current(slot, weapon_id)` returns the equipped entries for `EffectResolver.collect_modifiers()`. `StatusSystem.apply(target, effect, source)` applies a status to `"player"` or an enemy dictionary. `EffectRunner.fire(combat, trigger, extra)` fires a trigger. `Pickups.spawn(room_id, id, pos)` drops an item.
 
 ## Feel
 
@@ -132,6 +148,10 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 - `hazards.spike_plate` / `drain_plate` / `trap_plates`: pressure-plate hazards in trap rooms (spikes: 3 damage after 0.5 s, rearm 2 s; drain: −1 tick after 0.6 s if you are still on it, one-shot; 2–4 plates per room, 1–2 of them drains).
 - `room_obstacle_caps`: obstacle cap per kind (13 for start, guild hall, exit, treasure and shrine; 20 trap; 30 elite; boss and normal use `obstacle_count`).
 - `interaction.radius` (26 px), `shrine_ticks` (+2), `shrine_heal_ratio` (0.5 of max HP).
+- `run.starting_loadout` (`["wpn_crowbar", "wpn_nail_pistol"]`): content ids granted at run start.
+- `items`: `consumable_slots` 6, `pickup_radius` 10 px (contact pickups), `hover_radius` 14 px (tooltip and E), `drop_spread` 18 px, `floor_start_every_floor`, `room_clear_kinds`, `room_clear_chance_by_depth` (a gate before the loot table's own `empty_chance`), `nearby_enemy_radius` 64 px (the `nearby_enemies` condition).
+- `credits`: `start` 0, `per_kill_xp_ratio` 0.1, `min_per_kill` 1, `room_clear` by kind.
+- `shop`: `offers` 3, `rarity_price_multipliers`, `cha_discount_per_mod` 0.1, `max_discount` 0.5, `min_price` 1.
 - `feel.stamina` (`max` 100, `regen_per_second` 30, `regen_delay` 0.6, `wis_regen_per_mod` 0.1).
 - `feel.dodge` (`cost` 35, `distance` 48, `duration` 0.25, `iframes` 0.2, `recovery` 0.1, `cooldown` 0, the input `buffer` 0.12).
 - `feel.attack_timing` (melee active / recovery 0.1 / 0.18 s, ranged recovery 0.28 s) and `feel.attack_move_multipliers` (arc 0.6, thrust 0.4, spin 0.5, ranged 0.85).
@@ -189,6 +209,8 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `announcer_test.gd` | Announcer data validator, placeholders, seeded selection, cooldowns, once-per-run, preemption, rate limit, modal suppression; live toasts, log, achievements page and telemetry in `Main.tscn` |
 | `collapse_test.gd` | Collapse clock v1: never-refused doors, grace lifecycle (10 s, stabilise, 5 s, third zero), debris waves vs the wave table, exit during grace, modal freeze, hazards module, `budget_for` (26 for 424242; 30/36/40/46/50 for depths 2–6), route sweep, feasibility re-roll |
 | `rooms_test.gd` | Special-room placement over 20 seeds × 6 depths, interiors and obstacle caps, chest / shrine / guild rest / trap plates on the live game, the interaction registry, the floor map overlay |
+| `inventory_test.gd` | Wave 2B: starting loadout, weapon / active swaps and drops, active recharge by seconds / rooms / floors, the belt, passive stacking and stats, scripted pickups, chest and boss loot box, credits, the shop, `grant_ticks` stabilising the grace, loot determinism, Input Map collisions |
+| `items_combat_test.gd` | Wave 2B: starter weapons equal the prototype numbers, spread / burst / beam / pierce, melee arc / thrust / spin geometry, `on_hit` and DoT, shields and player statuses, the decoy, boss immunity, `on_kill` / `on_damage_taken`, hazard statuses, a render pass |
 | `combat_feel_test.gd` | Wave 2D: dodge distance, timing and i-frames, stamina cost/delay/regen and the two-chain rule, dodge refusals, knockback (resist, walls, interrupts, boss cap, crawler), hit-stop freeze and budget, damage numbers and the setting, movement penalties, door lock timing/kinds/grace/clear, locked-door dodge, 15 s failsafe |
 | `achievements_test.gd` | Achievements on scripted event sequences (never twice), profile save/load and corrupt-file recovery, telemetry report keys and 50-file retention |
 
@@ -225,6 +247,13 @@ game/
 │   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage() + feedback/knockback
 │   ├── fx.gd                   # hit feedback state: hit-stop, shake, flashes, numbers, death bursts (pure)
 │   ├── door_lock.gd            # D-07 door lock, unreachable-enemy failsafe, room-clear moment
+│   ├── inventory.gd            # RunState.inventory: slots, belt, credits, active recharge (static)
+│   ├── loadout.gd              # Loadout.current(): owned content -> ContentDB.loadout, attack profiles
+│   ├── status_system.gd        # statuses on the crawler and enemies: apply, tick, flags, absorb
+│   ├── effect_runner.gd        # fires content triggers and executes their effects
+│   ├── pickups.gd              # floor pickups per room (room_states[id].pickups)
+│   ├── item_system.gd          # node: pickups, loot sources, active / consumables, shop, credits
+│   ├── ui/item_card.gd         # NEW ITEM reward card
 │   ├── room_renderer.gd        # immediate-mode drawing of the room, doors (tick previews), actors
 │   ├── ui/hud.gd               # status lines (FLOOR d/target), clock / grace countdown, prompt, minimap
 │   ├── ui/floor_map.gd         # full floor map overlay (M); build_model() is pure
@@ -252,13 +281,13 @@ game/
     └── *_test.gd               # see "Run tests"
 ```
 
-**Data flow.** `RunState` is the single source of truth (seed, depth, floor, current room, ticks, XP/level, scores, HP/AC, visited rooms, persisted `room_states`, tick ledger, reserved `inventory`/`skills`, `telemetry`, parsed `config`). Systems change it through its methods (`start_run`, `reset_for_floor(depth, budget)`, `floor_stats`, `close_floor`, `intermission_heal`, `award_xp`, `apply_damage_to_player`, `heal_player`, `apply_stat_allocation`, `apply_tick_entry`, `add_ticks`, `end_run`, `summary`), and everything that happens is announced on `Events` (`room_entered`, `ticks_changed`, `enemy_damaged`, `enemy_killed`, `player_damaged`, `level_up`, `run_ended`, `message`, ...). `Game` reacts to `enemy_killed` (XP, boss gate), `level_up` (modal) and `player_died` (defeat), and emits `floor_cleared`, `game_state_changed` and `settings_changed`; `RunState` counts telemetry from the bus; `Hud` shows the newest `message`. All damage flows through `Combat.apply_damage(target, amount, context)`, and all combat dice use `RunState.rng`, so the same seed and inputs replay identically.
+**Data flow.** `RunState` is the single source of truth (seed, depth, floor, current room, ticks, XP/level, scores, HP/AC, visited rooms, persisted `room_states`, tick ledger, `inventory` (Wave 2B), `statuses`, reserved `skills`, `telemetry`, parsed `config`). Systems change it through its methods (`start_run`, `reset_for_floor(depth, budget)`, `floor_stats`, `close_floor`, `intermission_heal`, `award_xp`, `apply_damage_to_player`, `heal_player`, `apply_stat_allocation`, `apply_tick_entry`, `add_ticks`, `end_run`, `summary`), and everything that happens is announced on `Events` (`room_entered`, `ticks_changed`, `enemy_damaged`, `enemy_killed`, `player_damaged`, `level_up`, `run_ended`, `message`, ...). `Game` reacts to `enemy_killed` (XP, boss gate), `level_up` (modal) and `player_died` (defeat), and emits `floor_cleared`, `game_state_changed` and `settings_changed`; `RunState` counts telemetry from the bus; `Hud` shows the newest `message`. All damage flows through `Combat.apply_damage(target, amount, context)`, and all combat dice use `RunState.rng`, so the same seed and inputs replay identically.
 
 **Adding a feature** usually means: add state to `RunState` (or use the reserved `inventory`/`skills`), add or reuse a signal in `events.gd`, and subscribe from your own node rather than editing `game.gd`. Room drawing is still immediate mode; a `TileMapLayer` plus sprite nodes is the candidate follow-up when animation work starts.
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no inventory/loot, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Chest loot is rolled and announced but not yet added to an inventory, and the guild-hall shop is a placeholder sign. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

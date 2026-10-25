@@ -321,9 +321,9 @@ Effects that touch the collapse clock (`grant_ticks`) are deliberately small (1โ
 Wave 2B wired the content layer into play (weapons, items, statuses, triggers, loot, shop; see the module table at the top and [`game/README.md`](../../game/README.md#items-and-loot)). Still missing:
 
 - **Skills in play.** `skills.json` is validated, and `Loadout.current()` already reads `RunState.skills` (`"skl_id"` or `{"id", "rank"}`), but nothing grants skill points or ranks yet (Wave 2F). The `skills` and `dodge` keys of `cooldown_reduction` have no consumer.
-- **`on_dodge`** is declared but never fires: there is no dodge action yet (combat-feel PR). `itm_knockoff_sneakers`' haste-on-dodge is inert until then.
+- **`on_dodge`** fires from `Combat.on_player_dodged()` (2D's dodge roll, merged). The roll also applies `evasive` for its i-frame window.
 - **Melee timing:** swings still resolve instantly (no wind-up / active / recovery frames, no per-swing LOS); the proposed `windup`/`active`/`recovery` weapon fields are not in the schema yet.
-- **Knockback** is computed (weapon `knockback` plus modifiers) and carried in the damage context (`knockback`, `knockback_direction`) but not applied; `Enemies.apply_knockback()` is ready for the combat-feel PR.
+- **Knockback** is computed from the weapon's `knockback` plus modifiers. Melee knockback gets +5 % per positive STR modifier. It travels in the damage context (`knockback`, `direction`), and 2D's finalise step applies it. The crowbar's 20 px equals 2D's default melee shove.
 - **Unused stats:** `crit_threshold` (crits stay on a natural 20), `dodge_cooldown` and `xp_mult` have no consumers. `damage_taken_mult`, `heal_mult`, `pickup_radius`, `move_speed`, `max_hp`, `ac`, the damage/attack bonuses, both cooldowns, the melee shape stats and every projectile stat are live.
 - **Statuses:** `vulnerable`, `weakened`, `marked` and `rooted` (COMBAT_AND_RPG ยง7 proposals) are not in `effects.json`; boss immunity to `rooted` is coded for when they are. Status *icons* are coloured pips (renderer, HUD text), not art.
 - **Decoy:** `concealed` places an inflatable decoy where the item was used; enemies path to it and their strikes land on it. Enemy projectiles already in flight can still hit you.

@@ -1,12 +1,26 @@
 # Collapse System — clock v1
 
-- **Status:** Proposed. The v0 per-room-type policy and door preview are **implemented** ([`collapse_policy.gd`](../../game/scripts/collapse_policy.gd), [`prototype_rules.json`](../../game/data/prototype_rules.json)). The v1 rules below are the target for Wave 2E.
+- **Status:** Implemented with deviations (Wave 2A budget, Wave 2E clock v1). See [Implementation status](#implementation-status-wave-2e) for what differs. Code: [`collapse_policy.gd`](../../game/scripts/collapse_policy.gd), [`collapse_clock.gd`](../../game/scripts/collapse_clock.gd), [`hazards.gd`](../../game/scripts/hazards.gd), [`run_rules.gd`](../../game/scripts/core/run_rules.gd), [`prototype_rules.json`](../../game/data/prototype_rules.json).
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 1B, backlog task 2 ("specify collapse clock v0")
 - **Decisions covered:** D-03 (charge rule), D-04 (unit and budget), D-05 (zero-clock outcome)
 - **Related:** [Game design](GAME_DESIGN.md) · [Procedural generation](PROCEDURAL_GENERATION.md) · [Encounter rules](ENCOUNTER_RULES.md) · [ADR-001 tunability constraint](../decisions/ADR-001-engine-and-platform.md)
 
 The collapse clock is the signature mechanic. It should tempt the player to explore *one more room* without ever punishing them for something they could not see. None of these values are claims about the books. They are tunable game defaults.
+
+## Implementation status (Wave 2E)
+
+Implemented as specified unless listed here.
+
+- **D-03 never refuse:** `CollapsePolicy.evaluate` always returns `allowed = true` and clamps at 0. New entry fields: `charged` (ticks actually removed), `reaches_zero`, `source` (`transition`) and `modifiers` (`[]`). `collapses` is kept for old callers and is always `false`. `RunState.add_ticks` also appends a ledger entry (`source` = the reason string).
+- **D-04 budget:** computed once, in `run_rules.gd` (Wave 2A). `CollapsePolicy.budget_for(floor, room_count, policy)`, `mandatory_route_cost` and `slack_for` delegate to it, and `mandatory_budget_floor` (the old diagnostic) now returns the route cost without the `+1`. `CollapsePolicy.mandatory_route` also returns the route's rooms, which the generator uses for §9.3. **Deviation:** the guild hall is kept off the cheapest route as well (§9.4). A free guild on an equal-length detour would otherwise make the route 2 ticks cheaper for about 30 % of seeds. With that rule the route is always `2 × spine`, so the §4 table holds exactly (26/30/36/40/46/50).
+- **D-05 grace:** as in §6. `CollapseClock` (a Game child) listens to `Events.ticks_changed`, so door entries and `add_ticks` (hazards, items, shrine) both trigger it. A zero reached on a door entry is resolved after the room swap. The exit is excluded, so it resolves first: arriving with the last tick, or during grace, clears the floor. The first debris wave lands at grace start. The timer and the hazards only advance while Game is `RUNNING`. **Extras:** debris also damages enemies (open question 5's default). There is a screen shake per wave, scaled by the screen-shake setting, and a red edge vignette. The rumble audio is not implemented yet (no audio).
+- **Signals:** `grace_started(seconds)`, `grace_ended(stabilised)` (true when ticks are regained; false on collapse, exit or death; `RunState.grace.outcome` says which) and `hazard_spawned(data)`.
+- **Room kinds:** `treasure`, `elite` (+1 `clear_grant`), `trap` and `shrine` are in `collapse.room_types`, with `default.clear_refund` 0. **Deviation (shrine):** the shrine offers a one-time choice, *stabilise* (+2 ticks) or *mend* (heal 50 % of max HP), instead of the HP → ticks trade in §7.
+- **In-room drains:** drain plates in trap rooms show `−1` and take 1 tick after a 0.6 s telegraph, but only if the crawler is still on the plate. They are one-shot.
+- **HUD:** the tick counter turns amber at ≤ 6 and red at ≤ 3, and is replaced by a red countdown with a bar during grace. A door label gets a red `!` when it would leave the clock at 0. During grace, door labels show the real change (grants only).
+- **Not yet implemented:** the per-floor grant cap (`max_granted_ratio`), the guild "shore up" service, the `tick_cost_modifier` and `grace_bonus_seconds` effect operations, and the D-07 door lock (Wave 2D; `CollapseClock.doors_unlocked()` and `RunState.grace_active()` are the hooks). For §12 telemetry, `floor_stats()` records `grace_triggered`, `grace_outcome` and `grace_time_used`; the other keys belong to 2G.
+- **Map (§8):** the full map shows the cost of the doors of the current room, not of every scouted room.
 
 ## 1. Principles
 
@@ -16,20 +30,22 @@ The collapse clock is the signature mechanic. It should tempt the player to expl
 4. **Running out is dramatic, not instant.** A short grace period turns a mistake into a last dash ([§6](#6-zero-clock-outcome--d-05)).
 5. **Everything is data.** Costs, grants, slack ratios and grace timings live in JSON. Behaviour lives in `collapse_policy.gd` and its successors.
 
-## 2. Current prototype behaviour
+## 2. Prototype behaviour (v0, superseded)
+
+This section records the single-floor prototype before v1. Both edge cases below are fixed: Wave 2A resolves the exit before collapse, and Wave 2E stops refusing transitions and adds grace.
 
 - **Unit:** integer ticks. The clock only changes on room transitions; it never drains in real time. Pause and level-up overlays do not affect it.
 - **Start:** `start_ticks` = 26 for a 22-room floor.
 - **Charge:** `evaluate(before, kind, first_visit, room_id)` charges `first_entry_cost` on the first visit or `revisit_cost` on later visits, and adds `first_entry_grant` on the first visit only. The result is clamped at ≥ 0. Each call returns a ledger entry with `before`, `cost`, `grant`, `after`, `allowed`, `collapses` and `reason`, which is printed as `COLLAPSE LEDGER`.
-- **Refusal:** `allowed` is false when `before < cost`. The transition is refused with the message *"Not enough collapse ticks for that doorway."*
+- **Refusal (v0 only):** `allowed` was false when `before < cost`, and the transition was refused with the message *"Not enough collapse ticks for that doorway."*
 - **Zero:** `collapses` is true when a paid transition leaves `after == 0`. The run ends at once with `collapsed`.
 - **Door preview:** every linked door is labelled with the net change `grant − cost` (for example `E-2`, `S+3`). Guild-hall, boss and exit doors are tinted. The exit is tinted red until the boss dies.
 - **Diagnostic:** `mandatory_budget_floor()` sums the first-entry net costs along the BFS routes start → boss → exit, plus 1. It is printed at run start and asserted to be > 0 in the smoke test. It is not enforced.
 
 **Two prototype edge cases v1 removes:**
 
-- *Exit collapse:* entering the exit with exactly its cost (1 tick) leaves `after == 0`. Because `collapses` is tested before the exit, the run is reported as **collapsed, not escaped**. The diagnostic's `+1` exists to cover this.
-- *Soft-lock:* when every unvisited door costs more than the remaining ticks, transitions are refused but no fail state fires. Revisits are free, so the crawler can wander visited rooms forever. Only **R** or **N** ends the run.
+- *Exit collapse (fixed in Wave 2A):* in v0, entering the exit with exactly its cost (1 tick) left `after == 0`. Because `collapses` was tested before the exit, the run was reported as **collapsed, not escaped**. The diagnostic's `+1` existed to cover this. Now the exit resolves first, a last-tick exit clears the floor, and the `+1` is gone.
+- *Soft-lock (fixed in Wave 2E):* in v0, when every unvisited door cost more than the remaining ticks, transitions were refused but no fail state fired. Revisits were free, so the crawler could wander visited rooms forever, and only **R** or **N** ended the run.
 
 ## 3. Tick unit and triggers — D-03
 

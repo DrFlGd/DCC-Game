@@ -127,10 +127,11 @@ Avoid prematurely building an abstract "universal engine"; these are modular res
 ## Implementation record — 2026-10-10
 
 - Godot project: [`game/project.godot`](../../game/project.godot)
-- Scene and gameplay: [`game/scenes/Main.tscn`](../../game/scenes/Main.tscn), [`game/scripts/main.gd`](../../game/scripts/main.gd)
+- Scene and gameplay: [`game/scenes/Main.tscn`](../../game/scenes/Main.tscn), [`game/scripts/game.gd`](../../game/scripts/game.gd) (orchestrator and state machine). The original monolithic `main.gd` was split by the Wave 1A refactor (2026-10-25) into `game.gd`, [`player.gd`](../../game/scripts/player.gd), [`combat.gd`](../../game/scripts/combat.gd), [`room_renderer.gd`](../../game/scripts/room_renderer.gd) and [`ui/hud.gd`](../../game/scripts/ui/hud.gd).
+- Core autoloads: [`core/run_state.gd`](../../game/scripts/core/run_state.gd) (`RunState`, all run data) and [`core/events.gd`](../../game/scripts/core/events.gd) (`Events`, signal bus)
 - Deterministic room generator: [`game/scripts/floor_generator.gd`](../../game/scripts/floor_generator.gd)
 - Data-driven clock policy: [`game/scripts/collapse_policy.gd`](../../game/scripts/collapse_policy.gd), [`game/data/prototype_rules.json`](../../game/data/prototype_rules.json)
-- Smoke tests: [`game/tests/smoke_test.gd`](../../game/tests/smoke_test.gd)
+- Smoke tests: [`game/tests/smoke_test.gd`](../../game/tests/smoke_test.gd); every headless check runs through [`game/tests/run_all.sh`](../../game/tests/run_all.sh), which CI calls
 - CI: [`.github/workflows/godot-ci.yml`](../../.github/workflows/godot-ci.yml)
 
 **Verification:** File creation and repository read-back succeeded. Godot runtime execution and graphics/input playtest were **not performed in this workspace** because Godot is not installed and the runtime could not be fetched. GitHub Actions is configured to run a headless import, smoke tests, and a brief scene launch after relevant pushes, but its execution result has not been independently confirmed. Do not mark the prototype spike as fully validated until those pass and the controls/room transitions are tested in the editor.

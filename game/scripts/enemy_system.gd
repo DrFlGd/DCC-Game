@@ -7,8 +7,10 @@ static func load_catalogue() -> Dictionary:
     var config = JSON.parse_string(FileAccess.get_file_as_string("res://data/enemies.json"))
     return config if config is Dictionary else {}
 
+## `depth` (1-based floor) is passed by Game for depth-scaled encounters (2C);
+## it is unused here so far.
 static func generate_encounter(catalogue: Dictionary, kind: String, seed_value: int,
-        room_id: int, blocked: Dictionary) -> Array[Dictionary]:
+        room_id: int, blocked: Dictionary, _depth: int = 1) -> Array[Dictionary]:
     var results: Array[Dictionary] = []
     var rng := RandomNumberGenerator.new()
     rng.seed = int(seed_value) * 73 + int(room_id) * 10211 + 41

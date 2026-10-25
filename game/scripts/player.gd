@@ -121,12 +121,19 @@ func tick_timers(delta: float) -> void:
     melee_cooldown = maxf(0.0, melee_cooldown - delta)
     melee_flash = maxf(0.0, melee_flash - delta)
     invulnerability = maxf(0.0, invulnerability - delta)
-    dodge_iframes = maxf(0.0, dodge_iframes - delta)
+    dodge_iframes = count_down(dodge_iframes, delta)
     if dodge_time <= 0.0:
-        dodge_recovery = maxf(0.0, dodge_recovery - delta)
-    dodge_cooldown = maxf(0.0, dodge_cooldown - delta)
-    dodge_buffer = maxf(0.0, dodge_buffer - delta)
+        dodge_recovery = count_down(dodge_recovery, delta)
+    dodge_cooldown = count_down(dodge_cooldown, delta)
+    dodge_buffer = count_down(dodge_buffer, delta)
     _tick_attack(delta)
+
+
+## `value - delta`, clamped at 0 and snapped to 0 within a microsecond so
+## frame-sized steps end timers on the expected frame.
+static func count_down(value: float, delta: float) -> float:
+    var left: float = value - delta
+    return 0.0 if left <= 0.000001 else left
 
 
 ## Wind-up, then active, then recovery; leftover time carries into the next phase.
@@ -230,7 +237,7 @@ func start_dash(direction: Vector2, distance: float, duration: float, iframes: f
 func step_dash(delta: float) -> Vector2:
     if dodge_time <= 0.0:
         return Vector2.ZERO
-    dodge_time = maxf(0.0, dodge_time - delta)
+    dodge_time = count_down(dodge_time, delta)
     var t: float = 1.0 - dodge_time / dodge_length
     var progress: float = 1.0 - (1.0 - t) * (1.0 - t)
     var change: Vector2 = dodge_direction * dodge_distance * (progress - dodge_progress)

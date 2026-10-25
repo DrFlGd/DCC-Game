@@ -7,6 +7,11 @@ config/name="DCC Game — Technical Prototype"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
+[autoload]
+
+Events="*res://scripts/core/events.gd"
+RunState="*res://scripts/core/run_state.gd"
+
 [display]
 window/size/viewport_width=960
 window/size/viewport_height=540

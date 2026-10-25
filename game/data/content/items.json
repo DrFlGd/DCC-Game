@@ -1,0 +1,474 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "itm_time_pouch",
+      "name": "Borrowed Time Pouch",
+      "kind": "active",
+      "rarity": "rare",
+      "min_depth": 2,
+      "effects": [
+        "fx_grant_ticks_2"
+      ],
+      "cooldown": 3,
+      "cooldown_unit": "rooms_cleared",
+      "charges": 1,
+      "stack_max": 1,
+      "tags": [
+        "collapse",
+        "utility"
+      ],
+      "sprite": "res://assets/items/time_pouch/sprite.png",
+      "description": "A velvet pouch containing two seconds of someone else's afternoon. The System insists they will not miss it.",
+      "adaptation_type": "original",
+      "synergy_notes": "Clock-runner build. Recharges on room clears, never on wall-clock time, so waiting in a room cannot farm ticks.",
+      "value": 80,
+      "balance_flags": [
+        "collapse_clock"
+      ]
+    },
+    {
+      "id": "itm_floor_stomp",
+      "name": "Floor-Stomp Subwoofer",
+      "kind": "active",
+      "rarity": "uncommon",
+      "min_depth": 1,
+      "effects": [
+        "fx_shockwave_damage",
+        "fx_shockwave_slow"
+      ],
+      "cooldown": 12,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 1,
+      "tags": [
+        "area",
+        "control"
+      ],
+      "sprite": "res://assets/items/floor_stomp/sprite.png",
+      "description": "A speaker cabinet with the bass turned past where the dial was supposed to stop. The floor tiles disapprove.",
+      "adaptation_type": "original",
+      "synergy_notes": "Panic button for melee builds: damage plus slow around you. Clumps enemies for cleave weapons.",
+      "value": 50
+    },
+    {
+      "id": "itm_fan_club_decoy",
+      "name": "Inflatable Fan Club",
+      "kind": "active",
+      "rarity": "uncommon",
+      "min_depth": 1,
+      "effects": [
+        "fx_decoy_conceal"
+      ],
+      "cooldown": 18,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 1,
+      "tags": [
+        "stealth",
+        "utility"
+      ],
+      "sprite": "res://assets/items/fan_club_decoy/sprite.png",
+      "description": "A life-sized inflatable cut-out of you, holding a sign that says 'Hit me instead'. Monsters are, mercifully, illiterate.",
+      "adaptation_type": "original",
+      "synergy_notes": "Ranged/kiter safety valve: break line of aggro, reposition, keep shooting.",
+      "value": 45
+    },
+    {
+      "id": "itm_safety_button",
+      "name": "Customer Safety Button",
+      "kind": "active",
+      "rarity": "common",
+      "min_depth": 1,
+      "effects": [
+        "fx_emergency_shield"
+      ],
+      "cooldown": 20,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 1,
+      "tags": [
+        "defense"
+      ],
+      "sprite": "res://assets/items/safety_button/sprite.png",
+      "description": "Pressing it summons a shimmering barrier and a recorded voice saying 'Your safety is very important to us'.",
+      "adaptation_type": "original",
+      "synergy_notes": "Generic defensive active usable by every build.",
+      "value": 30
+    },
+    {
+      "id": "itm_hazard_vest",
+      "name": "Hi-Vis Hazard Vest",
+      "kind": "passive",
+      "rarity": "common",
+      "min_depth": 1,
+      "effects": [
+        "fx_ac_plus_1",
+        "fx_max_hp_plus_4"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 2,
+      "tags": [
+        "defense",
+        "armor"
+      ],
+      "sprite": "res://assets/items/hazard_vest/sprite.png",
+      "description": "Highly visible. Monsters can see you coming from three rooms away. On the other hand, so can the medics. There are no medics.",
+      "adaptation_type": "original",
+      "synergy_notes": "Juggernaut staple. Stacks with Iron Gut for a tanky STR build.",
+      "value": 25
+    },
+    {
+      "id": "itm_knockoff_sneakers",
+      "name": "Knockoff Running Shoes",
+      "kind": "passive",
+      "rarity": "uncommon",
+      "min_depth": 1,
+      "effects": [
+        "fx_move_speed_x112",
+        "fx_dodge_haste"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "mobility"
+      ],
+      "sprite": "res://assets/items/knockoff_sneakers/sprite.png",
+      "description": "The logo is a swoosh going the wrong way. The soles are cardboard. You have never run faster in your life.",
+      "adaptation_type": "original",
+      "synergy_notes": "Kiter and bleeder mobility. Dodging grants haste; pairs with Sidestep Protocol.",
+      "value": 40
+    },
+    {
+      "id": "itm_serrated_lanyard",
+      "name": "Serrated Lanyard",
+      "kind": "passive",
+      "rarity": "uncommon",
+      "min_depth": 1,
+      "effects": [
+        "fx_melee_bleed_on_hit_30"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "bleed",
+        "melee"
+      ],
+      "sprite": "res://assets/items/serrated_lanyard/sprite.png",
+      "description": "Your sponsor badge now hangs from a strip of razor wire. Networking has never been so cutting-edge.",
+      "adaptation_type": "original",
+      "synergy_notes": "Bleed build: melee hits stack bleeding, which turns on Open Wounds' bonus damage.",
+      "value": 42
+    },
+    {
+      "id": "itm_lighter_bandolier",
+      "name": "Lighter-Fluid Bandolier",
+      "kind": "passive",
+      "rarity": "uncommon",
+      "min_depth": 2,
+      "effects": [
+        "fx_ranged_ignite_on_hit_20"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "fire",
+        "ranged"
+      ],
+      "sprite": "res://assets/items/lighter_bandolier/sprite.png",
+      "description": "Twelve tiny bottles of accelerant strapped across your chest. Fire safety officers would like a word. They are all on fire.",
+      "adaptation_type": "original",
+      "synergy_notes": "Arsonist build: ranged hits ignite. Scattergun pellets and staples roll separately, so they ignite often.",
+      "value": 48
+    },
+    {
+      "id": "itm_ricochet_wax",
+      "name": "Ricochet Floor Wax",
+      "kind": "passive",
+      "rarity": "rare",
+      "min_depth": 2,
+      "effects": [
+        "fx_projectile_pierce_plus_1"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "projectile",
+        "ranged"
+      ],
+      "sprite": "res://assets/items/ricochet_wax/sprite.png",
+      "description": "Industrial-grade polish applied to every projectile you own. They now glide through the first thing they hit, out of sheer momentum.",
+      "adaptation_type": "original",
+      "synergy_notes": "Kiter build: +1 pierce on all projectiles. Best with the crossbow or staple rifle.",
+      "value": 70
+    },
+    {
+      "id": "itm_spite_battery",
+      "name": "Spite Battery",
+      "kind": "passive",
+      "rarity": "rare",
+      "min_depth": 2,
+      "effects": [
+        "fx_spite_discharge"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "retaliation",
+        "defense"
+      ],
+      "sprite": "res://assets/items/spite_battery/sprite.png",
+      "description": "Stores the energy of every insult you have ever endured. Getting hit tops it up. It never needs charging.",
+      "adaptation_type": "original",
+      "synergy_notes": "Juggernaut build: rewards standing in melee. Pairs with Hazard Vest and Iron Gut.",
+      "value": 72
+    },
+    {
+      "id": "itm_vampire_straw",
+      "name": "Novelty Vampire Straw",
+      "kind": "passive",
+      "rarity": "common",
+      "min_depth": 1,
+      "effects": [
+        "fx_heal_on_kill_2"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 2,
+      "tags": [
+        "sustain"
+      ],
+      "sprite": "res://assets/items/vampire_straw/sprite.png",
+      "description": "A bendy straw with fangs. You are told not to ask what it was used for previously. You ask anyway. You regret it.",
+      "adaptation_type": "original",
+      "synergy_notes": "Universal sustain; strongest with fast-killing builds (scattergun, maul).",
+      "value": 28
+    },
+    {
+      "id": "itm_last_gasp_adrenaline",
+      "name": "Last-Gasp Adrenaline",
+      "kind": "passive",
+      "rarity": "rare",
+      "min_depth": 3,
+      "effects": [
+        "fx_low_hp_melee_haste",
+        "fx_low_hp_ranged_haste"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "risk",
+        "speed"
+      ],
+      "sprite": "res://assets/items/last_gasp_adrenaline/sprite.png",
+      "description": "An auto-injector that only fires when your vital signs become 'commercially interesting'.",
+      "adaptation_type": "original",
+      "synergy_notes": "High-risk build enabler: below 35% HP all attacks are 20% faster. Dangerous with Spite Battery.",
+      "value": 65
+    },
+    {
+      "id": "itm_sponsor_stopwatch",
+      "name": "Sponsor's Stopwatch",
+      "kind": "passive",
+      "rarity": "rare",
+      "min_depth": 3,
+      "effects": [
+        "fx_room_clear_tick_chance"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "collapse",
+        "utility"
+      ],
+      "sprite": "res://assets/items/sponsor_stopwatch/sprite.png",
+      "description": "Engraved with the words 'Time is money'. It has opinions about how you spend both.",
+      "adaptation_type": "original",
+      "synergy_notes": "Clock-runner build. Flagged: watch for collapse-clock trivialisation alongside the Time Pouch.",
+      "value": 85,
+      "balance_flags": [
+        "collapse_clock"
+      ]
+    },
+    {
+      "id": "itm_golden_trophy",
+      "name": "Golden Participation Trophy",
+      "kind": "passive",
+      "rarity": "legendary",
+      "min_depth": 6,
+      "effects": [
+        "fx_damage_bonus_plus_1",
+        "fx_attack_bonus_plus_1",
+        "fx_trophy_regen",
+        "fx_room_enter_shield"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 0,
+      "stack_max": 1,
+      "tags": [
+        "achievement",
+        "all_rounder"
+      ],
+      "sprite": "res://assets/items/golden_trophy/sprite.png",
+      "description": "Awarded for showing up. The viewers voted. The vote was not close, and nobody will say which way it went.",
+      "adaptation_type": "original",
+      "synergy_notes": "Build-agnostic legendary. Strong but not mandatory: no build depends on it.",
+      "value": 400
+    },
+    {
+      "id": "itm_bandage_roll",
+      "name": "Roll of Sponsored Bandages",
+      "kind": "consumable",
+      "rarity": "common",
+      "min_depth": 1,
+      "effects": [
+        "fx_heal_6"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 5,
+      "tags": [
+        "healing"
+      ],
+      "sprite": "res://assets/items/bandage_roll/sprite.png",
+      "description": "Each bandage is printed with an advertisement. The adhesive is surprisingly good.",
+      "adaptation_type": "original",
+      "synergy_notes": "Basic heal for every build.",
+      "value": 8
+    },
+    {
+      "id": "itm_sponsored_medkit",
+      "name": "Deluxe Medkit (Sample Size)",
+      "kind": "consumable",
+      "rarity": "uncommon",
+      "min_depth": 2,
+      "effects": [
+        "fx_heal_1d6_plus_6"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 3,
+      "tags": [
+        "healing"
+      ],
+      "sprite": "res://assets/items/sponsored_medkit/sprite.png",
+      "description": "Contains gauze, antiseptic and a coupon for 10% off your next catastrophic injury.",
+      "adaptation_type": "original",
+      "synergy_notes": "Bigger heal for deeper floors.",
+      "value": 20
+    },
+    {
+      "id": "itm_sketchy_antidote",
+      "name": "Sketchy Antidote",
+      "kind": "consumable",
+      "rarity": "common",
+      "min_depth": 1,
+      "effects": [
+        "fx_cleanse_poisoned",
+        "fx_cleanse_bleeding"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 5,
+      "tags": [
+        "cleanse"
+      ],
+      "sprite": "res://assets/items/sketchy_antidote/sprite.png",
+      "description": "The label has been scratched off and replaced with a hand-drawn smiley face. It works. Mostly.",
+      "adaptation_type": "original",
+      "synergy_notes": "Counter to poison and bleed enemies.",
+      "value": 10
+    },
+    {
+      "id": "itm_speed_draught",
+      "name": "Speed Draught",
+      "kind": "consumable",
+      "rarity": "common",
+      "min_depth": 1,
+      "effects": [
+        "fx_draught_haste"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 5,
+      "tags": [
+        "mobility"
+      ],
+      "sprite": "res://assets/items/speed_draught/sprite.png",
+      "description": "Tastes like an energy drink that was left in a hot car for a decade. The side effects are mostly lateral.",
+      "adaptation_type": "original",
+      "synergy_notes": "Short haste burst; useful to cross a room before the clock ticks.",
+      "value": 12
+    },
+    {
+      "id": "itm_tick_shard",
+      "name": "Collapse Tick Shard",
+      "kind": "consumable",
+      "rarity": "uncommon",
+      "min_depth": 1,
+      "effects": [
+        "fx_grant_ticks_1"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 3,
+      "tags": [
+        "collapse"
+      ],
+      "sprite": "res://assets/items/tick_shard/sprite.png",
+      "description": "A splinter of the floor's own countdown, still faintly ticking. Swallowing it is technically allowed.",
+      "adaptation_type": "original",
+      "synergy_notes": "Clock buffer. Kept out of normal room drops so it cannot be farmed.",
+      "value": 35,
+      "balance_flags": [
+        "collapse_clock"
+      ]
+    },
+    {
+      "id": "itm_party_popper",
+      "name": "Flash-Bang Party Popper",
+      "kind": "consumable",
+      "rarity": "uncommon",
+      "min_depth": 1,
+      "effects": [
+        "fx_popper_stun"
+      ],
+      "cooldown": 0,
+      "cooldown_unit": "seconds",
+      "charges": 1,
+      "stack_max": 3,
+      "tags": [
+        "control",
+        "area"
+      ],
+      "sprite": "res://assets/items/party_popper/sprite.png",
+      "description": "Congratulations! You have been selected for a surprise celebration. So has everything within arm's reach.",
+      "adaptation_type": "original",
+      "synergy_notes": "Emergency crowd control for any build.",
+      "value": 22
+    }
+  ]
+}

@@ -67,6 +67,7 @@ func _run() -> void:
     _test_shop()
     _test_grant_ticks_grace()
     _test_loot_determinism()
+    _test_input_map()
     game.queue_free()
     if failures == 0:
         print("PASS: loadout, swaps, belt, passives, recharge units, pickups, chest, loot box, credits, shop, grace, determinism")
@@ -463,3 +464,27 @@ func _test_loot_determinism() -> void:
         gates += 1 if entry[0] else 0
     check(gates > 0 and gates < runs[0][1].size(), "the room-clear gate is a real chance (%d/%d)" %
         [gates, runs[0][1].size()])
+
+
+## The belt actions exist, and no key or gamepad button is bound to two
+## gameplay actions (ui_* built-ins excluded; axes may be shared by design).
+func _test_input_map() -> void:
+    for action in ["use_item", "use_consumable", "next_consumable", "interact"]:
+        check(InputMap.has_action(action) and not InputMap.action_get_events(action).is_empty(),
+            "input action bound: " + action)
+    var owners: Dictionary = {}
+    for action in InputMap.get_actions():
+        if String(action).begins_with("ui_"):
+            continue
+        for event in InputMap.action_get_events(action):
+            var key := ""
+            if event is InputEventKey:
+                key = "key:%d" % (event.physical_keycode if event.physical_keycode != 0 else event.keycode)
+            elif event is InputEventJoypadButton:
+                key = "pad:%d" % event.button_index
+            elif event is InputEventMouseButton:
+                key = "mouse:%d" % event.button_index
+            if key == "":
+                continue
+            check(not owners.has(key), "%s is bound to both %s and %s" % [key, owners.get(key, ""), action])
+            owners[key] = action

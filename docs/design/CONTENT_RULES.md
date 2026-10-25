@@ -1,6 +1,6 @@
 # Content rules: weapons, items, skills, effects and loot
 
-**Status:** Wave 1B content layer. Data, validators and pure rule modules exist and are tested. They are **not yet wired into gameplay**: the running prototype still uses the hard-coded shot and swing in `main.gd`. Integration happens in Wave 2B (weapons/effects in combat) and Wave 2F (items, skills, loot in the run loop).
+**Status:** Wave 1B content layer, **wired into play in Wave 2B**: weapons drive the crawler's attacks, items are carried in an inventory, statuses tick on actors, every trigger except `on_dodge` fires, and loot drops from rooms, chests, the boss loot box and the guild shop. Skills (Wave 2F) still need their PR; `Loadout.current()` already reads `RunState.skills`. Section 10 lists what is still missing.
 
 All content is plain JSON under [`game/data/content/`](../../game/data/content/). You can add or rebalance content without touching GDScript, as long as you use the fields described here. When you run the content test, every file is checked against these rules.
 
@@ -18,6 +18,18 @@ All content is plain JSON under [`game/data/content/`](../../game/data/content/)
 | [`effect_resolver.gd`](../../game/scripts/content/effect_resolver.gd) | `collect_modifiers`, `apply_stat_modifiers`, `apply_status`, `tick_statuses`, `evaluate_condition`, shields, cooldowns |
 | [`loot_rules.gd`](../../game/scripts/content/loot_rules.gd) | `roll(db, table_id, seed, depth, room_id, salt)`: deterministic drops |
 | [`content_test.gd`](../../game/tests/content_test.gd) | Validation, counts, stacking, ordering, expiry, conditions, cycles, loot determinism |
+
+**Gameplay integration (Wave 2B):**
+
+| Module | Purpose |
+| --- | --- |
+| [`inventory.gd`](../../game/scripts/inventory.gd) | `RunState.inventory`: weapon/active slots, passives, the 6-slot belt, credits, swap rules, active recharge |
+| [`loadout.gd`](../../game/scripts/loadout.gd) | `Loadout.current()`: the single place effects are gathered (inventory + `RunState.skills`); passive stats and attack profiles |
+| [`status_system.gd`](../../game/scripts/status_system.gd) | Status maps on the crawler (`RunState.statuses`) and enemies (`enemy["statuses"]`), ticking, flags, shields |
+| [`effect_runner.gd`](../../game/scripts/effect_runner.gd) | Fires a trigger and executes the operations (heal, damage, statuses, ticks, cooldown reduction) |
+| [`pickups.gd`](../../game/scripts/pickups.gd) | Floor loot persisted in `room_states[id].pickups` |
+| [`item_system.gd`](../../game/scripts/item_system.gd) | The Game child that runs all of the above each frame: loot sources, loot box, active item, consumables, shop |
+| [`inventory_test.gd`](../../game/tests/inventory_test.gd), [`items_combat_test.gd`](../../game/tests/items_combat_test.gd) | Inventory, loot, shop, attack patterns, statuses and triggers in the live game |
 
 Run the checks from the repository root:
 
@@ -177,7 +189,7 @@ Weapons only change the inputs to the existing d20 rules in [`rpg_rules.gd`](../
 | --- | --- | --- | --- |
 | `id`, `name`, `description`, `sprite`, `tags` | ✓ | ✓ | `sprite` is a placeholder path; no art is required yet |
 | `slot` | `melee` | `ranged` | |
-| `attack_pattern` | `arc`, `thrust`, `spin` | `single`, `spread`, `burst`, `beam` | `beam` is a placeholder (see section 10) |
+| `attack_pattern` | `arc`, `thrust`, `spin` | `single`, `spread`, `burst`, `beam` | All implemented (2B). `beam` = one hitscan tick along `range` per `cooldown` while held |
 | `damage_die` | ✓ | ✓ | Whole number 1..20 (normally 4/6/8/10/12) |
 | `damage_bonus` | ✓ | ✓ | -5..10, added on top of the ability modifier |
 | `ability` | ✓ | ✓ | `STR` or `DEX` |
@@ -196,7 +208,7 @@ Weapons only change the inputs to the existing d20 rules in [`rpg_rules.gd`](../
 | `adaptation_type` | ✓ | ✓ | `original` or `adapted`. `canon` requires a `source_reference` and is not used in the starter pool |
 | `synergy_notes`, `value` | optional | optional | `value` is a placeholder shop price |
 
-**Prototype baseline:** the current shot is 215 px/s, 0.28s, d6 DEX, 2s lifetime. The current swing is 32px reach, 0.5s, d6 STR, about a 127° arc. `wpn_nail_pistol` and `wpn_crowbar` reproduce these exactly, so Wave 2B can swap the hard-coded attacks for data without changing the feel. Every other weapon sits within about ×0.5–×2 of those numbers.
+**Prototype baseline:** the current shot is 215 px/s, 0.28s, d6 DEX, 2s lifetime. The current swing is 32px reach, 0.5s, d6 STR, about a 127° arc. `wpn_nail_pistol` and `wpn_crowbar` reproduce these exactly, and since Wave 2B the attacks are read from data (the only difference: 127° gives a dot threshold of 0.446 instead of the prototype's 0.45, i.e. 0.25° wider per side). Every other weapon sits within about ×0.5–×2 of those numbers.
 
 ### Starter weapons
 
@@ -306,16 +318,16 @@ Effects that touch the collapse clock (`grant_ticks`) are deliberately small (1�
 
 ## 10. Not implemented yet
 
-These are data and pure functions only. In particular:
+Wave 2B wired the content layer into play (weapons, items, statuses, triggers, loot, shop; see the module table at the top and [`game/README.md`](../../game/README.md#items-and-loot)). Still missing:
 
-- **No gameplay wiring.** `main.gd` does not read these files. Wave 2B replaces `_fire`/`_melee` with `ContentDB.attack_profile()` and runs `collect_modifiers` on hit, on kill, on damage taken and on use. Wave 2F adds the inventory, skill points, loot drops and the shop.
-- **Attack patterns:** `thrust`, `spin`, `spread` and `burst` need integration code; `beam` is only a placeholder (proposed: short hitscan ticks).
-- **Statuses on enemies and the player:** there is no status map on actors yet, and no status VFX or HUD icons.
-- **Unused stats:** `knockback`, `crit_threshold`, `dodge_cooldown`, `damage_taken_mult`, `heal_mult`, `xp_mult` and `pickup_radius` have no consumers yet.
-- **No stamina resource and no dodge action** exist yet (`stamina_cost`, `on_dodge`).
-- **No currency.** `value` is a placeholder shop price.
-- **No decoy actor.** `concealed` only marks the player as untargetable; the decoy entity belongs to integration.
-- **Enemy tags** for `target_tag` exist since Wave 2C (`enemies.json`); combat does not pass them to the resolver yet.
-- **Timed stat buffs** (stat operations with `duration > 0`) are not tracked by the resolver. The starter pool uses statuses for every temporary buff.
-- **No art:** every `sprite` path is a placeholder; see [`assets/weapons/README.md`](../../game/assets/weapons/README.md).
+- **Skills in play.** `skills.json` is validated, and `Loadout.current()` already reads `RunState.skills` (`"skl_id"` or `{"id", "rank"}`), but nothing grants skill points or ranks yet (Wave 2F). The `skills` and `dodge` keys of `cooldown_reduction` have no consumer.
+- **`on_dodge`** is declared but never fires: there is no dodge action yet (combat-feel PR). `itm_knockoff_sneakers`' haste-on-dodge is inert until then.
+- **Melee timing:** swings still resolve instantly (no wind-up / active / recovery frames, no per-swing LOS); the proposed `windup`/`active`/`recovery` weapon fields are not in the schema yet.
+- **Knockback** is computed (weapon `knockback` plus modifiers) and carried in the damage context (`knockback`, `knockback_direction`) but not applied; `Enemies.apply_knockback()` is ready for the combat-feel PR.
+- **Unused stats:** `crit_threshold` (crits stay on a natural 20), `dodge_cooldown` and `xp_mult` have no consumers. `damage_taken_mult`, `heal_mult`, `pickup_radius`, `move_speed`, `max_hp`, `ac`, the damage/attack bonuses, both cooldowns, the melee shape stats and every projectile stat are live.
+- **Statuses:** `vulnerable`, `weakened`, `marked` and `rooted` (COMBAT_AND_RPG §7 proposals) are not in `effects.json`; boss immunity to `rooted` is coded for when they are. Status *icons* are coloured pips (renderer, HUD text), not art.
+- **Decoy:** `concealed` places an inflatable decoy where the item was used; enemies path to it and their strikes land on it. Enemy projectiles already in flight can still hit you.
+- **Timed stat buffs** (stat operations with `duration > 0`) are still not tracked; stat operations on non-passive triggers are ignored. The starter pool uses statuses for every temporary buff.
+- **Selling** items and shop rerolls do not exist; prices are `value` × rarity multiplier (`shop` in `prototype_rules.json`), less 10 % per positive CHA modifier.
+- **No art:** every `sprite` path is a placeholder; pickups are rarity-coloured diamonds and the loot box is a drawn crate. See [`assets/weapons/README.md`](../../game/assets/weapons/README.md).
 - **Balance** is first-pass and untested in play. `BALANCE_GUIDELINES.md` (Phase 3) is still to be written.

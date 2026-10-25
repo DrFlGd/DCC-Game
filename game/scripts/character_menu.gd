@@ -5,16 +5,18 @@ extends CanvasLayer
 signal resume_requested
 signal allocation_confirmed(changes: Dictionary)
 signal resolution_requested(size: Vector2i)
+## Pause -> Settings: Game opens the shared settings screen above this menu.
+signal settings_requested
+## Pause -> Abandon run -> confirm: Game ends the run as "abandoned".
+signal abandon_requested
 
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Achievements = preload("res://scripts/core/achievements.gd")
 const Profile = preload("res://scripts/core/profile.gd")
-const RESOLUTION_PRESETS := [
-    Vector2i(800, 600), Vector2i(960, 540), Vector2i(1024, 768),
-    Vector2i(1280, 720), Vector2i(1280, 800), Vector2i(1366, 768),
-    Vector2i(1440, 900), Vector2i(1600, 900), Vector2i(1920, 1080),
-    Vector2i(2560, 1440), Vector2i(3840, 2160)
-]
+const Settings = preload("res://scripts/core/settings.gd")
+## Kept as an alias so callers and tests can keep using CharacterMenu's name;
+## the list itself lives in settings.gd.
+const RESOLUTION_PRESETS = Settings.RESOLUTION_PRESETS
 const ABILITY_NAMES := {
     "STR": "Strength", "DEX": "Dexterity", "CON": "Constitution",
     "INT": "Intelligence", "WIS": "Wisdom", "CHA": "Charisma"
@@ -147,6 +149,24 @@ func _open_overview_page() -> void:
         _refresh()
 
 
+func _open_abandon_page() -> void:
+    if mode == "pause":
+        page = "abandon"
+        _refresh()
+
+
+func _confirm_abandon() -> void:
+    if mode == "pause" and page == "abandon":
+        close_menu()
+        abandon_requested.emit()
+
+
+## Rebuilds the current page (Game calls it when the settings screen closes so
+## focus returns here).
+func refresh() -> void:
+    _refresh()
+
+
 func _refresh() -> void:
     if not is_inside_tree() or mode == "closed":
         return
@@ -178,6 +198,8 @@ func _refresh() -> void:
         _level_up_content(content)
     elif page == "character":
         _character_content(content)
+    elif page == "abandon":
+        _abandon_content(content)
     elif page == "achievements":
         _achievements_content(content)
     else:
@@ -236,15 +258,15 @@ func _on_change_point(ability: String, change: int) -> void:
 
 func _pause_content(content: VBoxContainer) -> void:
     content.add_child(_text("PAUSED", 27, Color("#f6d48d")))
-    content.add_child(_text("Floor %d  •  Room %d  •  Collapse %d ticks" % [
-        int(context.get("depth", 1)), int(context.get("room_id", 0)), int(context.get("ticks", 0))],
+    content.add_child(_text("Floor %d/%d  •  Room %d  •  Collapse %d ticks" % [
+        int(context.get("depth", 1)), int(context.get("target_depth", 6)),
+        int(context.get("room_id", 0)), int(context.get("ticks", 0))],
         15, Color("#d2e0e8")))
     content.add_child(_text("Level %d    XP %d    HP %d/%d    AC %d" % [
         int(context.get("level", 1)), int(context.get("xp", 0)),
         int(context.get("hp", 1)), int(context.get("max_hp", 1)),
         int(context.get("ac", 10))], 18, Color.WHITE))
     content.add_child(_button("View character stats", Callable(self, "_open_character_page")))
-    content.add_child(_button("Achievements", Callable(self, "_open_achievements_page")))
     content.add_child(_text("DISPLAY RESOLUTION (windowed)", 14, Color("#f6d48d")))
     var resolution_row := HBoxContainer.new()
     resolution_row.add_theme_constant_override("separation", 10)
@@ -263,11 +285,27 @@ func _pause_content(content: VBoxContainer) -> void:
     ], 12, Color("#9eb8c4")))
     if not resolution_feedback.is_empty():
         content.add_child(_text(resolution_feedback, 12, Color("#a9e7c5")))
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 10)
+    content.add_child(row)
+    row.add_child(_button("Settings", func(): settings_requested.emit()))
+    row.add_child(_button("Achievements", Callable(self, "_open_achievements_page")))
+    row.add_child(_button("Abandon run", Callable(self, "_open_abandon_page")))
     var resume := _button("Resume game  (Esc)", Callable(self, "_resume"))
     content.add_child(resume)
     content.add_child(_text("WASD: move   Mouse: aim   Left click: shoot   Space: melee",
         12, Color("#9eb8c4")))
     resume.grab_focus()
+
+
+func _abandon_content(content: VBoxContainer) -> void:
+    content.add_child(_text("ABANDON RUN?", 25, Color("#f6d48d")))
+    content.add_child(_text("The run ends here and counts as a failure. The dungeon keeps the floor.",
+        14, Color("#c5dee4")))
+    var back := _button("No, keep crawling", Callable(self, "_open_overview_page"))
+    content.add_child(back)
+    content.add_child(_button("Yes, abandon this run", Callable(self, "_confirm_abandon")))
+    back.grab_focus()
 
 
 func _character_content(content: VBoxContainer) -> void:

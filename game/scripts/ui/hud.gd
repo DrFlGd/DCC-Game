@@ -1,7 +1,8 @@
 extends CanvasLayer
-## Screen-space HUD: status lines, last message, minimap, control hints and the
-## end-of-run overlay. Reads RunState only; the message line is fed by
-## `Events.message` and the overlay is shown after `Events.run_ended`.
+## Screen-space HUD: status lines, last message, minimap and control hints.
+## Reads RunState only; the message line is fed by `Events.message`. The
+## end-of-run banner was replaced by the run summary screen (Wave 2A); Game
+## hides the HUD on the title screen.
 ## Drawn in immediate mode on a full-rect Control that ignores the mouse, so
 ## clicks still reach gameplay. Layer 5 keeps it under CharacterMenu (layer 10).
 const RPG = preload("res://scripts/rpg_rules.gd")
@@ -48,8 +49,9 @@ func _draw_hud() -> void:
     var room: Dictionary = RunState.floor["rooms"][RunState.current_room_id]
     var foes: Array = RunState.current_room().get("enemies", [])
     var level: int = RunState.level
-    _text("DCC | FLOOR %d | ROOM %d %s | TICKS %d | FOES %d" % [
-        RunState.depth, RunState.current_room_id, String(room["kind"]).to_upper(),
+    _text("DCC | FLOOR %d/%d | ROOM %d %s | TICKS %d | FOES %d" % [
+        RunState.depth, int(RunState.config.get("run", {}).get("target_depth", 6)),
+        RunState.current_room_id, String(room["kind"]).to_upper(),
         RunState.ticks, foes.size()], Vector2(14, 22), 17, Color("#f2da99"))
     _text("HP %d/%d  AC %d  LV %d  XP %d/%s  PROF +%d" % [
         maxi(0, RunState.hp), RunState.max_hp, RunState.ac, level, RunState.xp,
@@ -66,19 +68,6 @@ func _draw_hud() -> void:
         Vector2(14, view.y - 46), 14, Color("#dce9f2"))
     _text("Esc: pause / stats | R: replay | N: new seed | 24x24 room, 16px tiles",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
-    if RunState.outcome != "running":
-        _draw_end_overlay(view)
-
-
-func _draw_end_overlay(view: Vector2) -> void:
-    canvas.draw_rect(Rect2(Vector2(40, view.y * 0.48 - 58), Vector2(view.x - 80, 116)),
-        Color(0.02, 0.03, 0.07, 0.94))
-    var title: String = "FLOOR CLEARED!" if RunState.outcome == "escaped" \
-        else "RUN ENDED: " + RunState.outcome.to_upper()
-    _text(title, Vector2(65, view.y * 0.48 - 12), 23, Color("#f7d98b"))
-    _text("Rooms %d | Kills yield XP | Level %d | XP %d | R: repeat  N: new seed" % [
-        int(RunState.telemetry.get("rooms_entered", 0)), RunState.level, RunState.xp],
-        Vector2(65, view.y * 0.48 + 22), 14, Color.WHITE)
 
 
 func _draw_minimap(view: Vector2) -> void:

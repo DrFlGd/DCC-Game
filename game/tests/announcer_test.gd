@@ -217,6 +217,7 @@ func _test_live() -> void:
     if announcer == null:
         _finish()
         return
+    game.start_run(424242)  # the scene boots to the title screen
     var brain = announcer.brain
     check(announcer.problems.is_empty(), "live announcer loaded valid lines")
     check(announcer.layer > 20, "toast layer sits above run-loop screens")
@@ -251,6 +252,8 @@ func _test_live() -> void:
     announcer._process(0.016)
     check(announcer.is_modal() and brain.modal and brain.on_screen.is_empty(),
         "pause menu suppresses toasts")
+    if events.has_signal("game_state_changed"):
+        check(announcer._state_modal, "Events.game_state_changed(PAUSED) closes the toast gate")
     game.character_menu._open_achievements_page()
     check(game.character_menu.page == "achievements", "pause menu has an Achievements page")
     game._input(escape)

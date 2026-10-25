@@ -60,6 +60,8 @@ var log_open := false
 var enemy_names: Dictionary = {}
 var _definitions_by_id: Dictionary = {}
 var _state_modal := false
+## Last Events.game_state_changed state ("" until 2A's signal fires).
+var _game_state := ""
 var _last_input_at := 0.0
 var _low_hp_armed := true
 var _ticks_low_armed := true
@@ -285,7 +287,8 @@ func _on_announcement_requested(trigger: String, context: Dictionary) -> void:
 func _on_optional(signal_name: String, args: Array) -> void:
     match signal_name:
         "game_state_changed":
-            _state_modal = args.size() >= 2 and MODAL_STATES.has(String(args[1]))
+            _game_state = String(args[1]) if args.size() >= 2 else ""
+            _state_modal = MODAL_STATES.has(_game_state)
         "grace_started":
             _track(signal_name, {})
             announce("grace_started")
@@ -345,7 +348,8 @@ func _run_clock() -> float:
 
 
 func _check_idle() -> void:
-    if RunState.floor.is_empty() or RunState.outcome != "running" or brain.modal:
+    var playing: bool = _game_state.is_empty() or _game_state == "RUNNING"
+    if RunState.floor.is_empty() or RunState.outcome != "running" or brain.modal or not playing:
         _last_input_at = clock
         return
     var idle: float = clock - _last_input_at
@@ -450,7 +454,7 @@ func _layout_ui() -> void:
     _log_panel.position = Vector2(view.x - width - 12.0, 100.0)
     _log_panel.size = Vector2(width, maxf(120.0, view.y - 170.0))
     _hint.position = Vector2(view.x - 92.0, view.y - 38.0)
-    _hint.visible = not RunState.floor.is_empty()
+    _hint.visible = not RunState.floor.is_empty() and _game_state != "TITLE"
 
 
 func _refresh_log() -> void:

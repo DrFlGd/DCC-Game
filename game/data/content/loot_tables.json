@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "rarity_order": [
+    "common",
+    "uncommon",
+    "rare",
+    "epic",
+    "legendary"
+  ],
+  "rarity_weights_by_depth": [
+    {
+      "min_depth": 1,
+      "weights": {
+        "common": 70,
+        "uncommon": 25,
+        "rare": 5,
+        "epic": 0,
+        "legendary": 0
+      }
+    },
+    {
+      "min_depth": 3,
+      "weights": {
+        "common": 55,
+        "uncommon": 30,
+        "rare": 12,
+        "epic": 3,
+        "legendary": 0
+      }
+    },
+    {
+      "min_depth": 5,
+      "weights": {
+        "common": 40,
+        "uncommon": 32,
+        "rare": 18,
+        "epic": 8,
+        "legendary": 2
+      }
+    },
+    {
+      "min_depth": 8,
+      "weights": {
+        "common": 30,
+        "uncommon": 30,
+        "rare": 22,
+        "epic": 13,
+        "legendary": 5
+      }
+    }
+  ],
+  "tables": {
+    "room_normal_clear": {
+      "description": "Rolled once when a normal room is cleared. Usually nothing; mostly consumables.",
+      "rolls": 1,
+      "empty_chance": 0.55,
+      "unique": true,
+      "min_rarity": "common",
+      "max_rarity": "legendary",
+      "rarity_multipliers": {
+        "common": 1.2,
+        "uncommon": 1.0,
+        "rare": 0.8,
+        "epic": 0.5,
+        "legendary": 0.25
+      },
+      "sources": [
+        {
+          "from": "items",
+          "kind": "consumable",
+          "weight": 6
+        },
+        {
+          "from": "items",
+          "kind": "passive",
+          "weight": 2
+        },
+        {
+          "from": "weapons",
+          "weight": 1
+        }
+      ],
+      "exclude": [
+        "wpn_crowbar",
+        "wpn_nail_pistol",
+        "itm_tick_shard"
+      ]
+    },
+    "treasure_room": {
+      "description": "Two guaranteed, distinct rewards skewed toward better rarities.",
+      "rolls": 2,
+      "empty_chance": 0,
+      "unique": true,
+      "min_rarity": "common",
+      "max_rarity": "legendary",
+      "rarity_multipliers": {
+        "common": 0.6,
+        "uncommon": 1.2,
+        "rare": 1.5,
+        "epic": 1.5,
+        "legendary": 1.5
+      },
+      "sources": [
+        {
+          "from": "weapons",
+          "weight": 3
+        },
+        {
+          "from": "items",
+          "kind": "passive",
+          "weight": 4
+        },
+        {
+          "from": "items",
+          "kind": "active",
+          "weight": 2
+        },
+        {
+          "from": "items",
+          "kind": "consumable",
+          "weight": 2
+        }
+      ],
+      "exclude": [
+        "wpn_crowbar",
+        "wpn_nail_pistol"
+      ]
+    },
+    "boss_kill": {
+      "description": "Boss loot box: two distinct rewards, never common.",
+      "rolls": 2,
+      "empty_chance": 0,
+      "unique": true,
+      "min_rarity": "uncommon",
+      "max_rarity": "legendary",
+      "rarity_multipliers": {
+        "uncommon": 1.0,
+        "rare": 1.6,
+        "epic": 2.0,
+        "legendary": 2.0
+      },
+      "sources": [
+        {
+          "from": "weapons",
+          "weight": 3
+        },
+        {
+          "from": "items",
+          "kind": "passive",
+          "weight": 3
+        },
+        {
+          "from": "items",
+          "kind": "active",
+          "weight": 3
+        }
+      ],
+      "exclude": [
+        "wpn_crowbar",
+        "wpn_nail_pistol"
+      ]
+    },
+    "guild_hall_shop": {
+      "description": "Shop stock offered in the guild hall. Four distinct offers, no legendaries.",
+      "rolls": 4,
+      "empty_chance": 0,
+      "unique": true,
+      "min_rarity": "common",
+      "max_rarity": "epic",
+      "rarity_multipliers": {
+        "common": 1.0,
+        "uncommon": 1.0,
+        "rare": 0.9,
+        "epic": 0.6
+      },
+      "sources": [
+        {
+          "from": "items",
+          "kind": "consumable",
+          "weight": 4
+        },
+        {
+          "from": "items",
+          "kind": "passive",
+          "weight": 2
+        },
+        {
+          "from": "items",
+          "kind": "active",
+          "weight": 1
+        },
+        {
+          "from": "weapons",
+          "weight": 2
+        }
+      ],
+      "exclude": [
+        "wpn_crowbar",
+        "wpn_nail_pistol"
+      ]
+    },
+    "floor_start": {
+      "description": "A small care package at the start of each floor: one cheap consumable.",
+      "rolls": 1,
+      "empty_chance": 0,
+      "unique": true,
+      "min_rarity": "common",
+      "max_rarity": "uncommon",
+      "rarity_multipliers": {},
+      "sources": [
+        {
+          "from": "items",
+          "kind": "consumable",
+          "weight": 1
+        }
+      ],
+      "exclude": [
+        "itm_tick_shard"
+      ]
+    }
+  }
+}

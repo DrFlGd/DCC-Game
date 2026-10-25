@@ -10,6 +10,7 @@ extends Node
 ## RNG used for combat rolls. Floor, obstacle and encounter generation use
 ## their own seeded RNGs derived from floor_seed().
 const RPG = preload("res://scripts/rpg_rules.gd")
+const Collapse = preload("res://scripts/collapse_policy.gd")
 const CONFIG_PATH := "res://data/prototype_rules.json"
 const DEFAULT_SEED := 424242
 ## run_time_seconds only advances while Game is RUNNING (advance_clock).
@@ -39,6 +40,10 @@ var current_room_id := 0
 var ticks := 0
 ## Starting budget of the current floor (RunRules.floor_budget; 0 until set).
 var floor_budget := 0
+## Zero-clock grace state for this floor (CollapsePolicy.grace_initial()
+## shape: active, remaining, duration, count, wave_timer, elapsed, outcome).
+## Driven by the CollapseClock node; reset by reset_for_floor().
+var grace: Dictionary = Collapse.grace_initial()
 var xp := 0
 var level := 1
 ## STR/DEX/CON/INT/WIS/CHA -> int.
@@ -142,6 +147,8 @@ func reset_for_floor(new_depth: int, budget: int = -1) -> void:
     room_states.clear()
     boss_defeated = false
     tick_ledger.clear()
+    # Before the budget is set, so its ticks_changed never reads as a stabilise.
+    grace = Collapse.grace_initial()
     if budget >= 0:
         floor_budget = budget
         _bump("ticks_granted", budget)
@@ -150,6 +157,11 @@ func reset_for_floor(new_depth: int, budget: int = -1) -> void:
     _floor_baseline = {}
     for key in FLOOR_KEYS:
         _floor_baseline[key] = telemetry.get(key, 0)
+
+
+## True while the zero-clock grace period runs (doors unlock, entries free).
+func grace_active() -> bool:
+    return bool(grace.get("active", false))
 
 
 ## Seed for generating floor `depth`. Depth 1 uses the run seed unchanged so
@@ -236,21 +248,31 @@ func heal_player(amount: int) -> int:
 
 
 ## Records a CollapsePolicy entry for a door transition and applies its result.
+## Only ticks actually removed (`charged`, the cost clamped at 0) count as spent.
 func apply_tick_entry(entry: Dictionary) -> void:
     tick_ledger.append(entry)
-    telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) + int(entry.get("cost", 0))
+    telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) \
+        + int(entry.get("charged", entry.get("cost", 0)))
     _bump("ticks_granted", maxi(0, int(entry.get("grant", 0))))
     _set_ticks(int(entry["after"]), String(entry.get("reason", "")))
 
 
 ## Adds (or with a negative value removes) ticks outside door transitions,
-## e.g. items or shrines. Clamped at 0; collapse handling stays with Game.
+## e.g. items, shrines or hazards. Clamped at 0. `reason` doubles as the
+## ledger source (`item:<id>`, `skill:<id>`, `shrine`, `hazard:<id>`,
+## `room_clear`). Zero-clock handling stays with the CollapseClock node, which
+## listens to `ticks_changed`: reaching 0 starts grace, and any positive
+## amount during grace stabilises the floor.
 func add_ticks(amount: int, reason: String) -> void:
+    var before: int = ticks
     var next: int = maxi(0, ticks + amount)
     if next < ticks:
         telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) + ticks - next
     else:
         _bump("ticks_granted", next - ticks)
+    if next != before:
+        tick_ledger.append({"source": reason, "reason": reason, "before": before,
+            "after": next, "amount": amount, "modifiers": []})
     _set_ticks(next, reason)
 
 
@@ -265,7 +287,10 @@ func floor_stats() -> Dictionary:
     var result: Dictionary = {
         "depth": depth, "rooms_explored": visited.size(),
         "rooms_total": floor.get("rooms", []).size(), "budget": floor_budget,
-        "ticks_left": ticks, "boss_defeated": boss_defeated
+        "ticks_left": ticks, "boss_defeated": boss_defeated,
+        "grace_triggered": int(grace.get("count", 0)),
+        "grace_outcome": String(grace.get("outcome", "")),
+        "grace_time_used": float(grace.get("elapsed", 0.0))
     }
     for key in FLOOR_KEYS:
         var gained = telemetry.get(key, 0) - _floor_baseline.get(key, 0)
@@ -329,7 +354,10 @@ func summary() -> Dictionary:
         "rooms_visited": visited.size(), "boss_defeated": boss_defeated,
         "ability_scores": ability_scores.duplicate(true),
         "inventory": inventory.duplicate(true), "skills": skills.duplicate(),
-        "ledger_entries": tick_ledger.size()
+        "ledger_entries": tick_ledger.size(),
+        "grace_triggered": int(grace.get("count", 0)),
+        "grace_outcome": String(grace.get("outcome", "")),
+        "grace_time_used": float(grace.get("elapsed", 0.0))
     })
     return result
 

@@ -13,7 +13,8 @@
     "default": {
       "first_entry_cost": 2,
       "revisit_cost": 0,
-      "first_entry_grant": 0
+      "first_entry_grant": 0,
+      "clear_refund": 0
     },
     "room_types": {
       "start": {
@@ -28,12 +29,125 @@
       },
       "exit": {
         "first_entry_cost": 1
+      },
+      "treasure": {
+        "first_entry_cost": 2
+      },
+      "elite": {
+        "first_entry_cost": 3,
+        "clear_grant": 1
+      },
+      "trap": {
+        "first_entry_cost": 1
+      },
+      "shrine": {
+        "first_entry_cost": 1
       }
     },
     "budget": {
       "min_slack": 8,
-      "slack_ratio": 0.45
+      "slack_ratio": 0.45,
+      "max_start_ticks": 70,
+      "guild_max_ratio": 0.5
+    },
+    "grace": {
+      "seconds": 10,
+      "repeat_seconds": 5,
+      "max_per_floor": 2,
+      "waves": [
+        {
+          "above": 7.0,
+          "interval": 1.5,
+          "markers": 1,
+          "shake": 1
+        },
+        {
+          "above": 3.5,
+          "interval": 1.0,
+          "markers": 2,
+          "shake": 2
+        },
+        {
+          "above": 0.0,
+          "interval": 0.6,
+          "markers": 3,
+          "shake": 3
+        }
+      ],
+      "debris": {
+        "radius": 14,
+        "telegraph": 0.8,
+        "damage": 2,
+        "duration": 0.15,
+        "hits_enemies": true
+      }
     }
+  },
+  "generation": {
+    "special_rooms": {
+      "counts_by_depth": [
+        {
+          "min_depth": 1,
+          "treasure": 1,
+          "elite": 0,
+          "trap": 0,
+          "shrine": 0
+        },
+        {
+          "min_depth": 2,
+          "elite": 1,
+          "trap": 1
+        },
+        {
+          "min_depth": 3,
+          "shrine": 1
+        },
+        {
+          "min_depth": 5,
+          "trap": 2
+        }
+      ],
+      "guild_min_hops": 2,
+      "elite_min_hops": 3
+    },
+    "feasibility": {
+      "max_attempts": 20,
+      "seed_stride": 104729
+    }
+  },
+  "hazards": {
+    "spike_plate": {
+      "radius": 9,
+      "telegraph": 0.5,
+      "damage": 3,
+      "duration": 0.2,
+      "rearm": 2.0
+    },
+    "drain_plate": {
+      "radius": 9,
+      "telegraph": 0.6,
+      "ticks": 1,
+      "duration": 0.2
+    },
+    "trap_plates": {
+      "min": 2,
+      "max": 4,
+      "max_drain": 2
+    }
+  },
+  "room_obstacle_caps": {
+    "start": 13,
+    "guild_hall": 13,
+    "exit": 13,
+    "treasure": 13,
+    "shrine": 13,
+    "trap": 20,
+    "elite": 30
+  },
+  "interaction": {
+    "radius": 26,
+    "shrine_ticks": 2,
+    "shrine_heal_ratio": 0.5
   },
   "player_ability_scores": {
     "STR": 14,

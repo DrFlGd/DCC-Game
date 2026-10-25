@@ -13,6 +13,9 @@ extends Node2D
 ## All run data lives in the `RunState` autoload; cross-system notifications go
 ## through the `Events` autoload. Game reacts to enemy_killed (XP, boss gate),
 ## level_up (modal) and player_died (defeat).
+## Wave 2E adds three children created here: CollapseClock (zero-clock grace,
+## collapse_clock.gd), RoomServices (interactables and trap plates,
+## room_services.gd) and FloorMap (the M overlay, ui/floor_map.gd).
 signal state_changed(previous: int, current: int)
 
 ## RUNNING: simulation ticks. LEVEL_UP / PAUSED: CharacterMenu is modal and the
@@ -23,7 +26,9 @@ signal state_changed(previous: int, current: int)
 ## stay stable but is no longer entered (SUMMARY replaced it). Append new
 ## states at the end. Every change is also announced as
 ## Events.game_state_changed(previous_name, current_name).
-enum State { RUNNING, LEVEL_UP, PAUSED, ENDED, TITLE, SUMMARY, INTERMISSION }
+## MAP / DIALOG (Wave 2E): floor map overlay or a RoomServices choice modal;
+## the world is frozen as in PAUSED.
+enum State { RUNNING, LEVEL_UP, PAUSED, ENDED, TITLE, SUMMARY, INTERMISSION, MAP, DIALOG }
 
 const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
@@ -42,6 +47,9 @@ const TitleScreen = preload("res://scripts/ui/title_screen.gd")
 const IntermissionScreen = preload("res://scripts/ui/intermission_screen.gd")
 const SummaryScreen = preload("res://scripts/ui/summary_screen.gd")
 const SettingsScreen = preload("res://scripts/ui/settings_screen.gd")
+const CollapseClock = preload("res://scripts/collapse_clock.gd")
+const RoomServices = preload("res://scripts/room_services.gd")
+const FloorMap = preload("res://scripts/ui/floor_map.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -63,6 +71,10 @@ var title_screen: TitleScreen
 var intermission_screen: IntermissionScreen
 var summary_screen: SummaryScreen
 var settings_screen: SettingsScreen
+## Wave 2E children (see the class comment).
+var clock: CollapseClock
+var services: RoomServices
+var floor_map: FloorMap
 ## Shared player settings (Settings.shared()), loaded and applied in _ready.
 var settings
 
@@ -87,6 +99,13 @@ func _ready() -> void:
         as IntermissionScreen
     summary_screen = _ensure_child("SummaryScreen", SummaryScreen) as SummaryScreen
     settings_screen = _ensure_child("SettingsScreen", SettingsScreen) as SettingsScreen
+    clock = _ensure_child("CollapseClock", CollapseClock) as CollapseClock
+    services = _ensure_child("RoomServices", RoomServices) as RoomServices
+    floor_map = _ensure_child("FloorMap", FloorMap) as FloorMap
+    clock.setup(self)
+    services.setup(self)
+    services.modal_opened.connect(func(): _change_state(State.DIALOG))
+    services.modal_closed.connect(_on_modal_closed)
     settings = Settings.shared()
     settings.apply_window(get_window())
     combat.setup(player, catalogue)
@@ -131,6 +150,9 @@ func start_run(new_seed: int) -> void:
     renderer.rules = rules
     _close_screens()
     character_menu.close_menu()
+    floor_map.close()
+    if services.is_modal_open():
+        services.dialog.close()
     _start_floor(1)
     _change_state(State.RUNNING)
 
@@ -171,12 +193,18 @@ static func random_seed() -> int:
 ## player at the centre of its start room.
 func _start_floor(depth: int) -> void:
     var room_count: int = RunRules.room_count(depth, RunState.config)
-    var generated: Dictionary = Generator.generate(RunState.floor_seed(depth), room_count)
+    # Wave 2E: depth drives special-room counts; the generator re-rolls
+    # infeasible layouts and records route/budget/feasibility in the floor dict.
+    var generated: Dictionary = Generator.generate(RunState.floor_seed(depth), room_count,
+        {"depth": depth, "config": RunState.config})
     var route: int = RunRules.mandatory_route_cost(generated, rules)
     var budget: int = route + RunRules.slack(generated["rooms"].size(), RunState.config)
     RunState.reset_for_floor(depth, budget)
     RunState.floor = generated
+    clock.reset_floor()
+    floor_map.close()
     combat.clear_projectiles()
+    combat.clear_hazards()
     player.reset(ROOM.get_center(), float(RunState.config.get("player_speed", Player.DEFAULT_SPEED)))
     var text := "Floor %d/%d | Seed %d | %d rooms | route %d + slack = %d ticks" % [
         depth, RunRules.target_depth(RunState.config), RunState.seed, room_count, route, budget]
@@ -196,17 +224,29 @@ func _load_room(id: int) -> void:
         return
     var room: Dictionary = RunState.floor["rooms"][id]
     var floor_seed: int = RunState.floor_seed()
+    var kind: String = String(room["kind"])
     var contents: Dictionary = Contents.generate(floor_seed, id, room["neighbors"],
-        String(room["kind"]), int(RunState.config.get("obstacle_count", 38)))
+        kind, int(RunState.config.get("obstacle_count", 38)),
+        RunState.config.get("room_obstacle_caps", {}),
+        RunState.config.get("hazards", {}).get("trap_plates", {}))
+    # Wave 2E: elite rooms borrow the normal table until enemies.json has one.
+    var encounter_kind: String = kind
+    if kind == "elite" and not catalogue.get("encounter_tables", {}).has(kind):
+        encounter_kind = "normal"
     # RunState.depth is passed so depth-scaled encounters (2C) can use it.
     var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue,
-        String(room["kind"]), floor_seed, id, contents["blocked"], RunState.depth)
+        encounter_kind, floor_seed, id, contents["blocked"], RunState.depth)
     RunState.room_states[id] = {"blocked": contents["blocked"], "props": contents["props"],
-        "enemies": encounter}
+        "enemies": encounter, "interactables": contents["interactables"],
+        "plates": contents["plates"]}
 
 
 ## Tries the door on side `direction` of the current room: exit gate, collapse
-## cost, ledger, room swap, then collapse/escape outcome.
+## cost, ledger, room swap, then the exit / zero-clock outcome.
+## Wave 2E (D-03, D-05): a transition is never refused for lack of ticks (only
+## the sealed exit refuses). The cost clamps at 0; reaching 0 starts the grace
+## period after the room swap (CollapseClock), and entries during grace are
+## free while first-entry grants still apply.
 func _enter_neighbor(direction: String) -> void:
     var room: Dictionary = RunState.floor["rooms"][RunState.current_room_id]
     if not room["neighbors"].has(direction):
@@ -219,13 +259,12 @@ func _enter_neighbor(direction: String) -> void:
         return
     var first_visit: bool = not RunState.visited.has(next_id)
     var entry: Dictionary = rules.evaluate(RunState.ticks, kind, first_visit, next_id)
-    if not bool(entry["allowed"]):
-        Events.say("Not enough collapse ticks for that doorway.", "collapse")
-        return
+    clock.begin_transition(kind == "exit")
     RunState.apply_tick_entry(entry)
     RunState.current_room_id = next_id
     RunState.visited[next_id] = true
     combat.clear_projectiles()
+    combat.clear_hazards()
     player.enter_through(direction)
     _load_room(next_id)
     Events.say("Room %d [%s] | %s | %d ticks left" % [
@@ -236,10 +275,13 @@ func _enter_neighbor(direction: String) -> void:
     # floor success BEFORE the collapse check, so paying the exit's cost with the
     # last tick is a success, not a collapse.
     if kind == "exit":
+        # Wave 2E: the exit also ends an active grace (outcome "exit").
+        clock.resolve_exit()
+        clock.end_transition()
         _complete_floor()
-    elif bool(entry["collapses"]):
-        _end_run("collapsed", "THE FLOOR COLLAPSED! R = repeat, N = new seed",
-            "collapse on floor %d" % RunState.depth)
+    else:
+        # Wave 2E: may start grace, or collapse at once on the floor's third zero.
+        clock.end_transition()
 
 
 ## Exit taken: floor_cleared, then victory on target_depth or the intermission.
@@ -260,6 +302,9 @@ func _complete_floor() -> void:
 
 func _end_run(outcome: String, text: String, cause: String = "") -> void:
     character_menu.close_menu()
+    floor_map.close()
+    if services.is_modal_open():
+        services.dialog.close()
     settings_screen.close()
     _change_state(State.SUMMARY)
     Events.say(text, "outcome")
@@ -310,11 +355,19 @@ func _physics_process(delta: float) -> void:
     # A kill above may have opened the level-up modal; enemies freeze with it.
     if state == State.RUNNING:
         combat.update_enemies(delta)
+    # Wave 2E: hazards, plates/prompts and the grace timer, each frozen by modals.
+    if state == State.RUNNING:
+        combat.update_hazards(delta)
+    if state == State.RUNNING:
+        services.update(delta)
+    if state == State.RUNNING:
+        clock.update(delta)
     _redraw()
 
 
 func _redraw() -> void:
     renderer.queue_redraw()
+    hud.prompt = services.prompt if state == State.RUNNING else ""
     hud.refresh()
 
 
@@ -325,7 +378,16 @@ func _relayout() -> void:
 
 
 func _input(event: InputEvent) -> void:
-    if not event.is_action_pressed("pause"):
+    # Wave 2E: the floor map toggles on `map` and also closes on `pause`;
+    # a RoomServices choice modal handles its own keys.
+    if event.is_action_pressed("map") or (state == State.MAP and event.is_action_pressed("pause")):
+        if state == State.MAP:
+            close_map()
+        elif event.is_action_pressed("map"):
+            open_map()
+        get_viewport().set_input_as_handled()
+        return
+    if state == State.DIALOG or not event.is_action_pressed("pause"):
         return
     if settings_screen.is_open():
         settings_screen.close()
@@ -343,6 +405,11 @@ func _unhandled_input(event: InputEvent) -> void:
         return
     if settings_screen != null and settings_screen.is_open():
         return
+    # Wave 2E: `interact` uses the interactable in reach (RoomServices).
+    if event.is_action_pressed("interact"):
+        if state == State.RUNNING:
+            services.try_interact()
+        return
     # R / N restart mid-run and on the summary (muscle memory), not on the
     # title or intermission screens.
     if state != State.RUNNING and state != State.SUMMARY:
@@ -355,6 +422,28 @@ func _unhandled_input(event: InputEvent) -> void:
             and RunState.level < 20:
         # Prototype playtest shortcut: jump to the next XP threshold.
         RunState.award_xp(maxi(0, RPG.next_level_xp(RunState.level) - RunState.xp))
+
+
+## Opens the floor map overlay (only from RUNNING); the world freezes.
+func open_map() -> bool:
+    if state != State.RUNNING:
+        return false
+    floor_map.open(FloorMap.build_model(RunState.floor, RunState.visited,
+        RunState.current_room_id, RunState.ticks, rules, RunState.room_states,
+        RunState.boss_defeated))
+    _change_state(State.MAP)
+    return true
+
+
+func close_map() -> void:
+    floor_map.close()
+    if state == State.MAP:
+        _change_state(State.RUNNING)
+
+
+func _on_modal_closed() -> void:
+    if state == State.DIALOG:
+        _change_state(State.RUNNING)
 
 
 func _character_context() -> Dictionary:

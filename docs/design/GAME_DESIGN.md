@@ -1,6 +1,6 @@
 # Game Design — the run loop contract
 
-- **Status:** Proposed (design baseline for the Wave 2 vertical slice). Sections marked *Current prototype* describe code that is implemented in `game/scripts/`.
+- **Status:** Proposed (design baseline for the Wave 2 vertical slice). Sections marked *Current prototype* or **Implemented (2A)** describe code in `game/scripts/`. Wave 2A implemented the run loop: §3.1 run start/victory, §3.2 floor steps 1–2, the §3.4 exit rule, the §5 intermission (recap, heal, Descend), the §6 summary header and core blocks, and the §7 `TITLE`, `INTERMISSION` and `SUMMARY` states. Deviations are noted in each section.
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 1A, backlog task 1 ("write the game loop contract")
 - **Decisions covered:** D-08 (persistence), D-12 (distribution scope); points to D-03/D-04/D-05 in [COLLAPSE_SYSTEM.md](COLLAPSE_SYSTEM.md)
@@ -34,7 +34,7 @@ New loop features add states to `game.gd`, data to `RunState`, and signals to `E
 
 ## 2. Current prototype behaviour
 
-This is the behaviour at main @ 9bb993d, which the Wave 1A refactor preserved.
+This is the behaviour at main @ 9bb993d, which the Wave 1A refactor preserved. **Superseded by Wave 2A** for the run loop: the game boots to a title screen, runs six floors with per-depth room counts and fresh budgets, resolves the exit before collapse, and ends every run on a summary screen (outcomes `victory`, `defeated`, `collapsed`, `abandoned`; `escaped` is gone). The list below is kept as the historical baseline.
 
 - One floor per run. The HUD always shows `FLOOR 1`. `room_count` 22, `start_ticks` 26 and the seed 424242 come from [`prototype_rules.json`](../../game/data/prototype_rules.json).
 - Outcomes (`RunState.outcome`) are `running`, `collapsed`, `escaped` and `defeated`. When the run ends, a banner shows rooms entered, level and XP; `RunState.end_run()` emits `Events.run_ended(outcome, summary)`. **R** repeats the seed and **N** rolls a new one. There is no title screen and no summary screen; `game.gd` has the states `RUNNING`, `LEVEL_UP`, `PAUSED` and `ENDED`.
@@ -77,10 +77,10 @@ flowchart TD
 
 ### 3.1 Run
 
-- **Start:** the title screen offers *New run* with an optional seed field; leave it empty for a random seed. Seeds are 31-bit positive integers shown on every summary.
+- **Start — Implemented (2A):** the title screen offers *New run* with an optional seed field; leave it empty for a random seed. Seeds are 31-bit positive integers shown on every summary. *Deviation:* the title has two buttons, **New run** (random seed) and **Seeded run** (uses the field, rejecting anything outside 1–2147483647), plus **Settings** and **Quit**.
 - **Floor seed derivation (determinism):** use `RunState.floor_seed(depth)`, as implemented in 1A. Depth 1 uses the run seed unchanged, so existing seeds reproduce. Deeper floors use `(run_seed + (depth − 1) × 1000003) mod 2147483647`, which 1A marks as provisional; this page adopts it as the default. Every per-room RNG keeps the existing `seed + room_id × k` pattern on top of the floor seed. With the same run seed and the same choices, a player gets the same floors.
-- **Proposed default — victory:** the run is won when the crawler takes the unsealed exit on floor **`target_depth` = 6** (config key `run.target_depth`). Six floors cover bands I–III ([ENEMY_TIERS.md](ENEMY_TIERS.md)) and three biomes ([BIOMES_AND_TILESETS.md](BIOMES_AND_TILESETS.md)). Target run length is 45–60 minutes.
-- **Failure:** (a) **death**, when HP reaches 0; (b) **collapse**, when the grace period expires; (c) **abandon**, chosen from the pause menu, which is recorded as a failure with cause `abandoned`.
+- **Victory — Implemented (2A):** the run is won when the crawler takes the unsealed exit on floor **`target_depth` = 6** (config key `run.target_depth`). Six floors cover bands I–III ([ENEMY_TIERS.md](ENEMY_TIERS.md)) and three biomes ([BIOMES_AND_TILESETS.md](BIOMES_AND_TILESETS.md)). Target run length is 45–60 minutes.
+- **Failure:** (a) **death**, when HP reaches 0; (b) **collapse**, when the grace period expires; (c) **abandon**, chosen from the pause menu, which is recorded as a failure with cause `abandoned`. *Implemented (2A):* death (cause = killer's definition id), collapse (cause `collapse on floor N`; still immediate at 0 until 2E's grace period lands) and abandon (pause → *Abandon run* → confirm; outcome and cause `abandoned`).
 - An *endless* mode after floor 6 is out of scope for the slice. Reserve it as `run.mode = "endless"`.
 
 ### 3.2 Floor
@@ -93,6 +93,8 @@ flowchart TD
 
 The floor ends with **exit** (success), **death** or **collapse**.
 
+*Implemented (2A):* steps 1–2. `game.gd` `_start_floor(depth)` generates `(RunState.floor_seed(depth), RunRules.room_count(depth))`, computes the budget with `scripts/core/run_rules.gd` (§4 of the collapse doc: Dijkstra route + `max(8, ceil(0.45 × rooms))`; 26 for seed 424242 floor 1) and calls `RunState.reset_for_floor(depth, budget)`, which clears visited rooms, room states, the boss flag and the tick ledger and sets the new clock. The crawler is placed at the start-room centre. `RunState.depth` is passed to `Enemies.generate_encounter` for 2C. Biomes (step 3), the `floor_start` loot roll (step 4) and the intro line (step 5) belong to later waves and 2G.
+
 ### 3.3 Room
 
 - **Before entry:** each door shows the net tick change for the room behind it, plus a kind colour for scouted rooms. This is implemented as a label like `E-2` and tinted doors.
@@ -104,7 +106,7 @@ The floor ends with **exit** (success), **death** or **collapse**.
 
 - The boss room is the second-to-last room of the guaranteed spine, and the exit is the last (this is the generator's current behaviour). The exit stays sealed until the boss is dead. A sealed exit door is drawn red and its tooltip reads *Sealed: defeat the floor boss*.
 - A boss kill (`Events.boss_defeated`) drops a **boss loot box**. It rolls the 1B `boss_kill` table, which gives 2 distinct rewards that are never common, plus 1 extra roll at CHA mod ≥ +3 ([ENCOUNTER_RULES.md §7](ENCOUNTER_RULES.md#7-rewards)). The box opens in a modal reward overlay, like level-up, that shows what came out; it is not a choice.
-- **Rule change from the prototype:** entering the unsealed exit always succeeds, even when paying its cost would reduce the clock to 0. Exit resolution happens before collapse resolution.
+- **Rule change from the prototype — Implemented (2A):** entering the unsealed exit always succeeds, even when paying its cost would reduce the clock to 0. Exit resolution happens before collapse resolution.
 
 ## 4. What persists — D-08
 
@@ -127,6 +129,8 @@ Implementation note for 2A: `RunState.start_run(seed)` (implemented) already res
 - A no-op hook, `apply_meta_unlocks()`, called at the end of `start_run`, so that later meta-progression needs no change to the call sites.
 - The between-floor rules in this table (heal, refill stamina, clear statuses, new tick budget) applied by a `RunState.begin_next_floor(depth)` wrapper.
 
+*Implemented (2A), with deviations:* the between-floor rules are split rather than wrapped. `RunState.intermission_heal()` heals `run.intermission_heal_ratio` (0.5) of missing HP when the intermission opens, and `reset_for_floor(depth, budget)` sets the new budget (leftovers discarded); XP, level, scores, HP and inventory carry over. Stamina and statuses do not exist yet. `RunState.meta` and `apply_meta_unlocks()` were **not** added: `user://profile.json` belongs to 2G's `profile.gd`. Settings persist separately in `user://settings.cfg`.
+
 ## 5. Between floors (the intermission)
 
 The intermission is a non-combat modal screen that is shown after the exit and before the next floor is generated. Gameplay time is frozen during it.
@@ -138,6 +142,8 @@ The intermission is a non-combat modal screen that is shown after the exit and b
 5. **Descend** button. The next floor generates and the intermission fades out on the new start room.
 
 Level-ups earned from the efficiency bonus open the level-up overlay before the Descend button becomes active.
+
+*Implemented (2A):* state `INTERMISSION` (`scripts/ui/intermission_screen.gd`) after `Events.floor_cleared` when depth < target: recap of rooms explored / total, ticks left of the floor budget, kills, damage taken and floor time (from `RunState.floor_stats()`), the 50 % heal, one original system line, and a focusable **Descend** button. Simulation and run time are frozen. *Not yet:* the leftover-tick efficiency bonus (step 2), ticks spent / granted and loot in the recap, and 2G's announcer line (the screen has its own placeholder quips).
 
 ## 6. Run summary
 
@@ -154,20 +160,24 @@ The summary is shown for every outcome. Its data is `RunState.summary()`, the sn
 | Epitaph | One announcer line chosen by outcome and cause |
 | Actions | **Retry seed** · **New run** · **Title** |
 
+*Implemented (2A):* state `SUMMARY` (`scripts/ui/summary_screen.gd`) after every `run_ended`: outcome and cause, depth reached of target and floors cleared, rooms explored, ticks spent / granted, kills, damage dealt / taken, level and XP, run time, the seed in a read-only (selectable) field with a **Copy seed** button, an epitaph line, and **Retry seed** / **New run** / **Title**; **R** / **N** still work. `RunState.summary()` adds `cause`, `target_depth`, `floor_budget`, `rooms_total`, `floors` (one `floor_stats()` record per floor with its `result`) and the `floors_cleared`, `ticks_granted` and `run_time_seconds` telemetry. *Not yet:* the per-floor table on screen (the data is in `floors`), kills by archetype, accuracy, build, loot and achievements blocks, and 2G's telemetry file.
+
 ## 7. Screen flow and game states
 
 These are the states of the `game.gd` state machine. `RUNNING`, `LEVEL_UP`, `PAUSED` and `ENDED` exist today. 2A adds `TITLE` and `SUMMARY` (`SUMMARY` replaces today's `ENDED` banner), plus the proposed `REWARD_PICK` and `INTERMISSION`. Overlays freeze simulation and never change the collapse clock. Every transition emits a signal on `Events` so that UI and audio can follow without polling.
 
 | State | Enters from | Leaves to | Simulation | Status |
 | --- | --- | --- | --- | --- |
-| `TITLE` | boot, summary | `RUNNING` (`RunState.start_run`, `Events.run_started`) | none | 2A |
+| `TITLE` | boot, summary | `RUNNING` (`RunState.start_run`, `Events.run_started`) | none | **implemented** (2A) |
 | `RUNNING` | title, overlays, intermission | `PAUSED`, `LEVEL_UP`, `REWARD_PICK`, `INTERMISSION`, `SUMMARY` | live | exists |
 | grace (a flag on `RUNNING`, `RunState.grace_left > 0`) | ticks reach 0 | normal running (ticks regained), `INTERMISSION` (exit), `SUMMARY` (collapse or death) | live, grace timer counting | 2E |
-| `PAUSED` | `pause` | `RUNNING`, `SUMMARY` (abandon, after confirmation) | frozen | exists |
+| `PAUSED` | `pause` | `RUNNING`, `SUMMARY` (abandon, after confirmation) | frozen | exists; Settings page and Abandon added (2A) |
 | `LEVEL_UP` | `Events.level_up` | `RUNNING` (cannot be skipped, as today) | frozen | exists |
 | `REWARD_PICK` | boss kill, loot box, chest | `RUNNING` | frozen | proposed (2B) |
-| `INTERMISSION` | exit taken, depth < target (`Events.floor_cleared`) | `RUNNING` (new floor, `Events.floor_started`) | frozen | proposed (2A) |
-| `SUMMARY` (today `ENDED`) | victory, death, collapse, abandon (`Events.run_ended`) | `TITLE`, `RUNNING` (retry / new) | none | 2A |
+| `INTERMISSION` | exit taken, depth < target (`Events.floor_cleared`) | `RUNNING` (new floor, `Events.floor_started`) | frozen | **implemented** (2A) |
+| `SUMMARY` (replaces `ENDED`) | victory, death, collapse, abandon (`Events.run_ended`) | `TITLE`, `RUNNING` (retry / new) | none | **implemented** (2A) |
+
+*Implemented (2A):* the enum is `RUNNING, LEVEL_UP, PAUSED, ENDED, TITLE, SUMMARY, INTERMISSION` (appended, so old values are stable). `ENDED` is kept but never entered. Each change emits the existing `Game.state_changed(previous, current)` and the new `Events.game_state_changed(previous_name, current_name)`. A settings page (`scripts/ui/settings_screen.gd` over `scripts/core/settings.gd`) opens from `TITLE` and `PAUSED` without changing state; Esc closes it.
 
 The pause menu keeps the current pages (overview, character, resolution). 2B adds an *Inventory* page and 2F a *Skills* page. Abandon asks for confirmation.
 

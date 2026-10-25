@@ -27,6 +27,7 @@ const Player = preload("res://scripts/player.gd")
 const Combat = preload("res://scripts/combat.gd")
 const RoomRenderer = preload("res://scripts/room_renderer.gd")
 const Hud = preload("res://scripts/ui/hud.gd")
+const Announcer = preload("res://scripts/ui/announcer.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -44,6 +45,8 @@ var combat: Combat
 var renderer: RoomRenderer
 var hud: Hud
 var character_menu: CharacterMenu
+## Dungeon-system announcer, achievements, profile and telemetry (Wave 2G).
+var announcer: Announcer
 
 
 func _ready() -> void:
@@ -61,6 +64,7 @@ func _ready() -> void:
     combat = _ensure_child("Combat", Combat) as Combat
     hud = _ensure_child("Hud", Hud) as Hud
     character_menu = _ensure_child("CharacterMenu", CharacterMenu) as CharacterMenu
+    announcer = _ensure_child("Announcer", Announcer) as Announcer
     combat.setup(player, catalogue)
     renderer.setup(player, combat, null, catalogue)
     _relayout()

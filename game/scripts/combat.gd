@@ -62,6 +62,10 @@ func _on_room_entered(_room_id: int, _kind: String, _entry: Dictionary, _first: 
     var dormancy: float = float(catalogue.get("encounters", {}).get("dormancy", 0.6))
     for foe in enemies():
         Enemies.on_room_entered(foe, dormancy)
+        if String(foe.get("elite", "")) != "" and not bool(foe.get("boss", false)):
+            Events.announcement_requested.emit("elite_spotted", {"enemy": String(foe["name"]),
+                "text": "Elite detected: %s. Its loot is nicer than yours." % foe["name"],
+                "priority": 3, "category": "warning"})
 
 
 func enemies() -> Array:
@@ -252,7 +256,10 @@ func _check_phase(foe: Dictionary, definition: Dictionary) -> void:
     for i in range(projectiles.size() - 1, -1, -1):
         if String(projectiles[i]["owner"]) == "enemy":
             projectiles.remove_at(i)
-    Events.say(String(phases[index].get("announce", "%s changes tactics." % foe["name"])), "combat")
+    var line: String = String(phases[index].get("announce", "%s changes tactics." % foe["name"]))
+    Events.say(line, "combat")
+    Events.announcement_requested.emit("boss_phase_changed", {"text": line, "priority": 4,
+        "category": "warning", "enemy": String(foe["name"]), "phase": index + 1})
 
 
 func _damage_player(amount: int, context: Dictionary) -> int:

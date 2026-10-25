@@ -13,18 +13,20 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project.
 4. Resize the game window by dragging an edge; the room remains **24×24 tiles** and scales to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable in this test build; opening animations are future work.
 
-| Input | Action |
-| --- | --- |
-| WASD or arrow keys | Move |
-| Mouse | Aim freely in any direction |
-| Hold left mouse button | Shoot projectiles |
-| Hold Space | Melee attack in aim direction |
-| Esc | Open pause menu, view character stats, or resume |
-| Pause → Display resolution | Choose a common windowed resolution and click **Apply resolution** |
-| F9 (prototype debug) | Award XP up to the next level so you can test the level-up menu immediately |
-| Mouse in level-up menu | Assign and refund points with + / −, then confirm |
-| R | Restart using same seed |
-| N | Restart using a new seed |
+| Input (keyboard / mouse) | Gamepad default | Input Map action | Effect |
+| --- | --- | --- | --- |
+| WASD or arrow keys | Left stick or D-pad | `move_up/down/left/right` | Move |
+| Mouse | — (right stick reserved as `aim_*`) | — | Aim freely in any direction |
+| Hold left mouse button | Hold RT | `fire` | Shoot projectiles |
+| Hold Space | Hold RB | `melee` | Melee attack in aim direction |
+| Esc | Start | `pause` | Open pause menu, view character stats, or resume |
+| Pause → Display resolution | — | — | Choose a common windowed resolution and click **Apply resolution** |
+| F9 (prototype debug) | — | `debug_level_up` | Award XP up to the next level so you can test the level-up menu immediately |
+| Mouse in level-up menu | — | — | Assign and refund points with + / −, then confirm |
+| R | — | `restart_seed` | Restart using same seed |
+| N | — | `new_seed` | Restart using a new seed |
+
+Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). Reserved actions with default bindings for Wave 2 features: `dodge` (Shift / B), `use_item` (Q / LB), `swap_weapon` (Tab / Y), `interact` (E / A), `map` (M / Back) and `aim_up/down/left/right` (right stick). Aiming is still mouse-only.
 
 **Goal:** defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Guild halls grant sample bonus ticks. Normal rooms contain **2–4 enemies** using melee or ranged attacks and basic pathfinding; the boss room contains multiple enemies. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
@@ -69,7 +71,7 @@ New scores immediately update AC (DEX), max HP (CON), STR-based melee and DEX-ba
 
 Press **Esc** to open the pause menu. Choose **View character stats** to see your build, select one of the built-in **windowed resolution presets** (800×600, 960×540, 1024×768, 1280×720, 1280×800, 1366×768, 1440×900, 1600×900, 1920×1080, 2560×1440, 3840×2160) and click **Apply resolution**, or select **Resume game** to return. Large options may be limited by your monitor/window manager; resizing affects the viewport, not the fixed 24×24 room. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
 
-Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). More UI/audio accessibility and gamepad support remain future tasks.
+Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). Gamepad bindings exist for movement, fire, melee and pause; gamepad aiming and menu navigation, plus more UI/audio accessibility, remain future tasks.
 
 ## Editing the clock and floor
 
@@ -90,43 +92,63 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 
 ## Run tests
 
-From the repository root, with `godot` pointing to Godot 4.7.2:
+From the repository root, with `godot` pointing to Godot 4.7.2 (or `GODOT=/path/to/godot`):
 
 ```sh
-godot --headless --path game --editor --quit
-godot --headless --path game --script res://tests/smoke_test.gd
+game/tests/run_all.sh
 ```
 
-GitHub Actions also defines a headless smoke check in `.github/workflows/godot-ci.yml`.
+It runs, failing fast with a summary: the import step, `tests/scripts_parse_test.gd` (compiles every script; the import alone does not report parse errors), `tests/smoke_test.gd`, every other `tests/*_test.gd`, and a short launch of the main scene. A step fails on a non-zero exit, a timeout, or any `SCRIPT ERROR` in its output. GitHub Actions runs the same script (`.github/workflows/godot-ci.yml`).
+
+| Test | Covers |
+| --- | --- |
+| `smoke_test.gd` | Pure logic: layout, assets, RPG math, allocation, catalogue, generation, obstacles, encounters, facing, Input Map |
+| `determinism_test.gd` | Seed 424242 floor signature, obstacle maps, encounters and a scripted combat trace equal constants captured from the pre-refactor `main.gd` |
+| `run_state_test.gd` | `RunState`: start_run, multi-level XP, allocation, damage/heal clamps, ticks, telemetry, summary |
+| `events_test.gd` | `Events` signals during scripted door transitions, kills, boss gate, death, collapse and escape |
+| `menu_integration_test.gd` | Live `Main.tscn`: level-up/pause modals, state machine, resolution, F9/R, Input-Map-driven physics loop |
+| `scripts_parse_test.gd` | Every script under `scripts/` and `tests/` compiles |
+
+**Writing tests that touch autoloads.** In `--script` mode (Godot 4.7.2) the `Events` and `RunState` autoload nodes already exist under `/root` when `_initialize()` runs (their `_ready()` runs a frame later), but their global identifiers are **not** visible to the test script or anything it `preload`s, because those compile before autoloads are registered. A compile error there makes Godot hang instead of exiting. So: fetch autoloads with `get_root().get_node("RunState")`, and `load()` game scripts or `res://scenes/Main.tscn` at runtime instead of `preload`ing them. Pure-logic modules that never mention an autoload can still be preloaded.
 
 ## Technical structure
 
+The runtime is event-driven. Two autoloads hold shared state and messaging; `Game` orchestrates; each child node has one job; pure-logic modules stay free of nodes.
+
 ```text
 game/
-├── project.godot
+├── project.godot               # autoloads (Events, RunState) and the Input Map
 ├── README.md
-├── assets/
-│   ├── README.md              # separate categories, 8-way contract
-│   ├── biomes/stone_crypt/tileset_16x16.png
-│   ├── characters/crawler/facing_8.png
-│   ├── enemies/rat/facing_8.png
-│   ├── enemies/brute_boss/facing_8.png
-│   └── weapons/README.md      # future weapon-specific sprite files
-├── scenes/Main.tscn
+├── assets/                     # see assets/README.md (separate files, 8-way facing contract)
+├── scenes/Main.tscn            # Game root + Player, Combat, RoomRenderer, Hud, CharacterMenu
 ├── scripts/
-│   ├── main.gd                 # renderer, input, room transitions, combat & HUD
+│   ├── core/
+│   │   ├── events.gd           # autoload Events: the signal bus (documented per signal)
+│   │   └── run_state.gd        # autoload RunState: run data, progression math, telemetry
+│   ├── game.gd                 # orchestrator + State {RUNNING, LEVEL_UP, PAUSED, ENDED}:
+│   │                           #   floor generation, room loading, doors/collapse, restarts, menus
+│   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames (Input Map)
+│   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage()
+│   ├── room_renderer.gd        # immediate-mode drawing of the room, doors (tick previews), actors
+│   ├── ui/hud.gd               # status lines, message line, minimap, hints, end-of-run overlay
+│   ├── character_menu.gd       # level-up allocation, pause and stat screens
 │   ├── floor_generator.gd      # deterministic graph and route queries
 │   ├── room_layout.gd          # fixed 24x24 world, fit-to-window scale
 │   ├── room_contents.gd        # obstacle generator and reachability checks
 │   ├── enemy_system.gd         # definitions, encounters, navigation
 │   ├── rpg_rules.gd            # six stats, d20 attack and XP progression
-│   ├── character_menu.gd       # level-up allocation, pause and stat screens
-│   └── collapse_policy.gd     # room-specific timing policy and ledger
+│   └── collapse_policy.gd      # room-specific timing policy and ledger
 ├── data/
 │   ├── prototype_rules.json    # collapse, obstacle count, player abilities
 │   └── enemies.json            # enemy behavior, stats, attacks, encounter tables
-└── tests/smoke_test.gd       # headless logic checks
+└── tests/
+    ├── run_all.sh              # runs everything below; used by CI
+    └── *_test.gd               # see "Run tests"
 ```
+
+**Data flow.** `RunState` is the single source of truth (seed, depth, floor, current room, ticks, XP/level, scores, HP/AC, visited rooms, persisted `room_states`, tick ledger, reserved `inventory`/`skills`, `telemetry`, parsed `config`). Systems change it through its methods (`start_run`, `reset_for_floor`, `award_xp`, `apply_damage_to_player`, `heal_player`, `apply_stat_allocation`, `apply_tick_entry`, `add_ticks`, `end_run`, `summary`), and everything that happens is announced on `Events` (`room_entered`, `ticks_changed`, `enemy_damaged`, `enemy_killed`, `player_damaged`, `level_up`, `run_ended`, `message`, ...). `Game` reacts to `enemy_killed` (XP, boss gate), `level_up` (modal) and `player_died` (defeat); `RunState` counts telemetry from the bus; `Hud` shows the newest `message`. All damage flows through `Combat.apply_damage(target, amount, context)`, and all combat dice use `RunState.rng`, so the same seed and inputs replay identically.
+
+**Adding a feature** usually means: add state to `RunState` (or use the reserved `inventory`/`skills`), add or reuse a signal in `events.gd`, and subscribe from your own node rather than editing `game.gd`. Room drawing is still immediate mode; a `TileMapLayer` plus sprite nodes is the candidate follow-up when animation work starts.
 
 ### Important scope limits
 

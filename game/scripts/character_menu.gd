@@ -1,5 +1,6 @@
 extends CanvasLayer
-## Modal UI; gameplay is frozen by Main while this overlay is visible.
+## Modal UI; gameplay is frozen by Game (LEVEL_UP / PAUSED states) while this
+## overlay is visible. Scores and context come from RunState via game.gd.
 ## Esc toggles pause; level-up must be allocated before combat resumes.
 signal resume_requested
 signal allocation_confirmed(changes: Dictionary)
@@ -231,8 +232,8 @@ func _on_change_point(ability: String, change: int) -> void:
 
 func _pause_content(content: VBoxContainer) -> void:
     content.add_child(_text("PAUSED", 27, Color("#f6d48d")))
-    content.add_child(_text("Floor 1  •  Room %d  •  Collapse %d ticks" % [
-        int(context.get("room_id", 0)), int(context.get("ticks", 0))],
+    content.add_child(_text("Floor %d  •  Room %d  •  Collapse %d ticks" % [
+        int(context.get("depth", 1)), int(context.get("room_id", 0)), int(context.get("ticks", 0))],
         15, Color("#d2e0e8")))
     content.add_child(_text("Level %d    XP %d    HP %d/%d    AC %d" % [
         int(context.get("level", 1)), int(context.get("xp", 0)),

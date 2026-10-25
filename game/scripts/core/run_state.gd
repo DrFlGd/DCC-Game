@@ -1,0 +1,297 @@
+extends Node
+## Autoload `RunState`: the single source of truth for the current run.
+##
+## Pure state plus progression math. No drawing, no input, no scene nodes.
+## Systems mutate the run through the methods below so that every change is
+## announced on `Events`. Fields may be read freely; writing them directly is
+## reserved for `Game` (floor/room bookkeeping) and tests.
+##
+## Determinism: `rng` is reseeded from `seed` in start_run() and is the only
+## RNG used for combat rolls. Floor, obstacle and encounter generation use
+## their own seeded RNGs derived from floor_seed().
+const RPG = preload("res://scripts/rpg_rules.gd")
+const CONFIG_PATH := "res://data/prototype_rules.json"
+const DEFAULT_SEED := 424242
+const TELEMETRY_KEYS := ["rooms_entered", "shots_fired", "melee_swings", "kills",
+    "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds"]
+
+## Parsed prototype_rules.json (see game/README.md for every key).
+var config: Dictionary = {}
+## Combat dice. Consumed in a fixed order by Combat, so same seed + same inputs
+## reproduce the same rolls.
+var rng := RandomNumberGenerator.new()
+@warning_ignore("shadowed_global_identifier")
+var seed := 0
+## 1-based floor depth.
+var depth := 1
+## Generator.generate() result for the current floor (rooms, start_id, ...).
+@warning_ignore("shadowed_global_identifier")
+var floor: Dictionary = {}
+var current_room_id := 0
+## Remaining collapse budget.
+var ticks := 0
+var xp := 0
+var level := 1
+## STR/DEX/CON/INT/WIS/CHA -> int.
+var ability_scores: Dictionary = {}
+var hp := 12
+var max_hp := 12
+var ac := 12
+var proficiency := 2
+var pending_stat_points := 0
+var boss_defeated := false
+## "running", "escaped", "collapsed" or "defeated".
+var outcome := "running"
+## room_id -> true for rooms entered on this floor.
+var visited: Dictionary = {}
+## room_id -> {"blocked": Dictionary, "props": Array, "enemies": Array}.
+## Persisted so obstacles and enemy HP survive revisits.
+var room_states: Dictionary = {}
+## Every CollapsePolicy.evaluate() entry applied this run, in order.
+var tick_ledger: Array[Dictionary] = []
+## Reserved for the items team: item_id -> stack/instance data.
+var inventory: Dictionary = {}
+## Reserved for the skills team: learned skill ids.
+var skills: Array = []
+## Counters for tuning; see TELEMETRY_KEYS. Updated from Events signals.
+var telemetry: Dictionary = {}
+
+
+func _init() -> void:
+    _reset_telemetry()
+
+
+func _enter_tree() -> void:
+    # _enter_tree (not _ready) so the hooks exist before a --script test's
+    # _initialize() runs; autoload _ready() only fires on the first frame.
+    _connect(Events.projectile_fired, _on_projectile_fired)
+    _connect(Events.melee_swung, _on_melee_swung)
+    _connect(Events.enemy_damaged, _on_enemy_damaged)
+    _connect(Events.enemy_killed, _on_enemy_killed)
+    _connect(Events.room_entered, _on_room_entered)
+
+
+func load_config(path: String = CONFIG_PATH) -> bool:
+    var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+    if not parsed is Dictionary:
+        push_error("Invalid " + path)
+        return false
+    config = parsed
+    return true
+
+
+func ensure_config() -> bool:
+    return true if not config.is_empty() else load_config()
+
+
+## Resets every per-run field and announces `run_started`. Floor generation is
+## Game's job; it calls reset_for_floor() and fills `floor` afterwards.
+func start_run(new_seed: int) -> void:
+    ensure_config()
+    seed = new_seed
+    rng.seed = new_seed
+    ticks = int(config.get("start_ticks", 26))
+    xp = 0
+    pending_stat_points = 0
+    ability_scores = config.get("player_ability_scores", RPG.player_base_scores()).duplicate(true)
+    sync_progression()
+    hp = max_hp
+    outcome = "running"
+    inventory = {}
+    skills = []
+    tick_ledger.clear()
+    _reset_telemetry()
+    reset_for_floor(1)
+    Events.run_started.emit(seed)
+
+
+## Clears per-floor state. Character progression, ticks and inventory persist.
+func reset_for_floor(new_depth: int) -> void:
+    depth = maxi(1, new_depth)
+    floor = {}
+    current_room_id = 0
+    visited.clear()
+    room_states.clear()
+    boss_defeated = false
+
+
+## Seed for generating floor `depth`. Depth 1 uses the run seed unchanged so
+## existing seeds reproduce. Deeper floors use a provisional derivation.
+func floor_seed(for_depth: int = -1) -> int:
+    var d: int = depth if for_depth < 1 else for_depth
+    return seed if d <= 1 else int((seed + (d - 1) * 1000003) % 2147483647)
+
+
+func current_room() -> Dictionary:
+    return room_states.get(current_room_id, {})
+
+
+func current_room_kind() -> String:
+    if floor.is_empty():
+        return ""
+    return String(floor["rooms"][current_room_id]["kind"])
+
+
+## Recomputes level, max HP, AC and proficiency from XP and ability scores.
+func sync_progression() -> void:
+    var progression: Dictionary = RPG.player_progression(xp, ability_scores)
+    level = int(progression["level"])
+    max_hp = int(progression["max_hp"])
+    ac = int(progression["ac"])
+    proficiency = int(progression["proficiency"])
+
+
+## Adds XP; emits `xp_gained`, then `level_up` once per award that crosses one or
+## more thresholds (points for every level gained are banked).
+func award_xp(amount: int) -> void:
+    var gained: int = maxi(0, amount)
+    var prior_level: int = level
+    var old_max: int = max_hp
+    xp += gained
+    sync_progression()
+    Events.xp_gained.emit(gained, xp)
+    if level > prior_level:
+        hp = mini(max_hp, hp + (max_hp - old_max))
+        var earned_levels: int = level - prior_level
+        pending_stat_points += earned_levels * maxi(0, int(config.get("stat_points_per_level", 2)))
+        Events.level_up.emit(level, pending_stat_points)
+
+
+## Applies a staged level-up allocation. Returns false (and changes nothing) if
+## RPG.apply_allocation rejects it. Raising CON heals by the max-HP gain.
+func apply_stat_allocation(changes: Dictionary) -> bool:
+    var cap: int = int(config.get("stat_score_cap", 20))
+    var next_scores: Dictionary = RPG.apply_allocation(ability_scores, changes,
+        pending_stat_points, cap)
+    if next_scores.is_empty():
+        return false
+    var old_max: int = max_hp
+    ability_scores = next_scores
+    pending_stat_points = 0
+    sync_progression()
+    hp = mini(max_hp, hp + maxi(0, max_hp - old_max))
+    Events.stats_changed.emit(ability_scores.duplicate(true))
+    return true
+
+
+## Removes HP (clamped at 0) and emits `player_damaged`; emits `player_died`
+## when HP reaches 0. Returns the damage applied (0 if already dead).
+func apply_damage_to_player(amount: int, source: String = "") -> int:
+    if amount <= 0 or hp <= 0:
+        return 0
+    hp = maxi(0, hp - amount)
+    telemetry["damage_taken"] = int(telemetry["damage_taken"]) + amount
+    Events.player_damaged.emit(amount, source)
+    if hp == 0:
+        Events.player_died.emit(source)
+    return amount
+
+
+## Restores HP up to max_hp. Returns the HP actually restored.
+func heal_player(amount: int) -> int:
+    if amount <= 0 or hp <= 0:
+        return 0
+    var healed: int = mini(amount, max_hp - hp)
+    hp += healed
+    if healed > 0:
+        Events.player_healed.emit(healed)
+    return healed
+
+
+## Records a CollapsePolicy entry for a door transition and applies its result.
+func apply_tick_entry(entry: Dictionary) -> void:
+    tick_ledger.append(entry)
+    telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) + int(entry.get("cost", 0))
+    _set_ticks(int(entry["after"]), String(entry.get("reason", "")))
+
+
+## Adds (or with a negative value removes) ticks outside door transitions,
+## e.g. items or shrines. Clamped at 0; collapse handling stays with Game.
+func add_ticks(amount: int, reason: String) -> void:
+    var next: int = maxi(0, ticks + amount)
+    if next < ticks:
+        telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) + ticks - next
+    _set_ticks(next, reason)
+
+
+func advance_clock(delta: float) -> void:
+    telemetry["run_time_seconds"] = float(telemetry["run_time_seconds"]) + delta
+
+
+## Marks the run finished and emits `run_ended` with summary().
+func end_run(new_outcome: String) -> Dictionary:
+    outcome = new_outcome
+    var result: Dictionary = summary()
+    Events.run_ended.emit(outcome, result)
+    return result
+
+
+## Values shown by the pause and character pages (window size is added by Game).
+func progression_context() -> Dictionary:
+    return {
+        "depth": depth, "room_id": current_room_id, "ticks": ticks,
+        "level": level, "xp": xp,
+        "next_xp": RPG.next_level_xp(level) if level < 20 else "MAX",
+        "hp": hp, "max_hp": max_hp, "ac": ac, "proficiency": proficiency,
+        "melee_bonus": RPG.attack_bonus(ability_scores, "STR", level),
+        "ranged_bonus": RPG.attack_bonus(ability_scores, "DEX", level)
+    }
+
+
+## Snapshot for the end-of-run screen, telemetry export and tests.
+func summary() -> Dictionary:
+    var result: Dictionary = telemetry.duplicate(true)
+    result.merge({
+        "seed": seed, "depth": depth, "outcome": outcome, "level": level,
+        "xp": xp, "hp": hp, "max_hp": max_hp, "ticks": ticks,
+        "rooms_visited": visited.size(), "boss_defeated": boss_defeated,
+        "ability_scores": ability_scores.duplicate(true),
+        "inventory": inventory.duplicate(true), "skills": skills.duplicate(),
+        "ledger_entries": tick_ledger.size()
+    })
+    return result
+
+
+func _set_ticks(value: int, reason: String) -> void:
+    var before: int = ticks
+    ticks = value
+    if before != ticks:
+        Events.ticks_changed.emit(before, ticks, reason)
+
+
+func _reset_telemetry() -> void:
+    telemetry = {}
+    for key in TELEMETRY_KEYS:
+        telemetry[key] = 0.0 if key == "run_time_seconds" else 0
+
+
+func _bump(key: String, amount: int = 1) -> void:
+    telemetry[key] = int(telemetry.get(key, 0)) + amount
+
+
+func _connect(event: Signal, handler: Callable) -> void:
+    if not event.is_connected(handler):
+        event.connect(handler)
+
+
+func _on_projectile_fired(owner_kind: String, _data: Dictionary) -> void:
+    if owner_kind == "player":
+        _bump("shots_fired")
+
+
+func _on_melee_swung(owner_kind: String, _position: Vector2, _direction: Vector2) -> void:
+    if owner_kind == "player":
+        _bump("melee_swings")
+
+
+func _on_enemy_damaged(_instance_id: String, amount: int, _critical: bool) -> void:
+    _bump("damage_dealt", amount)
+
+
+func _on_enemy_killed(_definition_id: String, _xp: int, _position: Vector2) -> void:
+    _bump("kills")
+
+
+func _on_room_entered(_room_id: int, _kind: String, _entry: Dictionary, first_visit: bool) -> void:
+    if first_visit:
+        _bump("rooms_entered")

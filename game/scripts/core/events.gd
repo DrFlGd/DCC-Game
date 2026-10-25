@@ -88,6 +88,22 @@ signal projectile_fired(owner: String, data: Dictionary)
 ## A melee swing started at world `position` towards unit vector `direction`.
 signal melee_swung(owner: String, position: Vector2, direction: Vector2)
 
+# --- Combat feel (Wave 2D) ---------------------------------------------------
+
+## The crawler started a dodge roll (or a skill dash through the same code
+## path) along unit vector `direction`. Emitted by Combat.on_player_dodged(),
+## which is also where the content trigger `on_dodge` fires.
+signal dodged(direction: Vector2)
+## RunState.stamina changed (spend, regen, refill). Regen only emits when the
+## whole-number value changes or the pool is full again.
+signal stamina_changed(current: float, maximum: float)
+## The doors of `room_id` sealed (D-07): a locking room with live hostiles,
+## 0.5 s after entry, once the crawler is 24 px inside.
+signal doors_locked(room_id: int)
+## The doors of `room_id` opened again. `reason` is "cleared", "grace" or
+## "failsafe".
+signal doors_unlocked(room_id: int, reason: String)
+
 # --- Progression -------------------------------------------------------------
 
 ## The player gained `amount` XP; `total` is the new cumulative XP.

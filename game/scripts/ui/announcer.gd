@@ -24,7 +24,8 @@ const Enemies = preload("res://scripts/enemy_system.gd")
 ## Toasts are held back while a modal (pause, level-up) is open.
 const LAYER := 25
 ## Game states (Events.game_state_changed, Wave 2A) that count as modal.
-const MODAL_STATES := ["LEVEL_UP", "PAUSED"]
+## MAP and DIALOG are the Wave 2E floor map and choice modal.
+const MODAL_STATES := ["LEVEL_UP", "PAUSED", "MAP", "DIALOG"]
 ## Signals from other Wave 2 teams; connected only if Events declares them.
 const OPTIONAL_SIGNALS := ["grace_started", "grace_ended", "hazard_spawned", "chest_opened",
     "shrine_used", "guild_rested", "game_state_changed"]

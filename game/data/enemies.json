@@ -372,11 +372,13 @@
     "kind_multiplier": {
       "normal": 1.0,
       "elite": 1.5,
+      "trap": 0.5,
       "boss": 0.5
     },
     "min_enemies": {
       "normal": 2,
       "elite": 2,
+      "trap": 0,
       "boss": 1
     },
     "max_enemies": {
@@ -502,7 +504,6 @@
       "escort_boss_gap": 48,
       "attempts": 150
     },
-    "boss_obstacle_cap": 24,
     "dormancy": 0.6,
     "first_cooldown": [
       0.4,

@@ -97,13 +97,6 @@ static func band_rules(catalogue: Dictionary, band: int) -> Dictionary:
     return catalogue.get("bands", {}).get(str(clampi(band, 1, 5)), {})
 
 
-## Obstacle target for a room: boss rooms are capped to keep an open arena.
-static func obstacle_density(catalogue: Dictionary, kind: String, density: int) -> int:
-    if kind == "boss":
-        return mini(density, int(settings(catalogue).get("boss_obstacle_cap", density)))
-    return density
-
-
 ## Resolves an enemy's `sprite` (a sprite_sheets id or a res:// path) to
 ## {path, frame: Vector2, render: Vector2}.
 static func sheet_info(catalogue: Dictionary, sprite: String) -> Dictionary:
@@ -1148,21 +1141,6 @@ static func has_line_of_sight(from_pos: Vector2, to_pos: Vector2, blocked: Dicti
         if blocked.has(Room.cell_of(point)):
             return false
     return true
-
-
-## Hazard entry (shared shape with the 2E ground-hazard system):
-## {pos, radius, telegraph_remaining, damage, duration, source} plus optional
-## tick (s between pulses; 0 = one pulse), tick_timer, pulses (count so far),
-## status (status id for the 2B status system; not applied yet), damage_type,
-## hits_enemies, hits_player, owner. `duration` is the remaining active time.
-static func make_hazard(pos: Vector2, radius: float, telegraph: float, damage: int,
-        duration: float, source: String, extra: Dictionary = {}) -> Dictionary:
-    var entry := {"pos": pos, "radius": radius, "telegraph_remaining": telegraph,
-        "damage": damage, "duration": duration, "source": source, "tick": 0.0,
-        "tick_timer": 0.0, "pulses": 0, "status": "", "damage_type": "physical",
-        "hits_enemies": false, "hits_player": true, "owner": "enemy"}
-    entry.merge(extra, true)
-    return entry
 
 
 # --- Validation ---------------------------------------------------------------------

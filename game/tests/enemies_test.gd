@@ -231,17 +231,20 @@ func _test_boss_and_elite_rooms() -> void:
 
 func _test_spawn_constraints() -> void:
     var spawn: Dictionary = Enemies.settings(catalogue)["spawn"]
+    var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/prototype_rules.json"))
+    var caps: Dictionary = config.get("room_obstacle_caps", {})
+    check(int(caps.get("boss", 99)) <= 24, "boss rooms keep an open arena (obstacle cap <= 24)")
     for seed_index in range(4):
         var seed_value: int = 1300 + seed_index
         var generated: Dictionary = Generator.generate(seed_value, 22)
         for room in generated["rooms"]:
             var kind: String = String(room["kind"])
-            if kind != "normal" and kind != "boss":
+            if not ["normal", "boss", "elite", "trap"].has(kind):
                 continue
             for depth in [1, 3, 5]:
                 var id: int = int(room["id"])
                 var blocked: Dictionary = Contents.generate(seed_value, id, room["neighbors"], kind,
-                    Enemies.obstacle_density(catalogue, kind, 38))["blocked"]
+                    38, caps)["blocked"]
                 var foes: Array[Dictionary] = Enemies.generate_encounter(catalogue, kind, seed_value,
                     id, blocked, depth, room["neighbors"])
                 var again: Array[Dictionary] = Enemies.generate_encounter(catalogue, kind, seed_value,

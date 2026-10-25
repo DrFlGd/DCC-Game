@@ -83,6 +83,13 @@ static func floor_budget(floor_data: Dictionary, policy, config: Dictionary) -> 
     return mandatory_route_cost(floor_data, policy) + slack(floor_data["rooms"].size(), config)
 
 
+## Public entry to the Dijkstra below (used by CollapsePolicy.mandatory_route
+## for the generator's route checks, with tie-break weights folded into `cost`).
+static func cheapest_path(rooms: Array, cost: Array[int], from_id: int, to_id: int,
+        forbidden: Dictionary = {}) -> Dictionary:
+    return _cheapest_path(rooms, cost, from_id, to_id, forbidden)
+
+
 ## Dijkstra from `from_id` to `to_id`, where stepping into room r costs
 ## cost[r]. Rooms in `forbidden` are never entered. Returns {cost, path} or {}.
 static func _cheapest_path(rooms: Array, cost: Array[int], from_id: int, to_id: int,

@@ -17,6 +17,7 @@ const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Player = preload("res://scripts/player.gd")
+const Hazards = preload("res://scripts/hazards.gd")
 
 const PLAYER_SHOT_SPEED := 215.0
 const PLAYER_SHOT_TTL := 2.0
@@ -28,14 +29,16 @@ const MELEE_DIE := 6
 const ENEMY_SHOT_TTL := 2.8
 const PROJECTILE_RADIUS := 2.0
 const HIT_SLOP := 3.0
+## Enemy puddle colours by status tag (drawn by hazards.gd).
+const PUDDLE_COLORS := {"poisoned": Color("#9bd34a"), "burning": Color("#ff7a2e"),
+    "slowed": Color("#4fa3ff")}
 
 ## Live projectiles: {pos, velocity, ttl, owner ("player"/"enemy"), die, bonus,
 ## attack_bonus, source, mult}. Cleared on every room transition.
 var projectiles: Array[Dictionary] = []
-## Live ground hazards: {pos, radius, telegraph_remaining, damage, duration,
-## source} plus tick, tick_timer, status, damage_type, hits_enemies, hits_player,
-## owner (see Enemies.make_hazard). Cleared on every room entry. Wave 2E's
-## generic hazard module is expected to absorb this list.
+## Live ground hazards of the current room (hazards.gd entry shape: pos, radius,
+## telegraph_remaining, damage, duration, source, kind, ...). Shared by grace
+## debris, trap plates and enemy puddles. Cleared on every room transition.
 var hazards: Array[Dictionary] = []
 ## Crawler velocity estimated from frame-to-frame movement (twin_shot lead).
 var player_velocity := Vector2.ZERO
@@ -53,10 +56,10 @@ func setup(player_node: Player, enemy_catalogue: Dictionary) -> void:
     catalogue = enemy_catalogue
 
 
-## Every room entry (first visit or revisit) clears hazards and puts the room's
-## enemies back on their spawn points, dormant for `encounters.dormancy` s.
+## Every room entry (first visit or revisit) puts the room's enemies back on
+## their spawn points, dormant for `encounters.dormancy` s. (Game clears
+## hazards before the room swap.)
 func _on_room_entered(_room_id: int, _kind: String, _entry: Dictionary, _first: bool) -> void:
-    hazards.clear()
     _last_player_pos = Vector2.INF
     player_velocity = Vector2.ZERO
     var dormancy: float = float(catalogue.get("encounters", {}).get("dormancy", 0.6))
@@ -82,6 +85,41 @@ func definition_of(foe: Dictionary) -> Dictionary:
 
 func clear_projectiles() -> void:
     projectiles.clear()
+
+
+# --- Ground hazards (Wave 2E) -------------------------------------------------
+
+## Adds a hazard entry (normalised by hazards.gd) and emits `hazard_spawned`.
+func spawn_hazard(entry: Dictionary) -> Dictionary:
+    Hazards.normalize(entry)
+    hazards.append(entry)
+    Events.hazard_spawned.emit(entry)
+    return entry
+
+
+func clear_hazards() -> void:
+    hazards.clear()
+
+
+## Steps every hazard and applies its hits: flat damage through apply_damage()
+## (i-frames skip the crawler inside hazards.gd) and tick drains through
+## RunState.add_ticks(-n, source).
+func update_hazards(delta: float) -> void:
+    if hazards.is_empty():
+        return
+    var hits: Array[Dictionary] = Hazards.step(hazards, delta, {
+        "pos": player.world_position, "radius": Player.RADIUS,
+        "invulnerable": player.invulnerability > 0.0}, enemies())
+    for hit in hits:
+        var source: String = String(hit["entry"]["source"])
+        if hit["target"] is String:
+            if int(hit["damage"]) > 0 and RunState.hp > 0:
+                apply_damage(player, int(hit["damage"]), {"source": source})
+            if int(hit["ticks"]) > 0:
+                RunState.add_ticks(-int(hit["ticks"]), source)
+        elif int(hit["target"]["hp"]) > 0:
+            apply_damage(hit["target"], int(hit["damage"]), {"source": source,
+                "damage_type": String(hit["entry"].get("damage_type", "physical"))})
 
 
 ## Spawns a player bolt along the current aim (cooldown is the Player's job).
@@ -237,10 +275,11 @@ func _on_enemy_death(foe: Dictionary) -> void:
         var damage := 0
         for _i in range(int(burst.get("dice", 1))):
             damage += RunState.rng.randi_range(1, maxi(1, int(burst.get("die", 6))))
-        hazards.append(Enemies.make_hazard(Vector2(foe["pos"]), float(burst.get("radius", 32)),
-            float(burst.get("telegraph", 0.8)), damage, 0.0, String(foe["definition"]),
-            {"hits_enemies": bool(burst.get("hits_enemies", true)),
-                "damage_type": String(burst.get("damage_type", "fire"))}))
+        spawn_hazard(Hazards.make("volatile_burst", Vector2(foe["pos"]),
+            float(burst.get("radius", 32)), float(burst.get("telegraph", 0.8)), damage, 0.0,
+            String(foe["definition"]), {"hits_enemies": bool(burst.get("hits_enemies", true)),
+                "damage_type": String(burst.get("damage_type", "fire")),
+                "color": Color(String(foe.get("tint", "#ff8a3d")))}))
 
 
 ## Boss phase thresholds: entering a phase roars (1 s invulnerable), clears
@@ -300,10 +339,9 @@ func update_projectiles(delta: float) -> void:
 
 
 ## Steps every enemy's state machine (dormancy, wind-up, resolution, recovery)
-## and resolves the actions it returns. Also ticks hazards.
+## and resolves the actions it returns. Hazards tick in update_hazards().
 func update_enemies(delta: float) -> void:
     _track_player(delta)
-    update_hazards(delta)
     var foes: Array = enemies()
     var world := {"player_pos": player.world_position, "player_velocity": player_velocity,
         "blocked": blocked(), "allies": foes}
@@ -365,10 +403,12 @@ func _resolve_enemy_action(foe: Dictionary, definition: Dictionary, action: Dict
                 var numbers: Dictionary = Enemies.attack_numbers(foe, definition, attack)
                 damage = maxi(1, int(floorf(float(RPG.roll_damage(RunState.rng,
                     int(numbers["die"]), int(numbers["bonus"]), false)) * float(numbers["mult"]))))
-            hazards.append(Enemies.make_hazard(action["pos"], float(action["radius"]),
+            var status: String = String(spec.get("status", ""))
+            spawn_hazard(Hazards.make("puddle", action["pos"], float(action["radius"]),
                 float(spec.get("telegraph", 0.0)), damage, float(spec.get("duration", 0.0)), source,
-                {"tick": float(spec.get("tick", 0.0)), "status": String(spec.get("status", "")),
-                    "damage_type": String(attack.get("damage_type", "physical"))}))
+                {"interval": float(spec.get("tick", 0.0)), "status": status,
+                    "damage_type": String(attack.get("damage_type", "physical")),
+                    "color": PUDDLE_COLORS.get(status, Hazards.DEFAULT_COLOR)}))
         "summon":
             _summon(foe, attack)
         "support":
@@ -439,50 +479,3 @@ func _support(foe: Dictionary, attack: Dictionary) -> void:
         else:
             ally["ward"] = maxi(int(ally.get("ward", 0)), amount)
             ally["ward_time"] = float(attack.get("duration", 6.0))
-
-
-## Ticks hazards: the telegraph counts down (no damage), then the hazard pulses
-## once on activation and every `tick` seconds while `duration` (remaining
-## active seconds) lasts; a hazard with tick 0 pulses exactly once.
-func update_hazards(delta: float) -> void:
-    for i in range(hazards.size() - 1, -1, -1):
-        if i >= hazards.size():
-            continue
-        var hazard: Dictionary = hazards[i]
-        if float(hazard["telegraph_remaining"]) > 0.0:
-            hazard["telegraph_remaining"] = float(hazard["telegraph_remaining"]) - delta
-            if float(hazard["telegraph_remaining"]) > 0.0:
-                continue
-        var tick: float = float(hazard.get("tick", 0.0))
-        if int(hazard.get("pulses", 0)) == 0:
-            hazard["tick_timer"] = tick
-            _pulse(hazard)
-        elif tick > 0.0:
-            hazard["tick_timer"] = float(hazard["tick_timer"]) - delta
-            if float(hazard["tick_timer"]) <= 0.0001 and float(hazard["duration"]) > 0.0001:
-                hazard["tick_timer"] = float(hazard["tick_timer"]) + tick
-                _pulse(hazard)
-        hazard["duration"] = float(hazard["duration"]) - delta
-        if float(hazard["duration"]) <= 0.0001 and i < hazards.size() and is_same(hazards[i], hazard):
-            hazards.remove_at(i)
-
-
-func _pulse(hazard: Dictionary) -> void:
-    hazard["pulses"] = int(hazard.get("pulses", 0)) + 1
-    _hazard_pulse(hazard)
-
-
-func _hazard_pulse(hazard: Dictionary) -> void:
-    var center: Vector2 = hazard["pos"]
-    var radius: float = float(hazard["radius"])
-    var damage: int = int(hazard["damage"])
-    if damage <= 0:
-        return
-    if bool(hazard.get("hits_player", true)) and player.invulnerability <= 0.0 \
-            and center.distance_to(player.world_position) <= radius + Player.RADIUS:
-        apply_damage(player, damage, {"source": String(hazard["source"])})
-    if bool(hazard.get("hits_enemies", false)):
-        for foe in enemies().duplicate():
-            if int(foe["hp"]) > 0 and center.distance_to(Vector2(foe["pos"])) <= radius + float(foe["radius"]):
-                apply_damage(foe, damage, {"source": "hazard:" + String(hazard["source"]),
-                    "damage_type": String(hazard.get("damage_type", "physical"))})

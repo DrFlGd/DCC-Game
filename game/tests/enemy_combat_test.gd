@@ -11,6 +11,7 @@ var game
 var rs: Node
 var events: Node
 var Enemies
+var Hazards
 var damage_log: Array = []
 var messages: Array = []
 var kills: Array = []
@@ -31,6 +32,7 @@ func _run() -> void:
     rs = get_root().get_node("RunState")
     events = get_root().get_node("Events")
     Enemies = load("res://scripts/enemy_system.gd")
+    Hazards = load("res://scripts/hazards.gd")
     events.player_damaged.connect(func(amount, source): damage_log.append([amount, source]))
     events.message.connect(func(text, _category): messages.append(text))
     events.enemy_killed.connect(func(id, xp, _pos): kills.append([id, xp]))
@@ -244,8 +246,8 @@ func _test_summoner_cap() -> void:
 
 func _test_hazards() -> void:
     _arena([], Vector2(100, 100))
-    game.combat.hazards.append(Enemies.make_hazard(Vector2(100, 100), 32.0, 0.0, 2, 3.0,
-        "spore_puffer", {"tick": 1.0, "status": "poisoned"}))
+    game.combat.spawn_hazard(Hazards.make("puddle", Vector2(100, 100), 32.0, 0.0, 2, 3.0,
+        "spore_puffer", {"interval": 1.0, "status": "poisoned"}))
     for _i in range(190):
         game.player.invulnerability = 0.0
         game.combat.update_hazards(FRAME)
@@ -253,7 +255,7 @@ func _test_hazards() -> void:
         "puddle pulses once per second for 3 s: %s" % [damage_log])
     check(game.combat.hazards.is_empty(), "expired hazards are removed")
     _arena([], Vector2(100, 100))
-    game.combat.hazards.append(Enemies.make_hazard(Vector2(100, 100), 22.0, 0.9, 6, 0.0, "lobber"))
+    game.combat.spawn_hazard(Hazards.make("puddle", Vector2(100, 100), 22.0, 0.9, 6, 0.0, "lobber"))
     for _i in range(53):
         game.combat.update_hazards(FRAME)
     check(damage_log.is_empty(), "no damage while the ground circle is telegraphing")
@@ -265,7 +267,8 @@ func _test_hazards() -> void:
     _arena([puffer], Vector2(120, 100))
     _simulate(0.7, false)
     check(game.combat.hazards.size() == 1 and game.combat.hazards[0]["source"] == "spore_puffer"
-        and float(game.combat.hazards[0]["radius"]) == 32.0, "spore puffer drops a 32 px puddle")
+        and float(game.combat.hazards[0]["radius"]) == 32.0
+        and float(game.combat.hazards[0]["interval"]) == 1.0, "spore puffer drops a 32 px puddle (hazards.gd entry)")
 
 
 func _test_support_and_knockback() -> void:

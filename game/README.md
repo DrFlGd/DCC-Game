@@ -28,14 +28,20 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | R | — | `restart_seed` | Restart using same seed (during a run or on the run summary) |
 | N | — | `new_seed` | Restart using a new seed (during a run or on the run summary) |
 | L | L3 (left stick press) | `toggle_log` | Show / hide the system log (see [The System](#the-system)) |
+| E | A | `interact` | Use the feature in reach when the HUD shows a prompt: open a chest, pray at a shrine, rest at the guild hall, read the shop sign |
+| M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc also closes it) |
+| 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc walks away without using it |
 
-Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). Reserved actions with default bindings for Wave 2 features: `dodge` (Shift / B), `use_item` (Q / LB), `swap_weapon` (Tab / Y), `interact` (E / A), `map` (M / Back) and `aim_up/down/left/right` (right stick). Aiming is still mouse-only.
+Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). Reserved actions with default bindings for Wave 2 features: `dodge` (Shift / B), `use_item` (Q / LB), `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Aiming is still mouse-only.
 
 **Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms spend a **threat budget that grows with depth** (2–4 enemies on floors 1–2, up to 6 by floor 5); every enemy attack has a visible **wind-up telegraph** you can dodge, and enemies wait 0.6 s when you enter. Boss rooms hold the depth's boss (Armored Brute on floors 1–2, Sump Warden from floor 3) plus an escort; bosses change phase at HP thresholds and show an HP bar at the top. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
 ## What works
 
-- Seeded 2D procedural room graph with branches and adjacency-created loops, plus start/boss/guild-hall/exit tags.
+- Seeded 2D procedural room graph with branches and adjacency-created loops, plus start/boss/guild-hall/exit tags and side-room **treasure, elite, trap and shrine** rooms; infeasible layouts are re-rolled deterministically.
+- **Collapse clock v1:** never-refused doors, a zero-clock grace period with escalating debris, stabilising by regaining ticks, and a hard collapse when the grace runs out.
+- **Interactions** (E): treasure chests, shrines, the guild-hall rest station and shop sign; spike and tick-drain pressure plates in trap rooms.
+- **Floor map** (M): visited and scouted rooms by kind, door costs from the current room.
 - Room transitions via matching cardinal doors, room discovery, and an exit locked until the boss is defeated.
 - Editable collapse rules for first entry, revisits, boss rooms, guild halls, and exit, with an entry ledger printed to Godot's **Output** panel.
 - Visible tick/health HUD (`FLOOR d/6`), door preview of net tick effects, and restart handling.
@@ -98,10 +104,19 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 - `collapse.budget.min_slack` / `slack_ratio`: each floor's fresh budget is **cheapest mandatory route cost + max(min_slack, ceil(slack_ratio × rooms))** (8 and 0.45; [COLLAPSE_SYSTEM.md §4](../docs/design/COLLAPSE_SYSTEM.md#4-starting-budget-and-depth-scaling)), computed in `scripts/core/run_rules.gd`. The route cost is a Dijkstra search start → boss → exit over first-entry costs, with each room's net cost clamped at 0 and the exit cost included. For seed 424242, floor 1 is 16 + 10 = **26** ticks (as before), floor 2 is 30. Leftover ticks never carry over.
 - `start_ticks`: provisional clock set by `RunState.start_run` before the floor budget replaces it (and what `RunState` uses on its own in unit tests).
 - `collapse.default.first_entry_cost` / `revisit_cost`: fallback transition cost.
-- `collapse.room_types.<kind>`: optional override for `start`, `normal`, `boss`, `guild_hall`, `exit`; currently boss costs 3, guild hall costs 0 and grants 3, exit costs 1.
-- `first_entry_grant`: bonus ticks on first entry to the configured room type.
+- `collapse.default.clear_refund`: ticks refunded when any room is cleared (0, an experiment knob).
+- `collapse.room_types.<kind>`: per-kind override of `first_entry_cost`, `revisit_cost`, `first_entry_grant` and `clear_grant` for `start` (0), `normal` (default 2), `boss` (3), `guild_hall` (0, grants 3), `exit` (1), `treasure` (2), `elite` (3, +1 on clear), `trap` (1) and `shrine` (1).
+- `collapse.budget.max_start_ticks` (70) / `guild_max_ratio` (0.5): generator feasibility limits: a floor budget above 70, or a guild hall whose cheapest path costs more than half the budget, re-rolls the layout.
+- `collapse.grace.seconds` (10) / `repeat_seconds` (5) / `max_per_floor` (2): the zero-clock grace period. `collapse.grace.waves[]` is the debris table (`above` seconds left, `interval`, `markers` per wave, `shake` px); `collapse.grace.debris` the marker (`radius` 14, `telegraph` 0.8 s, `damage` 2, `duration` 0.15 s, `hits_enemies`).
+- `generation.special_rooms.counts_by_depth[]`: treasure / elite / trap / shrine counts; the last row whose `min_depth` ≤ depth wins, missing kinds keep the previous row's value (defaults: 1 treasure everywhere, elite 1 from depth 2, trap 1 from depth 2 and 2 from depth 5, shrine 1 from depth 3). `guild_min_hops` (2) and `elite_min_hops` (3) are placement distances from the start room.
+- `generation.feasibility.max_attempts` (20) / `seed_stride` (104729): an infeasible floor is regenerated with `seed + attempt × stride`; the outcome is stored in `floor["feasibility"]`.
+- `hazards.spike_plate` / `drain_plate` / `trap_plates`: pressure-plate hazards in trap rooms (spikes: 3 damage after 0.5 s, rearm 2 s; drain: −1 tick after 0.6 s if you are still on it, one-shot; 2–4 plates per room, 1–2 of them drains).
+- `room_obstacle_caps`: obstacle cap per kind (13 for start, guild hall, exit, treasure and shrine; 20 trap; 30 elite; boss and normal use `obstacle_count`).
+- `interaction.radius` (26 px), `shrine_ticks` (+2), `shrine_heal_ratio` (0.5 of max HP).
 
-**No collapse values are final.** This prototype interprets zero remaining ticks as immediate defeat *after a transition*, and denies any transition whose entry cost exceeds remaining ticks. The exception is the unsealed exit: it resolves *before* the collapse check, so leaving with exactly the last tick clears the floor. This is a test behavior, not final game design. Some seeds may be unusually generous/tight until the balancing work is completed. Each floor's room count, route cost and budget are printed to the console when it starts.
+**The collapse clock (v1, [COLLAPSE_SYSTEM.md](../docs/design/COLLAPSE_SYSTEM.md)).** Doors are never refused for lack of ticks; only the sealed exit refuses. A cost larger than what is left takes the clock to 0. When the clock reaches 0 by anything other than the exit, a **10 s grace period** starts: the tick counter becomes a red countdown, doors stay unlocked, entering rooms is free (first-entry grants still apply) and falling-debris markers telegraph for 0.8 s before dealing 2 damage (a dodge's i-frames avoid them). Regaining any ticks (guild hall, shrine, elite clear, items) stabilises the floor; a second zero on the same floor gives 5 s, a third collapses at once. The timer running out ends the run as **collapsed**. The unsealed exit always resolves first, so leaving with exactly the last tick, or during grace, clears the floor. Pause, level-up, the map and the shrine prompt freeze the grace timer and hazards. The HUD counter turns amber at ≤ 6 and red at ≤ 3, and a door label ends in a red `!` when walking through would leave the clock at 0. No values are final; each floor's room count, route cost and budget are printed to the console when it starts.
+
+**Special rooms.** Side rooms (never the guaranteed spine) can be a **treasure** room (a chest that rolls the `treasure_room` loot table), a **trap** room (spike and tick-drain pressure plates), a **shrine** (one choice: +2 ticks or heal 50 %), or an **elite** room (a harder fight; until the enemies team adds an `elite` table it uses the normal one). The **guild hall** has a rest station (full heal, once per floor) and a shop sign (the shop arrives with the items team). Chest loot is announced (`Events.chest_opened`) but not yet added to an inventory.
 
 ## The System
 
@@ -138,7 +153,7 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | Test | Covers |
 | --- | --- |
 | `smoke_test.gd` | Pure logic: layout, assets, RPG math, allocation, catalogue, generation, obstacles, encounters, facing, Input Map |
-| `determinism_test.gd` | Seed 424242 floor signature, obstacle maps, encounters and a scripted combat trace equal constants captured from the pre-refactor `main.gd` |
+| `determinism_test.gd` | Seed 424242 floor signature, kind-masked geometry, obstacle maps, encounters and a scripted combat trace equal captured constants (regenerated in Wave 2E for the special rooms; the geometry and combat trace are unchanged since the pre-refactor `main.gd`) |
 | `run_state_test.gd` | `RunState`: start_run, multi-level XP, allocation, damage/heal clamps, ticks, telemetry, summary |
 | `enemies_test.gd` | Enemy schema v2 (shipped and broken records), roster, budgets within 10 % and composition rules over 20 seeds × depths 1–6, boss/elite rooms, spawn constraints, veteran/elite scaling, phases, twin_shot geometry, dormancy and wind-up state machine |
 | `enemy_combat_test.gd` | Live `Combat`: wind-up timing and dodging, dormancy on entry, twin_shot hits a still crawler, boss phase roars, bulwark/volatile elites, summon caps, hazards, support wards, knockback, `boss_defeated` for both bosses |
@@ -147,6 +162,8 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `run_loop_test.gd` | Title → `start_run`, room counts and budgets by depth (26 on floor 1 for 424242), exit → intermission → fresh floor with carried XP/HP, last-tick exit, victory on floor 6, summary after death/abandon with Retry/New/Title, run-time freeze, pause → settings, `user://` settings roundtrip |
 | `scripts_parse_test.gd` | Every script under `scripts/` and `tests/` compiles |
 | `announcer_test.gd` | Announcer data validator, placeholders, seeded selection, cooldowns, once-per-run, preemption, rate limit, modal suppression; live toasts, log, achievements page and telemetry in `Main.tscn` |
+| `collapse_test.gd` | Collapse clock v1: never-refused doors, grace lifecycle (10 s, stabilise, 5 s, third zero), debris waves vs the wave table, exit during grace, modal freeze, hazards module, `budget_for` (26 for 424242; 30/36/40/46/50 for depths 2–6), route sweep, feasibility re-roll |
+| `rooms_test.gd` | Special-room placement over 20 seeds × 6 depths, interiors and obstacle caps, chest / shrine / guild rest / trap plates on the live game, the interaction registry, the floor map overlay |
 | `achievements_test.gd` | Achievements on scripted event sequences (never twice), profile save/load and corrupt-file recovery, telemetry report keys and 50-file retention |
 
 **Writing tests that touch autoloads.** In `--script` mode (Godot 4.7.2) the `Events` and `RunState` autoload nodes already exist under `/root` when `_initialize()` runs (their `_ready()` runs a frame later), but their global identifiers are **not** visible to the test script or anything it `preload`s, because those compile before autoloads are registered. A compile error there makes Godot hang instead of exiting. So: fetch autoloads with `get_root().get_node("RunState")`, and `load()` game scripts or `res://scenes/Main.tscn` at runtime instead of `preload`ing them. Pure-logic modules that never mention an autoload can still be preloaded.
@@ -173,11 +190,17 @@ game/
 │   │   ├── profile.gd          # user://profile.json: unlocks, lifetime stats (static accessors)
 │   │   └── telemetry.gd        # per-run report to user://telemetry/
 │   ├── game.gd                 # orchestrator + State {RUNNING, LEVEL_UP, PAUSED, ENDED(unused),
-│   │                           #   TITLE, SUMMARY, INTERMISSION}: floors, doors/collapse, screens
+│   │                           #   TITLE, SUMMARY, INTERMISSION, MAP, DIALOG}: floors, doors, screens
+│   ├── collapse_clock.gd       # zero-clock grace driver: timer, debris waves, hard collapse
+│   ├── hazards.gd              # ground hazards: telegraph -> active -> expire, drawing (pure)
+│   ├── interactables.gd        # interactable entries (chest, shrine, rest, sign...) (pure)
+│   ├── room_services.gd        # interact registry + prompts, chest/shrine/rest/sign, trap plates
 │   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames (Input Map)
 │   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage()
 │   ├── room_renderer.gd        # immediate-mode drawing of the room, doors (tick previews), actors
-│   ├── ui/hud.gd               # status lines (FLOOR d/target), message line, minimap, hints
+│   ├── ui/hud.gd               # status lines (FLOOR d/target), clock / grace countdown, prompt, minimap
+│   ├── ui/floor_map.gd         # full floor map overlay (M); build_model() is pure
+│   ├── ui/choice_dialog.gd     # small modal choice prompt (shrine)
 │   ├── ui/announcer.gd         # "The System": toasts, system log, achievements, profile, telemetry
 │   ├── ui/title_screen.gd      # New run / Seeded run / Settings / Quit
 │   ├── ui/intermission_screen.gd # floor recap + Descend
@@ -185,12 +208,12 @@ game/
 │   ├── ui/settings_screen.gd   # settings page (title and pause menu)
 │   ├── ui/screen_base.gd       # shared panel/button helpers for the screens above
 │   ├── character_menu.gd       # level-up allocation, pause and stat screens
-│   ├── floor_generator.gd      # deterministic graph and route queries
+│   ├── floor_generator.gd      # deterministic graph, special rooms, feasibility re-roll
 │   ├── room_layout.gd          # fixed 24x24 world, fit-to-window scale
-│   ├── room_contents.gd        # obstacle generator and reachability checks
+│   ├── room_contents.gd        # obstacles, chests/shrines/rest, trap plates, reachability
 │   ├── enemy_system.gd         # catalogue v2 + validator, threat budgets, spawns, enemy AI state machine
 │   ├── rpg_rules.gd            # six stats, d20 attack and XP progression
-│   └── collapse_policy.gd      # room-specific timing policy and ledger
+│   └── collapse_policy.gd      # transition pricing, budget (via run_rules), route rooms, grace rules
 ├── data/
 │   ├── prototype_rules.json    # run (depths, rooms), collapse + budget, obstacles, abilities
 │   ├── enemies.json            # enemy roster (schema v2), sprite sheets, band guardrails, budgets, elites
@@ -207,7 +230,7 @@ game/
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no inventory/loot, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). The player cannot independently visit a floor overview; the minimap is a discovery/debugging aid. Enemy and boss abilities, guild-hall behavior, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no inventory/loot, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Chest loot is rolled and announced but not yet added to an inventory, and the guild-hall shop is a placeholder sign. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

@@ -14,6 +14,9 @@ extends Node2D
 const Contents = preload("res://scripts/room_contents.gd")
 const Layout = preload("res://scripts/room_layout.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
+const Hazards = preload("res://scripts/hazards.gd")
+const Collapse = preload("res://scripts/collapse_policy.gd")
+const Settings = preload("res://scripts/core/settings.gd")
 
 const TILE := 16.0
 const SIZE := 24
@@ -27,8 +30,6 @@ const CRAWLER = preload("res://assets/characters/crawler/facing_8.png")
 const TELEGRAPH_COLORS := {"melee": Color("#ff5a4f"), "area": Color("#ffb347"),
     "dash": Color("#ff8c2a"), "ranged": Color("#d778dc"), "puddle": Color("#c6e05a"),
     "summon": Color("#f2a2c8"), "support": Color("#8fd3ff")}
-const HAZARD_COLORS := {"poisoned": Color("#9bd34a"), "burning": Color("#ff7a2e"),
-    "slowed": Color("#4fa3ff")}
 const FLOOR_TILE := Rect2(0, 0, 16, 16)
 const FLOOR_ALT := Rect2(16, 0, 16, 16)
 const WALL_TOP := Rect2(32, 0, 16, 16)
@@ -72,12 +73,16 @@ func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO, viewport), BACKGROUND)
     if RunState.floor.is_empty() or player == null:
         return
-    var offset: Vector2 = layout.get("offset", Vector2.ZERO)
+    var base_offset: Vector2 = layout.get("offset", Vector2.ZERO)
     var scale: float = float(layout.get("scale", 1.0))
+    # Wave 2E: grace-period screen shake (presentation only; restored below).
+    layout["offset"] = base_offset + grace_shake() * scale
+    var offset: Vector2 = layout["offset"]
     draw_set_transform(offset, 0.0, Vector2.ONE * scale)
     _draw_room()
     _draw_actors()
     draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+    layout["offset"] = base_offset
 
 
 func _draw_room() -> void:
@@ -102,6 +107,7 @@ func _draw_room() -> void:
 
     for prop in RunState.current_room().get("props", []):
         _draw_obstacle(prop)
+    _draw_room_features()
 
     var links: Dictionary = room["neighbors"]
     _draw_walls(links)
@@ -116,6 +122,62 @@ func _draw_room() -> void:
     elif kind == "exit":
         _crypt_piece(STAIRS, MID, Vector2(32, 32))
         _text("EXIT", MID + Vector2(-16, -146), 17, Color("#ffdc91"))
+    elif ROOM_LABELS.has(kind):
+        _text(String(ROOM_LABELS[kind][0]), MID + Vector2(-28, -146), 17, ROOM_LABELS[kind][1])
+
+
+# --- Wave 2E: special rooms, interactables, plates, hazards ---------------------
+
+## Banner text and colour for the Wave 2E room kinds.
+const ROOM_LABELS := {
+    "treasure": ["TREASURE", Color("#ffe08a")], "elite": ["ELITE", Color("#e9a3f0")],
+    "trap": ["TRAPS", Color("#ffb08a")], "shrine": ["SHRINE", Color("#b9d2ff")]
+}
+
+
+## Screen-shake offset in world pixels for the current grace wave, scaled by
+## the screen-shake setting. Zero outside grace.
+static func grace_shake() -> Vector2:
+    if not RunState.grace_active():
+        return Vector2.ZERO
+    var config: Dictionary = Collapse.grace_config(RunState.config.get("collapse", {}))
+    var wave: Dictionary = Collapse.grace_wave(float(RunState.grace["remaining"]), config)
+    var amount: float = float(wave.get("shake", 0.0)) * float(Settings.shared().screen_shake)
+    var t: float = float(Time.get_ticks_msec()) / 1000.0
+    return Vector2(sin(t * 53.0), cos(t * 47.0)) * amount
+
+
+## Chests, shrines, the guild rest station and sign, and trap plates.
+func _draw_room_features() -> void:
+    var state: Dictionary = RunState.current_room()
+    for plate in state.get("plates", []):
+        var center: Vector2 = Contents.cell_center(plate["cell"])
+        var drain: bool = String(plate["kind"]) == "drain"
+        var color := Color("#c46bff") if drain else Color("#bfbfbf")
+        if not bool(plate["armed"]):
+            color = Color(color, 0.35)
+        draw_rect(Rect2(center - Vector2(6, 6), Vector2(12, 12)), Color(color, 0.25))
+        draw_rect(Rect2(center - Vector2(6, 6), Vector2(12, 12)), color, false, 1.0)
+        if drain and bool(plate["armed"]):
+            _text("-1", center + Vector2(-5, -8), 9, Color("#e7b6ff"))
+    for feature in state.get("interactables", []):
+        var center: Vector2 = feature["pos"]
+        var used: bool = bool(feature.get("used", false))
+        var tint := Color(1, 1, 1, 0.45) if used else Color.WHITE
+        match String(feature["kind"]):
+            "chest":
+                _crypt_piece(PROP_CHEST, center, Vector2(TILE, TILE), 0.0, tint)
+            "shrine":
+                draw_circle(center, 7.0, Color("#8fb8ff", 0.35 if used else 0.9))
+                draw_arc(center, 9.0, 0.0, TAU, 20, Color("#dfe9ff", tint.a), 1.0)
+            "rest":
+                draw_rect(Rect2(center - Vector2(7, 4), Vector2(14, 8)), Color("#6e9e8a", tint.a))
+                draw_rect(Rect2(center - Vector2(7, 4), Vector2(4, 8)), Color("#e8f2ea", tint.a))
+            "shop_sign":
+                draw_rect(Rect2(center - Vector2(6, 7), Vector2(12, 8)), Color("#a77b4f"))
+                draw_line(center + Vector2(0, 1), center + Vector2(0, 7), Color("#6b4a2b"), 2.0)
+            _:
+                draw_circle(center, 5.0, Color("#fff1a7", tint.a))
 
 
 func _draw_walls(links: Dictionary) -> void:
@@ -179,7 +241,17 @@ func _draw_door(direction: String, next_id: int) -> void:
     _crypt_piece(DOOR_TILE, door_center + door_offset, Vector2(TILE, TILE), rotation, color)
     var net_ticks: int = door_net_ticks(rules, RunState.ticks, kind,
         not RunState.visited.has(next_id), next_id)
-    _text("%s%+d" % [direction, net_ticks], label_pos, 13, Color.WHITE)
+    # Wave 2E: red "!" when the door would leave the clock at 0; during grace
+    # entries are free, so the label shows the true change (grants only).
+    var label_color := Color.WHITE
+    var suffix := ""
+    if RunState.ticks <= 0:
+        net_ticks = maxi(0, net_ticks)
+        label_color = Color("#ffb3b3")
+    elif RunState.ticks + net_ticks <= 0:
+        label_color = Color("#ff5a5a")
+        suffix = "!"
+    _text("%s%+d%s" % [direction, net_ticks, suffix], label_pos, 13, label_color)
 
 
 func _draw_obstacle(prop: Dictionary) -> void:
@@ -190,8 +262,7 @@ func _draw_obstacle(prop: Dictionary) -> void:
 
 
 func _draw_actors() -> void:
-    for hazard in combat.hazards:
-        _draw_hazard(hazard)
+    Hazards.draw_all(self, combat.hazards, ThemeDB.fallback_font)
     for projectile in combat.projectiles:
         var point: Vector2 = projectile["pos"]
         var color := Color("#ffe78b") if projectile["owner"] == "player" else Color("#d778dc")
@@ -289,18 +360,6 @@ func _draw_telegraph(foe: Dictionary, attack: Dictionary, cue: Color) -> void:
             var radius: float = float(attack.get("aoe_radius", 24.0))
             draw_circle(center, radius * progress, faint)
             draw_arc(center, radius, 0.0, TAU, 32, cue, 1.5)
-
-
-func _draw_hazard(hazard: Dictionary) -> void:
-    var center: Vector2 = hazard["pos"]
-    var radius: float = float(hazard["radius"])
-    var color: Color = HAZARD_COLORS.get(String(hazard.get("status", "")), Color("#d778dc"))
-    if float(hazard["telegraph_remaining"]) > 0.0:
-        draw_arc(center, radius, 0.0, TAU, 32, color, 1.5)
-        draw_circle(center, radius * 0.25, Color(color, 0.25))
-    else:
-        draw_circle(center, radius, Color(color, 0.30))
-        draw_arc(center, radius, 0.0, TAU, 32, Color(color, 0.7), 1.0)
 
 
 func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,

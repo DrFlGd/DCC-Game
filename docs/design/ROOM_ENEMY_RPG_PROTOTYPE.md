@@ -34,26 +34,29 @@ The generator:
 
 ## Multi-enemy encounters and AI
 
-The data-driven source is [`game/data/enemies.json`](../../game/data/enemies.json); runtime logic is [`enemy_system.gd`](../../game/scripts/enemy_system.gd).
+The data-driven source is [`game/data/enemies.json`](../../game/data/enemies.json) (schema v2); runtime logic is [`enemy_system.gd`](../../game/scripts/enemy_system.gd) (catalogue, encounters, AI state machine) and the enemy half of [`combat.gd`](../../game/scripts/combat.gd) (attack resolution, hazards, summons). The full schema, roster and guardrails are in [ENEMY_TIERS.md](ENEMY_TIERS.md); budgets and spawn rules are in [ENCOUNTER_RULES.md](ENCOUNTER_RULES.md).
 
-Each enemy type has an ID and these fields:
+Each enemy type has an ID and, among others, these fields:
 
 | Field | Example | Meaning |
 | --- | --- | --- |
-| `name`, `sprite` | `Rat Scavenger`, `rat` | UI and art selection |
-| `level`, `xp`, `hp`, `ac` | `1`, `25`, `7`, `12` | Combat challenge, rewards, defenses |
+| `name`, `sprite` | `Rat Scavenger`, `rat` | UI name; `sprite_sheets` id (frame and render size) |
+| `role`, `band`, `min_depth`/`max_depth`, `threat` | `chaser`, `1`, `1`/`6`, `2` | Encounter budget and composition inputs |
+| `level`, `xp`, `hp`, `ac`, `dr` | `1`, `25`, `7`, `12`, `0` | Combat challenge, rewards, defences |
 | `scores` | `{ "STR":10, "DEX":14, ... }` | Six ability scores |
-| `speed`, `collision_radius` | `43`, `6` | Movement and collision footprint at the new 16px world scale |
-| `behavior.mode` | `chase`, `kite`, `guard` | Pursuit or preferred-spacing behavior |
-| `behavior.pathfinding` | `grid_bfs`, `direct`, `stationary` | Choose grid BFS, direct steering, or no movement |
-| `behavior.preferred_distance` | `26` or `210` | Close-in for melee, keep range for ranged |
-| `behavior.repath_seconds` | `0.35` | Navigation refresh period |
-| `attacks[]` | `bite` or `spit` | Melee/ranged, STR/DEX, die, cooldown, range, projectile speed |
-| `abilities[]` | `lunge`, `twin_shot` | Implemented modifiers: close-range speed boost, paired shots |
+| `speed`, `collision_radius`, `knockback_resist` | `43`, `6`, `0.0` | Movement, footprint, push resistance |
+| `tags`, `resistances`, `boss` | `["beast"]`, `{"poisoned": 0.5}`, `false` | `target_tag` conditions, damage/status multipliers, exit gate |
+| `behavior.mode` | `chase`, `kite`, `guard`, `charge`, `zone`, `summon`, `support` | Movement between attacks |
+| `behavior.pathfinding` | `grid_bfs`, `direct`, `stationary` | BFS (with clearance for radius ≥ 8), direct steering, or none |
+| `attacks[]` | `bite`, `spit`, `ram`, `slam`, ... | `type`, `telegraph`, `wind_up`, `recovery`, `cooldown`, range, dice, type-specific fields |
+| `abilities[]` | `twin_shot`, `dash`, `puddle`, `summon`, ... | Required by some attack types; `twin_shot` doubles single shots |
+| `phases[]` | `{below: 0.5, attacks: [...]}` | Bosses only: HP thresholds that switch attack sets |
 
-You can add enemy definitions and reference them in `encounter_tables.normal.pool`, adjusting `min`/`max`. Currently normal encounters use **2–4 enemies**, while the boss room contains an armored brute plus two smaller enemies. Enemies persist in their room between visits; killing one removes only that instance. The two rat varieties currently reuse the **user-provided eight-frame rat GIF**, converted into the game's E/SE/S/SW/W/NW/N/NE order; a violet marker distinguishes ranged attackers.
+**Attack flow.** Every attack is telegraphed: an enemy enters `winding_up` (it stops, its sprite blends toward the attack colour and the renderer draws an arc, aim line, dash lane or ground circle where the hit will land), tracks the crawler for the first 60 % of the wind-up (80 % for shots), resolves at the end (melee and area hits are tested against the crawler's position at that moment, so stepping out dodges), then recovers. Enemies are dormant for 0.6 s whenever the crawler enters their room.
 
-The enemy definitions are schema-validated at startup and in CI. If you invent a new `behavior.mode` or `attacks[].type`, add corresponding logic and a test. A JSON label alone does not implement a new ability.
+**Encounters.** Rooms spend a threat budget that grows with depth (`round((5 + 3 × depth) × intensity × kind)`; depth 1 standard = 8). Normal rooms hold **2 to 4 enemies at depths 1–2, up to 5 at depths 3–4 and 6 at depths 5–6**. Boss rooms place the depth's boss at the room midpoint plus an escort on half a standard budget. Enemies persist in their room between visits; killing one removes only that instance; summons die with their summoner.
+
+The enemy definitions are schema-validated at startup and in CI. If you invent a new `behavior.mode`, attack `type` or ability, validation fails with a message naming it: add the logic and a test first. A JSON label alone does not implement a behaviour.
 
 ## D20 RPG starter rules
 
@@ -72,14 +75,21 @@ The prototype adopts recognizable **D&D-style** conventions, without claiming to
 
 Not yet implemented: classes/subclasses, species traits, feats, saving throws, spell slots, spellcasting, initiative, armor/equipment bonuses, ability score improvements, skill proficiencies, or true turn-based action economy. Combat remains real-time; attack cooldowns replace tabletop turns.
 
-### Starter enemies
+### Enemy roster (Wave 2C)
 
-| Type | Behavior | Attack | XP |
-| --- | --- | --- | ---: |
-| Rat Scavenger | Chase / BFS | Melee bite | 25 |
-| Spitting Rat | Kite / BFS | Ranged paired projectiles | 50 |
-| Hulking Rat | Chase / BFS; lunge at close range | Heavy melee | 100 |
-| Armored Brute | Boss chase / BFS; lunge | Boss melee | 250 |
+| Type | Role / band | Behaviour | Signature attack | XP |
+| --- | --- | --- | --- | ---: |
+| Rat Scavenger | chaser, I | chase / BFS | bite (arc, 0.35 s) | 25 |
+| Spitting Rat | ranged, I | kite at 105–136 px | twin spit: one aimed, one leading (line, 0.45 s) | 50 |
+| Hulking Rat | light tank, I | chase | hop-lunge dash and claw | 100 |
+| Shellback Charger | charger, II | hold at 90–117 px | 120 px ram; stunned by walls | 90 |
+| Spore Puffer | zoner, II | stationary | 32 px spore puddle | 60 |
+| Nest Mother | summoner, II | kite at 120 px | summons rat pups (cap 4) | 120 |
+| Bell Acolyte | support, III | stays near allies, flees the crawler | wards / heals allies in 80 px | 90 |
+| Rubble Golem | tank, III | slow chase | 28 px slam with knockback | 150 |
+| Cinder Lobber | artillery, III | kite at 140 px | firebomb lands 0.9 s after the throw | 100 |
+| Armored Brute | boss, I | chase | maul; below 50 % adds a shoulder charge | 250 |
+| Sump Warden | boss, II–III | kite at 90 px | tide spray, flood pulse; then drains and undertow; enraged below 25 % | 450 |
 
 Actual balancing numbers are editable test values, not canon claims.
 

@@ -2,8 +2,9 @@ extends Node2D
 ## Immediate-mode world renderer for the current 24x24 room.
 ##
 ## Draws floor and wall tiles, props, doors with net tick previews, enemy and
-## player sprites, projectiles, the melee arc and the i-frame ring. It only
-## reads state (RunState, Player, Combat) and never mutates it.
+## player sprites, projectiles, ground hazards, enemy attack telegraphs, the
+## melee arc and the i-frame ring. It only reads state (RunState, Player,
+## Combat) and never mutates it.
 ## World pixels are mapped to the window with `layout` (room_layout.gd), so the
 ## room is always 24x24 tiles whatever the window size.
 ##
@@ -12,6 +13,7 @@ extends Node2D
 ## animation work starts; keep this script as the debug-overlay layer.
 const Contents = preload("res://scripts/room_contents.gd")
 const Layout = preload("res://scripts/room_layout.gd")
+const Enemies = preload("res://scripts/enemy_system.gd")
 const Hazards = preload("res://scripts/hazards.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const Settings = preload("res://scripts/core/settings.gd")
@@ -24,8 +26,10 @@ const DIRECTIONS := ["N", "E", "S", "W"]
 const BACKGROUND := Color("#101720")
 const CRYPT = preload("res://assets/biomes/stone_crypt/tileset_16x16.png")
 const CRAWLER = preload("res://assets/characters/crawler/facing_8.png")
-const RAT = preload("res://assets/enemies/rat/facing_8.png")
-const BOSS = preload("res://assets/enemies/brute_boss/facing_8.png")
+## Telegraph colours by attack type (sprite tint blends 50 % toward these).
+const TELEGRAPH_COLORS := {"melee": Color("#ff5a4f"), "area": Color("#ffb347"),
+    "dash": Color("#ff8c2a"), "ranged": Color("#d778dc"), "puddle": Color("#c6e05a"),
+    "summon": Color("#f2a2c8"), "support": Color("#8fd3ff")}
 const FLOOR_TILE := Rect2(0, 0, 16, 16)
 const FLOOR_ALT := Rect2(16, 0, 16, 16)
 const WALL_TOP := Rect2(32, 0, 16, 16)
@@ -46,6 +50,8 @@ var combat
 ## CollapsePolicy instance used for the door previews.
 var rules
 var catalogue: Dictionary = {}
+## sprite id -> {texture: Texture2D, render: Vector2}, loaded on first use.
+var _sheets: Dictionary = {}
 
 
 func setup(player_node, combat_node, collapse_rules, enemy_catalogue: Dictionary) -> void:
@@ -260,21 +266,11 @@ func _draw_actors() -> void:
     for projectile in combat.projectiles:
         var point: Vector2 = projectile["pos"]
         var color := Color("#ffe78b") if projectile["owner"] == "player" else Color("#d778dc")
+        if projectile["owner"] != "player":
+            draw_circle(point, 3.5, Color("#240a2a"))
         draw_circle(point, 2.5, color)
     for foe in RunState.current_room().get("enemies", []):
-        var definition: Dictionary = catalogue["enemies"][foe["definition"]]
-        var boss_sprite: bool = definition["sprite"] == "boss"
-        var sheet: Texture2D = BOSS if boss_sprite else RAT
-        var sprite_size := Vector2(48, 48) if boss_sprite else Vector2(24, 24)
-        var point: Vector2 = foe["pos"]
-        _draw_facing_sprite(sheet, point, sprite_size, int(foe["facing"]))
-        var hp_ratio: float = float(foe["hp"]) / float(foe["max_hp"])
-        draw_rect(Rect2(point.x - 12, point.y - sprite_size.y * 0.5 - 6, 24, 3),
-            Color("#151b25"))
-        draw_rect(Rect2(point.x - 12, point.y - sprite_size.y * 0.5 - 6, 24 * hp_ratio, 3),
-            Color("#a5d49b"))
-        if foe["definition"] == "spitting_rat":
-            draw_circle(point + Vector2(0, 11), 2.5, Color("#c978d4"))
+        _draw_enemy(foe)
     var at: Vector2 = player.world_position
     var aim: Vector2 = player.aim_direction
     _draw_facing_sprite(CRAWLER, at, Vector2(24, 24), player.facing)
@@ -283,6 +279,87 @@ func _draw_actors() -> void:
         draw_arc(at, 30.0, aim.angle() - 0.7, aim.angle() + 0.7, 14, Color("#fff1a7"), 3.0)
     if player.invulnerability > 0.0:
         draw_arc(at, 12.0, 0.0, TAU, 24, Color(1, 1, 1, 0.42), 1.0)
+
+
+func _sheet(sprite: String) -> Dictionary:
+    if not _sheets.has(sprite):
+        var info: Dictionary = Enemies.sheet_info(catalogue, sprite)
+        _sheets[sprite] = {"texture": load(String(info["path"])) as Texture2D,
+            "render": info["render"]}
+    return _sheets[sprite]
+
+
+func _draw_enemy(foe: Dictionary) -> void:
+    var definition: Dictionary = catalogue["enemies"][foe["definition"]]
+    var sheet: Dictionary = _sheet(String(definition["sprite"]))
+    var sprite_size: Vector2 = sheet["render"]
+    var point: Vector2 = foe["pos"]
+    var state: String = String(foe.get("state", "idle"))
+    var attack: Dictionary = Enemies.attack_by_id(definition, String(foe.get("attack", "")))
+    var modulation := Color.WHITE
+    if String(foe.get("tint", "")) != "":
+        var tint := Color(String(foe["tint"]))
+        draw_arc(point, sprite_size.x * 0.5 + 1.5, 0.0, TAU, 28, tint, 1.5)
+        modulation = Color.WHITE.lerp(tint, 0.25)
+    if state == "winding_up" or state == "dashing":
+        var cue: Color = TELEGRAPH_COLORS.get(String(attack.get("type", "melee")), Color.RED)
+        var pulse: float = 0.35 + 0.15 * sin(float(foe.get("state_time", 0.0)) * 18.0)
+        modulation = modulation.lerp(cue, pulse)
+        _draw_telegraph(foe, attack, cue)
+    if float(foe.get("dormant", 0.0)) > 0.0:
+        modulation.a = 0.55
+    if float(foe.get("invulnerable", 0.0)) > 0.0:
+        draw_arc(point, sprite_size.x * 0.5 + 3.0, 0.0, TAU, 28, Color(1, 1, 1, 0.6), 1.0)
+    if sheet["texture"] != null:
+        _draw_facing_sprite(sheet["texture"], point, sprite_size, int(foe["facing"]), modulation)
+    else:
+        draw_circle(point, float(foe["radius"]), modulation)
+    if state == "stunned":
+        _text("*", point + Vector2(-3, -sprite_size.y * 0.5 - 8), 12, Color("#ffe78b"))
+    var bar_top: float = point.y - sprite_size.y * 0.5 - 6
+    var hp_ratio: float = clampf(float(foe["hp"]) / float(foe["max_hp"]), 0.0, 1.0)
+    draw_rect(Rect2(point.x - 12, bar_top, 24, 3), Color("#151b25"))
+    draw_rect(Rect2(point.x - 12, bar_top, 24 * hp_ratio, 3), Color("#a5d49b"))
+    var pool: int = int(foe.get("shield", 0)) + int(foe.get("ward", 0))
+    if pool > 0:
+        draw_rect(Rect2(point.x - 12, bar_top - 3, minf(24.0, 3.0 * float(pool)), 2),
+            Color("#7fc4ff"))
+
+
+## Shape cue for a wind-up, drawn where the attack will land: an arc at reach
+## (melee), a 1 px aim line (ranged), a lane (dash) or a filling circle (area).
+func _draw_telegraph(foe: Dictionary, attack: Dictionary, cue: Color) -> void:
+    var point: Vector2 = foe["pos"]
+    var aim: Vector2 = foe.get("aim", Vector2.RIGHT)
+    var length: float = maxf(0.001, float(foe.get("state_length", 1.0)))
+    var progress: float = clampf(float(foe.get("state_time", 0.0)) / length, 0.0, 1.0)
+    var faint := Color(cue, 0.22)
+    match String(attack.get("telegraph", "arc")):
+        "arc":
+            var reach: float = float(attack.get("range", 22.0)) + 5.5
+            var half: float = deg_to_rad(float(attack.get("arc", 120.0))) * 0.5
+            var fan := PackedVector2Array([point])
+            for i in range(13):
+                fan.append(point + aim.rotated(-half + 2.0 * half * float(i) / 12.0) * reach * progress)
+            if progress > 0.05:
+                draw_colored_polygon(fan, faint)
+            draw_arc(point, reach, aim.angle() - half, aim.angle() + half, 14, cue, 1.5)
+        "line":
+            draw_line(point, point + aim * float(attack.get("range", 120.0)), Color(cue, 0.8), 1.0)
+        "dash":
+            var lane: float = float(attack.get("dash_distance", 64.0)) if String(foe["state"]) != "dashing" \
+                else float(foe.get("dash_left", 0.0))
+            var side: Vector2 = aim.orthogonal() * float(foe["radius"])
+            var far: Vector2 = point + aim * lane
+            draw_colored_polygon(PackedVector2Array([point + side, far + side, far - side,
+                point - side]), faint)
+            draw_polyline(PackedVector2Array([point + side, far + side, far - side, point - side,
+                point + side]), cue, 1.0)
+        "circle":
+            var center: Vector2 = foe.get("target_point", point)
+            var radius: float = float(attack.get("aoe_radius", 24.0))
+            draw_circle(center, radius * progress, faint)
+            draw_arc(center, radius, 0.0, TAU, 32, cue, 1.5)
 
 
 func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
@@ -294,11 +371,12 @@ func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
     draw_set_transform(offset, 0.0, Vector2.ONE * scale)
 
 
-func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facing: int) -> void:
+func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facing: int,
+        modulation: Color = Color.WHITE) -> void:
     var index: int = posmod(facing, 8)
     var frame_size := Vector2(sheet.get_width() / 8.0, sheet.get_height())
     draw_texture_rect_region(sheet, Rect2(center - size * 0.5, size),
-        Rect2(float(index) * frame_size.x, 0.0, frame_size.x, frame_size.y))
+        Rect2(float(index) * frame_size.x, 0.0, frame_size.x, frame_size.y), modulation)
 
 
 func _text(value: String, position: Vector2, font_size: int, color: Color) -> void:

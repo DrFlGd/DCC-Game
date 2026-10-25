@@ -132,7 +132,7 @@ All keys are optional and are combined with AND. An unknown key fails validation
 | `room_kind` | string | You are in this room kind (`normal`, `boss`, `guild_hall`, ...) |
 | `nearby_enemies_at_least` | 1..99 | At least this many enemies are close by (integration defines "close") |
 
-Enemies do not have tags yet (`target_tag` will match nothing until Wave 2 adds them to `enemies.json`).
+Enemy tags live in `enemies.json` (`enemies.<id>.tags`, e.g. `beast`, `vermin`, `armored`, `construct`, `fungus`, `humanoid`) and are copied onto each live enemy dictionary as `tags` (elites add `elite` and their modifier's tags). Pass them to the resolver as `context.target_tags`.
 
 ### Stacking
 
@@ -315,7 +315,7 @@ These are data and pure functions only. In particular:
 - **No stamina resource and no dodge action** exist yet (`stamina_cost`, `on_dodge`).
 - **No currency.** `value` is a placeholder shop price.
 - **No decoy actor.** `concealed` only marks the player as untargetable; the decoy entity belongs to integration.
-- **Enemy tags** for `target_tag` do not exist.
+- **Enemy tags** for `target_tag` exist since Wave 2C (`enemies.json`); combat does not pass them to the resolver yet.
 - **Timed stat buffs** (stat operations with `duration > 0`) are not tracked by the resolver. The starter pool uses statuses for every temporary buff.
 - **No art:** every `sprite` path is a placeholder; see [`assets/weapons/README.md`](../../game/assets/weapons/README.md).
 - **Balance** is first-pass and untested in play. `BALANCE_GUIDELINES.md` (Phase 3) is still to be written.

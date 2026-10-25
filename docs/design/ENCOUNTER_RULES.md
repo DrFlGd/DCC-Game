@@ -1,11 +1,22 @@
 # Encounter Rules — budgets, composition, spawning
 
-- **Status:** Proposed. Count-based tables and the spawn checks in §1 are **implemented** ([`enemy_system.gd`](../../game/scripts/enemy_system.gd), [`enemies.json`](../../game/data/enemies.json)). Threat budgets and composition rules are the target for Wave 2C.
+- **Status:** **Implemented** (Wave 2C) in [`enemy_system.gd`](../../game/scripts/enemy_system.gd) (`compose_encounter`, `generate_encounter`) with settings under `encounters` in [`enemies.json`](../../game/data/enemies.json); deviations in [§0](#0-implementation-status-wave-2c). §1 describes the replaced prototype.
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 4 (encounter budgets, composition, spawn constraints, validation)
 - **Related:** [Enemy tiers](ENEMY_TIERS.md) · [Procedural generation](PROCEDURAL_GENERATION.md) · [Collapse system](COLLAPSE_SYSTEM.md) · [Combat and RPG](COMBAT_AND_RPG.md)
 
-## 1. Current prototype behaviour
+## 0. Implementation status (Wave 2C)
+
+- **Implemented:** the §3 budget formula and intensity roll; R1–R6, R9, R10 and R12; the §4.1 algorithm (pressure role first, then weighted fill; rule-5 fallback); spawn constraints S1–S3, S5, S6 and S9; §6 re-entry (positions reset to spawn points, HP kept); boss pool by depth (ENEMY_TIERS §7). `generate_encounter(catalogue, kind, seed, room_id, blocked, depth = 1, links = {})`: the same `(floor_seed, depth, room_id, links)` always gives the same enemies.
+- **Budget accuracy:** every normal room lands within **±10 %** of its budget (`encounters.budget.tolerance`), tighter than T6. A fill prefers picks after which the remaining slots can still reach the window; if a fill still misses, it is redrawn from the same RNG stream (up to `budget.attempts` = 12) and the closest fill is kept. Tests check 20 seeds × 8 rooms × depths 1–6.
+- **Elites:** normal rooms roll `elite_chance` per band (0 / 0 / 10 % / 15 % / 20 %); the elite is picked first at ×2 threat. `elite` rooms (kind multiplier 1.5) always have exactly one elite. The floor generator does not emit `elite` rooms yet (2E).
+- **Spawns:** ≥ 96 px from every linked portal centre (ranged ≥ 120 px) instead of the old 82 px from cell (12, 12); without links (tests) ≥ 82 px from the true midpoint (192, 192). Bosses spawn at (192, 192); escorts ≥ 48 px from the boss. Actors with radius ≥ 8 need clearance (`can_occupy` at the cell centre) and a clearance path from the portals; a second pass accepts plain-grid reachability if no strict spot exists (those actors path with clearance where possible and slide along obstacles otherwise). Boss rooms cap obstacles at 24 (`room_obstacle_caps.boss` in `prototype_rules.json`, shared with the 2E caps).
+- **Activation:** 0.6 s dormancy on every room entry (`encounters.dormancy`, applied by Combat on `Events.room_entered`), first cooldown 0.4–1.0 s, then the wind-up: the earliest hit is about 1.35 s after entry, as specified.
+- **Trap rooms** (2E) get the R8 enemy part: half a normal budget with no minimum count; the plates are 2E's.
+- **Not implemented:** R7 (introduction rule; needs per-run "seen" tracking), R8 dart idols, R11 (biome affinity), the zoner door-lane rule in S3, S4 clearance *along the path* beyond the reachability flood, S7 and S8. Escort composition uses the budget (the fixed "1 scavenger + 1 spitting rat" escort is gone).
+- **Tests:** `tests/enemies_test.gd` covers T1–T5, T7 (20 seeds), T8, T9 and T10; `tests/enemy_combat_test.gd` covers T11 and the telegraph and dormancy timing.
+
+## 1. Prototype behaviour before Wave 2C
 
 - **Tables:**
   - `normal` draws **2–4** enemies uniformly from the pool `[rat_scavenger, rat_scavenger, spitting_rat, hulking_rat]`, so scavengers are twice as likely.
@@ -93,13 +104,13 @@ These rules apply to normal, elite and trap rooms. A candidate that would break 
 | --- | --- | --- |
 | S1 | Cell in 2–21 on both axes, walkable, `can_occupy(radius)` | implemented |
 | S2 | Distance from other spawns ≥ the two radii + 11 px | implemented |
-| S3 | ≥ **96 px from every linked portal centre** (replaces "≥ 82 px from the room centre"). Ranged and artillery ≥ 120 px. Zoners ≥ 64 px from portals and door lanes. | new |
-| S4 | Clearance `k` for large actors ([PROCEDURAL_GENERATION.md §5](PROCEDURAL_GENERATION.md#5-room-interior-rules-v1)) at the spawn and along its path | new |
-| S5 | Reachable from **every linked portal**, not only from the centre, with its clearance | partially (centre only) |
-| S6 | The boss spawns at the centre (cell 12, 12), and escorts spawn ≥ 48 px from the boss | new |
+| S3 | ≥ **96 px from every linked portal centre** (replaces "≥ 82 px from the room centre"). Ranged and artillery ≥ 120 px. Zoners ≥ 64 px from portals and door lanes. | implemented (zoner lane rule: no) |
+| S4 | Clearance `k` for large actors ([PROCEDURAL_GENERATION.md §5](PROCEDURAL_GENERATION.md#5-room-interior-rules-v1)) at the spawn and along its path | implemented at the spawn; path via the reachability flood |
+| S5 | Reachable from **every linked portal**, not only from the centre, with its clearance | implemented |
+| S6 | The boss spawns at the centre (the midpoint 192, 192), and escorts spawn ≥ 48 px from the boss | implemented |
 | S7 | Trap actors sit on wall-adjacent cells (column or row 1 or 22) outside the door lanes and face inward. Their lane must not cover portal rows or columns 11–12. | new |
 | S8 | No spawn on hazard cells | new |
-| S9 | **Activation:** 0.6 s dormancy after the crawler enters, then a first cooldown of 0.4–1.0 s, then the wind-up. The earliest possible hit is about 1.35 s after entry. | new (prototype: 0.2–0.8 s, no wind-up) |
+| S9 | **Activation:** 0.6 s dormancy after the crawler enters, then a first cooldown of 0.4–1.0 s, then the wind-up. The earliest possible hit is about 1.35 s after entry. | implemented |
 
 Spawn positions depend only on `(floor_seed, room_id)`. They never depend on the door the crawler used, so encounters stay identical whatever route is taken.
 

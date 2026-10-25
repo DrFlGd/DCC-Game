@@ -33,7 +33,10 @@ func run_tests() -> void:
     check(collapse.evaluate(10, "normal", false, 1)["cost"] == 0, "revisit free")
     check(collapse.evaluate(10, "boss", true, 1)["cost"] == 3, "boss override")
     check(collapse.evaluate(10, "guild_hall", true, 1)["grant"] == 3, "guild grant")
-    check(not bool(collapse.evaluate(1, "boss", true, 1)["allowed"]), "cannot overspend")
+    var overspend: Dictionary = collapse.evaluate(1, "boss", true, 1)
+    check(bool(overspend["allowed"]) and int(overspend["after"]) == 0
+        and int(overspend["charged"]) == 1 and bool(overspend["reaches_zero"]),
+        "overspending is allowed, clamps at 0 and reaches zero (D-03)")
 
     # The interior always contains exactly 24x24 logical 16px tiles.
     var last_scale := 0.0

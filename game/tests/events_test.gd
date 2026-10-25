@@ -1,7 +1,7 @@
 extends SceneTree
 ## Proves the live Game emits the Events bus signals during scripted play:
 ## door transitions, a revisit, kills, player shots/swings, boss gate, death,
-## collapse and floor clear (exit -> intermission).
+## grace-then-collapse and floor clear (exit -> intermission).
 ## Run: godot --headless --path game --script res://tests/events_test.gd
 const SEED := 424242
 const OPPOSITE := {"N": "S", "S": "N", "E": "W", "W": "E"}
@@ -171,15 +171,26 @@ func _run() -> void:
     check(_last("run_ended")[1]["cause"] == "rat_scavenger", "summary carries the cause")
     check(_last("message")[0] == "YOU DIED! R = retry, N = new seed.", "death message kept")
 
-    # Collapse: a first entry that drains the last ticks.
+    # Collapse (v1, D-05): a first entry that drains the last ticks starts the
+    # grace period; the run collapses when the grace timer runs out.
     game.start_run(SEED)
     seen.clear()
     rs.ticks = 2
+    var grace_seconds: Array = []
+    events.grace_started.connect(func(seconds): grace_seconds.append(seconds))
     game._enter_neighbor(_first_normal_direction(rs))
     check(_last("ticks_changed") == [2, 0, "normal first entry (cost 2, grant 0)"],
         "ticks_changed to zero")
-    check(_last("run_ended")[0] == "collapsed" and game.state == game.State.SUMMARY,
-        "collapse ends the run")
+    check(grace_seconds == [10.0] and rs.grace_active() and _count("run_ended") == 0,
+        "reaching zero starts a 10 s grace instead of ending the run")
+    for _i in range(700):
+        if game.state != game.State.RUNNING:
+            break
+        game.player.invulnerability = 1.0
+        game._physics_process(1.0 / 60.0)
+    check(_count("run_ended") == 1 and _last("run_ended")[0] == "collapsed"
+        and game.state == game.State.SUMMARY, "grace running out collapses the run")
+    check(_last("run_ended")[1]["cause"] == "collapse on floor 1", "collapse cause recorded")
 
     game.queue_free()
     if failures == 0:

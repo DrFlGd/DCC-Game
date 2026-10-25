@@ -6,9 +6,16 @@ extends SceneTree
 ## Run: godot --headless --path game --script res://tests/determinism_test.gd
 const Generator = preload("res://scripts/floor_generator.gd")
 const SEED := 424242
-const SIGNATURE_MD5 := "b4a17cba2d2d09d31d90f84d8f610610"
-const OBSTACLES_MD5 := "82fdd6810b55c960f1cf3b7bf9ce8a15"
-const ENCOUNTERS_MD5 := "1053351d85fe7132dd1cd5397e7bb9b2"
+## Wave 2E regenerated SIGNATURE/OBSTACLES/ENCOUNTERS: room 11 became a
+## treasure room (13 obstacles, a chest, no enemies) and the guild hall moved
+## from room 13 (only reachable through the boss room) to room 18. Pre-2E
+## values: b4a17cba2d2d09d31d90f84d8f610610 / 82fdd6810b55c960f1cf3b7bf9ce8a15 /
+## 1053351d85fe7132dd1cd5397e7bb9b2. The geometry itself is unchanged:
+## GEOMETRY_MD5 is the signature with every kind masked, equal before and after.
+const SIGNATURE_MD5 := "1b0ee58c39bb5fb500913cf4125d7d4a"
+const GEOMETRY_MD5 := "1f25c833199dc62df2768615b93107fe"
+const OBSTACLES_MD5 := "3f1f9724997b9976972a33c98ccfc35a"
+const ENCOUNTERS_MD5 := "71d3ba0cf8e273eb0b078683661aba0f"
 const TRACE_MD5 := "99d79a3e32f45741df61183da0b74fbd"
 ## First lines of the captured trace, kept readable for debugging diffs.
 const TRACE_HEAD := ["10 24 (192.0, 363.0)", "3 7 0 Missed Rat Scavenger (d20: 2)",
@@ -39,7 +46,15 @@ func _run() -> void:
     game.start_run(SEED)
     var rooms: Array = run_state.floor["rooms"]
     var signature: String = Generator.signature(rooms)
-    check(signature.md5_text() == SIGNATURE_MD5, "floor signature matches pre-refactor main")
+    check(signature.md5_text() == SIGNATURE_MD5, "floor signature matches the fixture: "
+        + signature.md5_text())
+    var masked: Array = []
+    for room in rooms:
+        var copy: Dictionary = room.duplicate(true)
+        copy["kind"] = "x"
+        masked.append(copy)
+    check(Generator.signature(masked).md5_text() == GEOMETRY_MD5,
+        "room geometry and links unchanged since the prototype (kinds masked)")
     check(signature == Generator.signature(Generator.generate(SEED, 22)["rooms"]),
         "Game floor equals a direct Generator call")
 
@@ -57,8 +72,10 @@ func _run() -> void:
             foes.append("%s@%s hp%d cd%.6f" % [foe["instance_id"] + "/" + foe["definition"],
                 str(foe["pos"]), int(foe["hp"]), float(foe["attack_cooldown"])])
         encounters.append("%d:%s" % [id, ",".join(foes)])
-    check("|".join(obstacles).md5_text() == OBSTACLES_MD5, "obstacle maps match pre-refactor main")
-    check("|".join(encounters).md5_text() == ENCOUNTERS_MD5, "encounter lists match pre-refactor main")
+    check("|".join(obstacles).md5_text() == OBSTACLES_MD5, "obstacle maps match the fixture: "
+        + "|".join(obstacles).md5_text())
+    check("|".join(encounters).md5_text() == ENCOUNTERS_MD5, "encounter lists match the fixture: "
+        + "|".join(encounters).md5_text())
 
     var first: PackedStringArray = _combat_trace(game, run_state)
     for i in range(TRACE_HEAD.size()):
@@ -71,7 +88,7 @@ func _run() -> void:
 
     game.queue_free()
     if failures == 0:
-        print("PASS: seed 424242 floor, obstacles, encounters and combat trace match pre-refactor main")
+        print("PASS: seed 424242 floor, geometry, obstacles, encounters and combat trace match fixtures")
     quit(1 if failures > 0 else 0)
 
 

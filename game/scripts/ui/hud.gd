@@ -7,12 +7,18 @@ extends CanvasLayer
 ## clicks still reach gameplay. Layer 5 keeps it under CharacterMenu (layer 10).
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Layout = preload("res://scripts/room_layout.gd")
+const FloorMap = preload("res://scripts/ui/floor_map.gd")
+## Tick counter colour thresholds (COLLAPSE_SYSTEM §8).
+const TICKS_AMBER := 6
+const TICKS_RED := 3
 
 ## Room-to-window mapping from Layout.compute(); Game keeps it current.
 var layout: Dictionary = Layout.compute(Vector2(960, 540))
 ## Newest Events.message text and category.
 var message := ""
 var message_category := "info"
+## Interaction prompt for the feature in reach (set by Game from RoomServices).
+var prompt := ""
 var canvas: Control
 
 
@@ -49,10 +55,11 @@ func _draw_hud() -> void:
     var room: Dictionary = RunState.floor["rooms"][RunState.current_room_id]
     var foes: Array = RunState.current_room().get("enemies", [])
     var level: int = RunState.level
-    _text("DCC | FLOOR %d/%d | ROOM %d %s | TICKS %d | FOES %d" % [
+    # Ticks moved to the clock widget (_draw_clock, Wave 2E).
+    _text("DCC | FLOOR %d/%d | ROOM %d %s | FOES %d" % [
         RunState.depth, int(RunState.config.get("run", {}).get("target_depth", 6)),
         RunState.current_room_id, String(room["kind"]).to_upper(),
-        RunState.ticks, foes.size()], Vector2(14, 22), 17, Color("#f2da99"))
+        foes.size()], Vector2(14, 22), 17, Color("#f2da99"))
     _text("HP %d/%d  AC %d  LV %d  XP %d/%s  PROF +%d" % [
         maxi(0, RunState.hp), RunState.max_hp, RunState.ac, level, RunState.xp,
         str(RPG.next_level_xp(level)) if level < 20 else "MAX",
@@ -64,10 +71,72 @@ func _draw_hud() -> void:
     _text("  ".join(stat_parts), Vector2(14, 62), 12, Color("#afd4ce"))
     _text(message, Vector2(14, 83), 12, Color("#eccba6"))
     _draw_minimap(view)
-    _text("WASD / arrows: move  |  Mouse: aim  |  LMB: shoot  |  Space: melee",
+    _draw_clock(view)
+    _draw_grace_vignette(view)
+    _draw_prompt(view)
+    _text("WASD / arrows: move  |  Mouse: aim  |  LMB: shoot  |  Space: melee  |  E: interact",
         Vector2(14, view.y - 46), 14, Color("#dce9f2"))
-    _text("Esc: pause / stats | R: replay | N: new seed | 24x24 room, 16px tiles",
+    _text("Esc: pause / stats | M: map | R: replay | N: new seed | 24x24 room, 16px tiles",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
+
+
+# --- Collapse clock widget (Wave 2E) -------------------------------------------
+
+## Colour of the tick counter: amber at <= 6, red at <= 3.
+static func ticks_color(ticks: int) -> Color:
+    if ticks <= TICKS_RED:
+        return Color("#ff6b6b")
+    if ticks <= TICKS_AMBER:
+        return Color("#ffc15e")
+    return Color("#f2da99")
+
+
+## Tick counter left of the minimap; during grace a large red countdown and a
+## remaining-grace bar replace it.
+func _draw_clock(view: Vector2) -> void:
+    var origin := Vector2(view.x - 330.0, 9.0)
+    var grace: Dictionary = RunState.grace
+    if bool(grace.get("active", false)):
+        var remaining: float = float(grace.get("remaining", 0.0))
+        var duration: float = maxf(0.01, float(grace.get("duration", 1.0)))
+        canvas.draw_rect(Rect2(origin, Vector2(138, 82)), Color(0.25, 0.02, 0.03, 0.92))
+        _text("COLLAPSE IN", origin + Vector2(8, 15), 12, Color("#ffb3b3"))
+        _text("%.1f" % remaining, origin + Vector2(8, 58), 40, Color("#ff3b3b"))
+        canvas.draw_rect(Rect2(origin + Vector2(8, 66), Vector2(122, 8)), Color("#3a0a0d"))
+        canvas.draw_rect(Rect2(origin + Vector2(8, 66), Vector2(122.0 * remaining / duration, 8)),
+            Color("#ff3b3b"))
+        return
+    canvas.draw_rect(Rect2(origin, Vector2(138, 82)), Color("#222c39"))
+    _text("COLLAPSE TICKS", origin + Vector2(8, 15), 11, Color.WHITE)
+    _text(str(RunState.ticks), origin + Vector2(8, 60), 40, ticks_color(RunState.ticks))
+    var budget: int = int(RunState.floor.get("budget", 0))
+    if budget > 0:
+        _text("/ %d" % budget, origin + Vector2(80, 60), 13, Color("#a7b4c2"))
+
+
+## Red dust vignette while grace runs; it thickens as time runs out.
+func _draw_grace_vignette(view: Vector2) -> void:
+    var grace: Dictionary = RunState.grace
+    if not bool(grace.get("active", false)):
+        return
+    var urgency: float = 1.0 - float(grace.get("remaining", 0.0)) \
+        / maxf(0.01, float(grace.get("duration", 1.0)))
+    var edge: float = 10.0 + 26.0 * urgency
+    var tint := Color(0.55, 0.05, 0.05, 0.22 + 0.25 * urgency)
+    canvas.draw_rect(Rect2(Vector2.ZERO, Vector2(view.x, edge)), tint)
+    canvas.draw_rect(Rect2(Vector2(0, view.y - edge), Vector2(view.x, edge)), tint)
+    canvas.draw_rect(Rect2(Vector2(0, edge), Vector2(edge, view.y - edge * 2.0)), tint)
+    canvas.draw_rect(Rect2(Vector2(view.x - edge, edge), Vector2(edge, view.y - edge * 2.0)), tint)
+
+
+func _draw_prompt(view: Vector2) -> void:
+    if prompt == "":
+        return
+    var font: Font = ThemeDB.fallback_font
+    var width: float = font.get_string_size(prompt, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15).x
+    var at := Vector2((view.x - width) * 0.5, view.y - 72.0)
+    canvas.draw_rect(Rect2(at + Vector2(-10, -18), Vector2(width + 20, 26)), Color(0.05, 0.07, 0.1, 0.85))
+    _text(prompt, at, 15, Color("#fff1a7"))
 
 
 func _draw_minimap(view: Vector2) -> void:
@@ -94,11 +163,8 @@ func _draw_minimap(view: Vector2) -> void:
         var p: Vector2 = map_origin + Vector2(
             8.0 + float(cell.x - min_cell.x) * unit,
             20.0 + float(cell.y - min_cell.y) * unit)
-        var color := Color("#788b9d")
+        var color: Color = FloorMap.KIND_COLORS.get(String(room["kind"]), Color("#788b9d"))
         if id == RunState.current_room_id: color = Color.WHITE
-        elif room["kind"] == "boss": color = Color("#ec9c9d")
-        elif room["kind"] == "exit": color = Color("#eacb7b")
-        elif room["kind"] == "guild_hall": color = Color("#a4efd6")
         canvas.draw_rect(Rect2(p, Vector2(maxf(3.0, unit - 1.0), maxf(3.0, unit - 1.0))), color)
 
 

@@ -8,6 +8,17 @@
 
 This page is the contract the run-loop, UI and announcer work (Wave 2A, 2G) builds against. Every number is a default that lives in data (`game/data/*.json` or the RunState config), not in scene code.
 
+**Architecture this page assumes (Wave 1A):**
+
+| Piece | Role |
+| --- | --- |
+| `game.gd` | The orchestrator: owns the state machine (§7), generates floors and handles room transitions |
+| `RunState` autoload (`core/run_state.gd`) | All run data: seed, depth, floor, ticks and the tick ledger, XP, level, ability scores, HP, inventory, skills, visited rooms, room states, telemetry, `summary()` |
+| `Events` autoload (`core/events.gd`) | The signal bus that UI, audio, announcer, items and skills listen to: `run_started`, `floor_started`, `room_entered`, `room_cleared`, `ticks_changed`, `boss_defeated`, `floor_cleared`, `run_ended`, combat signals and `message` |
+| `player.gd`, `combat.gd`, `room_renderer.gd`, `ui/hud.gd` | Movement and input; damage; drawing; HUD |
+
+New loop features add states to `game.gd`, data to `RunState`, and signals to `Events`. Presentation layers only subscribe.
+
 ## 1. Vocabulary
 
 | Term | Definition |
@@ -21,13 +32,15 @@ This page is the contract the run-loop, UI and announcer work (Wave 2A, 2G) buil
 | **Collapse** | The floor's countdown, measured in **ticks** and spent on room transitions. At zero the floor enters a grace period and then collapses ([COLLAPSE_SYSTEM.md](COLLAPSE_SYSTEM.md)). |
 | **Crawler** | The player character. Use this word in UI text; never a character name from the books. |
 
-## 2. Current prototype behaviour (main @ 9bb993d)
+## 2. Current prototype behaviour
+
+This is the behaviour at main @ 9bb993d, which the Wave 1A refactor preserved.
 
 - One floor per run. The HUD always shows `FLOOR 1`. `room_count` 22, `start_ticks` 26 and the seed 424242 come from [`prototype_rules.json`](../../game/data/prototype_rules.json).
-- Outcomes held in `main.gd` are `running`, `collapsed`, `escaped` and `defeated`. When the run ends, a banner shows rooms entered, level and XP. **R** repeats the seed and **N** rolls a new one. There is no title screen and no summary screen.
-- The exit is sealed until the enemy with id `armored_brute` dies. The check is hard-coded to that id; it is not a data flag.
+- Outcomes (`RunState.outcome`) are `running`, `collapsed`, `escaped` and `defeated`. When the run ends, a banner shows rooms entered, level and XP; `RunState.end_run()` emits `Events.run_ended(outcome, summary)`. **R** repeats the seed and **N** rolls a new one. There is no title screen and no summary screen; `game.gd` has the states `RUNNING`, `LEVEL_UP`, `PAUSED` and `ENDED`.
+- The exit is sealed until the enemy with id `armored_brute` dies. The check is hard-coded to that id (`game.gd` `BOSS_DEFINITION`); it is not a data flag.
 - Entering a room spends ticks according to the room-kind policy. If the clock reaches 0 on a transition, the run ends at once with `collapsed`, and this check happens *before* the exit check (see the edge case in [COLLAPSE_SYSTEM.md §2](COLLAPSE_SYSTEM.md#2-current-prototype-behaviour)).
-- Room states (obstacles, surviving enemies) persist across revisits. Projectiles are cleared on every transition.
+- Room states (obstacles, surviving enemies) persist across revisits in `RunState.room_states`. Projectiles are cleared on every transition.
 - Level-up and Esc pause are modal overlays that freeze simulation. The collapse clock never changes while they are open.
 - Death resets everything. Nothing is saved.
 
@@ -65,17 +78,18 @@ flowchart TD
 ### 3.1 Run
 
 - **Start:** the title screen offers *New run* with an optional seed field; leave it empty for a random seed. Seeds are 31-bit positive integers shown on every summary.
-- **Floor seed derivation (determinism):** `floor_seed = (run_seed * 1000003 + depth * 7919) mod 2147483647`. Every per-room RNG keeps the existing `seed + room_id * k` pattern on top of `floor_seed`. With the same run seed and the same choices, a player gets the same floors.
+- **Floor seed derivation (determinism):** use `RunState.floor_seed(depth)`, as implemented in 1A. Depth 1 uses the run seed unchanged, so existing seeds reproduce. Deeper floors use `(run_seed + (depth − 1) × 1000003) mod 2147483647`, which 1A marks as provisional; this page adopts it as the default. Every per-room RNG keeps the existing `seed + room_id × k` pattern on top of the floor seed. With the same run seed and the same choices, a player gets the same floors.
 - **Proposed default — victory:** the run is won when the crawler takes the unsealed exit on floor **`target_depth` = 6** (config key `run.target_depth`). Six floors cover bands I–III ([ENEMY_TIERS.md](ENEMY_TIERS.md)) and three biomes ([BIOMES_AND_TILESETS.md](BIOMES_AND_TILESETS.md)). Target run length is 45–60 minutes.
 - **Failure:** (a) **death**, when HP reaches 0; (b) **collapse**, when the grace period expires; (c) **abandon**, chosen from the pause menu, which is recorded as a failure with cause `abandoned`.
 - An *endless* mode after floor 6 is out of scope for the slice. Reserve it as `run.mode = "endless"`.
 
 ### 3.2 Floor
 
-1. Generate the graph for `(floor_seed, room_count(depth))` ([PROCEDURAL_GENERATION.md](PROCEDURAL_GENERATION.md)).
-2. Compute the collapse budget from the mandatory route plus depth slack ([COLLAPSE_SYSTEM.md §4](COLLAPSE_SYSTEM.md#4-starting-budget-and-depth-scaling)).
+1. `RunState.reset_for_floor(depth)` clears the per-floor state, then `game.gd` generates the graph for `(RunState.floor_seed(), room_count(depth))` ([PROCEDURAL_GENERATION.md](PROCEDURAL_GENERATION.md)) and emits `Events.floor_started(depth, floor)`.
+2. Compute the collapse budget from the mandatory route plus depth slack ([COLLAPSE_SYSTEM.md §4](COLLAPSE_SYSTEM.md#4-starting-budget-and-depth-scaling)), and set `RunState.ticks` to it. Today `reset_for_floor` keeps the old ticks, so 2A must set the new budget here.
 3. Assign the biome for the depth. Place the crawler at the centre of the start room. Reveal the start, boss and exit positions on the minimap.
-4. The announcer plays its floor-intro line, and play begins.
+4. Roll the `floor_start` loot table (1B: one cheap consumable care package, [CONTENT_RULES.md §7](CONTENT_RULES.md#7-loot-tables-loot_tablesjson)).
+5. The announcer plays its floor-intro line, and play begins.
 
 The floor ends with **exit** (success), **death** or **collapse**.
 
@@ -89,7 +103,7 @@ The floor ends with **exit** (success), **death** or **collapse**.
 ### 3.4 Boss and exit
 
 - The boss room is the second-to-last room of the guaranteed spine, and the exit is the last (this is the generator's current behaviour). The exit stays sealed until the boss is dead. A sealed exit door is drawn red and its tooltip reads *Sealed: defeat the floor boss*.
-- A boss kill drops a **boss loot box**: pick one of three rewards ([ENCOUNTER_RULES.md §7](ENCOUNTER_RULES.md#7-rewards)). The choice opens as a modal overlay, like level-up.
+- A boss kill (`Events.boss_defeated`) drops a **boss loot box**. It rolls the 1B `boss_kill` table, which gives 2 distinct rewards that are never common, plus 1 extra roll at CHA mod ≥ +3 ([ENCOUNTER_RULES.md §7](ENCOUNTER_RULES.md#7-rewards)). The box opens in a modal reward overlay, like level-up, that shows what came out; it is not a choice.
 - **Rule change from the prototype:** entering the unsealed exit always succeeds, even when paying its cost would reduce the clock to 0. Exit resolution happens before collapse resolution.
 
 ## 4. What persists — D-08
@@ -107,7 +121,11 @@ The floor ends with **exit** (success), **death** or **collapse**.
 | Achievements, lifetime stats | — | — | **persist** in `user://profile.json` (presentation only) |
 | Unlocks | — | — | **reserved**: `RunState.meta.unlocks: Array[String]`, always empty in the slice |
 
-Implementation note for 1A/2A: `RunState` exposes `reset_run()`, which clears everything in the first three columns. It does not touch `meta`. The unlock hook is a no-op function `apply_meta_unlocks(run_state)` that is called once at run start, so that later meta-progression needs no change to the call sites.
+Implementation note for 2A: `RunState.start_run(seed)` (implemented) already resets XP, scores, HP, inventory, skills, the ledger and telemetry, and `reset_for_floor(depth)` clears the per-floor state. 2A adds:
+
+- `RunState.meta`, loaded from `user://profile.json`. `start_run` never touches it.
+- A no-op hook, `apply_meta_unlocks()`, called at the end of `start_run`, so that later meta-progression needs no change to the call sites.
+- The between-floor rules in this table (heal, refill stamina, clear statuses, new tick budget) applied by a `RunState.begin_next_floor(depth)` wrapper.
 
 ## 5. Between floors (the intermission)
 
@@ -123,7 +141,7 @@ Level-ups earned from the efficiency bonus open the level-up overlay before the 
 
 ## 6. Run summary
 
-The summary is shown for every outcome. It is written to `user://telemetry/run_<seed>_<timestamp>.json` by 2G, and the same data feeds the screen.
+The summary is shown for every outcome. Its data is `RunState.summary()`, the snapshot carried by `Events.run_ended(outcome, summary)`. 2A and 2G extend it with the fields below, and 2G writes it to `user://telemetry/run_<seed>_<timestamp>.json`.
 
 | Block | Contents |
 | --- | --- |
@@ -138,18 +156,18 @@ The summary is shown for every outcome. It is written to `user://telemetry/run_<
 
 ## 7. Screen flow and game states
 
-The states belong to the 1A `game.gd` state machine. Overlays freeze simulation and never change the collapse clock.
+These are the states of the `game.gd` state machine. `RUNNING`, `LEVEL_UP`, `PAUSED` and `ENDED` exist today. 2A adds `TITLE` and `SUMMARY` (`SUMMARY` replaces today's `ENDED` banner), plus the proposed `REWARD_PICK` and `INTERMISSION`. Overlays freeze simulation and never change the collapse clock. Every transition emits a signal on `Events` so that UI and audio can follow without polling.
 
-| State | Enters from | Leaves to | Simulation |
-| --- | --- | --- | --- |
-| `title` | boot, summary | `running` | none |
-| `running` | title, overlays, intermission | `paused`, `level_up`, `reward_pick`, `intermission`, `summary` | live |
-| `running/grace` (sub-state) | ticks reach 0 | `running` (ticks regained), `intermission` (exit), `summary` (collapse or death) | live, grace timer counting |
-| `paused` | Esc | `running`, `title` (abandon → summary first) | frozen |
-| `level_up` | XP threshold | `running` (cannot be skipped, as in the current prototype) | frozen |
-| `reward_pick` | boss kill, loot box | `running` | frozen |
-| `intermission` | exit taken, depth < target | `running` (new floor) | frozen |
-| `summary` | victory, death, collapse, abandon | `title`, `running` (retry / new) | none |
+| State | Enters from | Leaves to | Simulation | Status |
+| --- | --- | --- | --- | --- |
+| `TITLE` | boot, summary | `RUNNING` (`RunState.start_run`, `Events.run_started`) | none | 2A |
+| `RUNNING` | title, overlays, intermission | `PAUSED`, `LEVEL_UP`, `REWARD_PICK`, `INTERMISSION`, `SUMMARY` | live | exists |
+| grace (a flag on `RUNNING`, `RunState.grace_left > 0`) | ticks reach 0 | normal running (ticks regained), `INTERMISSION` (exit), `SUMMARY` (collapse or death) | live, grace timer counting | 2E |
+| `PAUSED` | `pause` | `RUNNING`, `SUMMARY` (abandon, after confirmation) | frozen | exists |
+| `LEVEL_UP` | `Events.level_up` | `RUNNING` (cannot be skipped, as today) | frozen | exists |
+| `REWARD_PICK` | boss kill, loot box, chest | `RUNNING` | frozen | proposed (2B) |
+| `INTERMISSION` | exit taken, depth < target (`Events.floor_cleared`) | `RUNNING` (new floor, `Events.floor_started`) | frozen | proposed (2A) |
+| `SUMMARY` (today `ENDED`) | victory, death, collapse, abandon (`Events.run_ended`) | `TITLE`, `RUNNING` (retry / new) | none | 2A |
 
 The pause menu keeps the current pages (overview, character, resolution). 2B adds an *Inventory* page and 2F a *Skills* page. Abandon asks for confirmation.
 
@@ -161,7 +179,19 @@ The fiction is that the dungeon is run by an indifferent, game-show-like **syste
 - **Tone guide:** a bureaucratic, overly cheerful corporate voice delivering bad news. Short, two lines at most, 90 characters per line. Punch at the situation, never at the player's real-world identity. No slurs and no sexual content.
 - **Channels:** a toast (top centre, 2.5 s) for events, and a scrolling log on the pause screen. Toasts never cover the room interior's middle 60 %, and they never block input.
 - **Rate limit:** at most one toast per 4 s. Priority events (boss intro, grace start, death) pre-empt and are never dropped.
-- **Events that need lines (minimum 3 variants each):** `run_started`, `floor_started`, `first_kill`, `elite_spotted`, `boss_intro`, `boss_killed`, `level_up`, `ticks_low` (≤ 4), `grace_started`, `room_cleared_flawless`, `loot_box_opened`, `achievement`, `death`, `collapse`, `victory`.
+- **Events that need lines (minimum 3 variants each).** The announcer subscribes to `Events`; it never polls `RunState`, apart from reading values for line templates.
+
+  | Line key | Signal |
+  | --- | --- |
+  | `run_started`, `floor_started`, `boss_killed`, `level_up` | the existing `run_started`, `floor_started`, `boss_defeated` and `level_up` |
+  | `first_kill` | the first `enemy_killed` |
+  | `ticks_low` (≤ 4) | `ticks_changed` |
+  | `room_cleared_flawless` | `room_cleared` with no `player_damaged` since `room_entered` |
+  | `death` | `player_died` |
+  | `collapse`, `victory` | `run_ended` |
+  | `elite_spotted`, `boss_intro`, `grace_started`, `loot_box_opened`, `achievement` | **new signals** proposed for 2C, 2E, 2B and 2G: `elite_spotted`, `boss_phase_changed`, `grace_started` / `grace_ended`, `loot_box_opened`, `achievement_unlocked` |
+
+  Toasts are shown through the existing `Events.message(text, category)` channel, with `category: "announcer"`.
 - **Achievements:** data-defined (`id`, `title`, `quip`, `condition` as an event counter). The slice needs 12. Examples of the shape, written for this project: *"Door Enthusiast — Opened 25 doors. The doors have filed a complaint."* · *"Exact Change — Reached the exit with 0 ticks to spare."*
 - **Sample line register** (original): *"Floor 3. Management reminds you that the ceiling is load-bearing, mostly."*
 

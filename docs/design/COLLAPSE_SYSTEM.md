@@ -39,15 +39,20 @@ The collapse clock is the signature mechanic. It should tempt the player to expl
 | --- | --- | --- |
 | First entry | Charge `first_entry_cost`, then add `first_entry_grant` | `collapse.room_types.<kind>.*` |
 | Revisit | Charge `revisit_cost` (default 0) | `collapse.default.revisit_cost` |
-| Event: item, skill or shrine grant | `+n` ticks with ledger reason `source:<id>` | effect op `collapse.grant_ticks` |
-| Event: in-room drain (trap plate, hazard) | `−n` ticks after a ≥ 0.5 s visible telegraph | effect op `collapse.drain_ticks` |
+| Event: item, skill or shrine grant | `+n` ticks via `RunState.add_ticks(n, reason)`, with reason `item:<id>`, `skill:<id>` or `shrine` | 1B effect op `grant_ticks` (implemented in data, 1–5 ticks, target `self`) |
+| Event: in-room drain (trap plate, hazard) | `−n` ticks after a ≥ 0.5 s visible telegraph, via `RunState.add_ticks(−n, "hazard:<id>")` | hazard data (2E) |
 | Event: elite room cleared | `+1` tick (proposed) | `collapse.room_types.elite.clear_grant` |
 | Event: room cleared (any) | `+clear_refund`, **default 0**, an experiment knob | `collapse.default.clear_refund` |
 | Floor start | Set to the computed budget ([§4](#4-starting-budget-and-depth-scaling)) | `collapse.budget.*` |
 
 **Transitions are never refused for lack of ticks in v1.** `allowed` stays true, apart from a sealed exit. The new value is clamped at 0. If it reaches 0, the grace period starts. This removes the soft-lock.
 
-**Ledger v1:** the existing dictionary gains `source` (`transition` | `item:<id>` | `skill:<id>` | `room_clear` | `hazard:<id>` | `shrine`) and `modifiers` (`[{id, delta}]`). It is emitted as `Events.collapse_changed(entry)`, and RunState keeps the per-floor ledger for telemetry.
+**Ledger v1** (uses the Wave 1A plumbing):
+
+- Door transitions go through `RunState.apply_tick_entry(entry)`, which appends the `CollapsePolicy` dictionary to `RunState.tick_ledger`.
+- Every other change goes through `RunState.add_ticks(amount, reason)`.
+- Both paths emit `Events.ticks_changed(before, after, reason)`, and `Events.room_entered(room_id, kind, ledger_entry, first_visit)` carries the transition entry.
+- v1 adds `source` (`transition` | `item:<id>` | `skill:<id>` | `room_clear` | `hazard:<id>` | `shrine`) and `modifiers` (`[{id, delta}]`) to the entry. It also records non-door changes in the ledger, so telemetry sees every tick.
 
 ## 4. Starting budget and depth scaling
 
@@ -131,18 +136,21 @@ Revisit the choice if telemetry shows grace converting to success in more than 3
 
 ## 7. Time-granting sources
 
-Item and skill names are placeholders. The content data from Wave 1B owns the real records, which use these effect ops.
+Rows marked *1B* already exist as content data ([CONTENT_RULES.md](CONTENT_RULES.md)) and use the `grant_ticks` effect operation. Their gameplay wiring comes in 2B and 2F. The other rows are proposals for 2E, and each needs a new effect operation where noted.
 
-| Source | Effect op | Default magnitude | Limit |
-| --- | --- | --- | --- |
-| Guild hall, first entry | `first_entry_grant` | +3 | once per floor (implemented) |
-| Guild hall service "shore up" | `collapse.grant_ticks` | +2 per purchase | 2 purchases per hall; price owned by 2E |
-| Consumable ("shoring kit") | `collapse.grant_ticks` | +2 | stack size 3 |
-| Passive ("surveyor" type) | `collapse.cost_modifier` | −1 on `trap`/`shrine` entries | room cost never below 1 for non-zero kinds |
-| Skill ("steady nerves" type) | `collapse.grace_bonus_seconds` | +3 s grace | 1 rank |
-| Skill ("efficient route" type) | `collapse.grant_ticks` on `room_cleared_flawless` | +1 | max 3 per floor |
-| Shrine offering | `collapse.grant_ticks` for `hp_cost` | 25 % current HP → +3 | once per shrine |
-| Elite room clear | `clear_grant` | +1 | per elite room |
+| Source | Mechanism | Magnitude | Limit | Status |
+| --- | --- | --- | --- | --- |
+| Guild hall, first entry | `first_entry_grant` | +3 | once per floor | implemented |
+| `itm_time_pouch` (Borrowed Time Pouch, active) | `grant_ticks` on use | +2 | recharges after 3 rooms cleared | 1B |
+| `itm_tick_shard` (Collapse Tick Shard, consumable) | `grant_ticks` on use | +1 | stack 3; excluded from normal-room and floor-start drops | 1B |
+| `itm_sponsor_stopwatch` (passive) | `grant_ticks` on `on_room_clear`, 20 % chance | +1 | per clear | 1B |
+| Guild hall service "shore up" | `grant_ticks` | +2 per purchase | 2 purchases per hall; price owned by 2E | proposed |
+| Elite room clear | `clear_grant` | +1 | per elite room | proposed |
+| Shrine offering | `grant_ticks` for an HP cost | 25 % current HP → +3 | once per shrine | proposed |
+| Passive ("surveyor" type) | new op `tick_cost_modifier` | −1 on `trap`/`shrine` entries | cost never below 1 for non-zero kinds | proposed |
+| Skill ("steady nerves" type) | new op `grace_bonus_seconds` | +3 s grace | 1 rank | proposed |
+
+Conditions can use the 1B key `ticks_below` (for example, an effect that only fires when the clock is low). Following 1B's rule, anything that touches the clock recharges on rooms or floors, never on seconds.
 
 **Global cap:** granted ticks per floor are capped at **50 % of `start_ticks`** (`collapse.max_granted_ratio` 0.5). Further grants are logged with reason `capped` and give 0, so that stacking sources cannot remove the pressure.
 
@@ -183,7 +191,7 @@ Start 26 → rooms 1–3 (−6) = 20 → two side rooms (−4) = 16 → guild ha
 
 **Example 2: arriving at the exit on the last tick.** Ticks 1, boss dead, exit cost 1. *Prototype:* `after == 0`, so the run is reported as **collapsed**. *v1:* exit resolves first, so the floor **succeeds** with 0 left. The run earns the "Exact Change" achievement.
 
-**Example 3: over-explored before the boss.** Ticks 2, boss behind the next door (cost 3). *Prototype:* the transition is refused and the run soft-locks. *v1:* the player can (a) use a shoring kit (+2) → 4, then boss (−3) → 1, kill it, then exit (−1) → 0, a success; or (b) walk in with 2 → 0, which starts grace inside the boss room. Without a fast kill or a grant, the collapse follows in 10 s. The preview's red `!` warned about this before the door.
+**Example 3: over-explored before the boss.** Ticks 2, boss behind the next door (cost 3). *Prototype:* the transition is refused and the run soft-locks. *v1:* the player can (a) use the Borrowed Time Pouch (+2) → 4, then boss (−3) → 1, kill it, then exit (−1) → 0, a success; or (b) walk in with 2 → 0, which starts grace inside the boss room. Without a fast kill or a grant, the collapse follows in 10 s. The preview's red `!` warned about this before the door.
 
 **Example 4: the grace dash.** Boss dead, 1 tick, the exit two rooms away through an unvisited normal room. Entering it costs 2 → clamp to 0 → grace 10 s. Doors unlock, and crossing 384 px at 105 px/s takes about 3.7 s. Entering the exit at about 4.5 s gives **success**.
 

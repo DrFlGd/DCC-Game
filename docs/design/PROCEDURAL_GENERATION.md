@@ -78,7 +78,7 @@ Config shape: `generation.depth_table[]` with the fields `{depth, room_count, li
 | `boss` | Floor objective | boss + escort | yes | 3 |
 | `exit` | Descend | stairs down; sealed until the boss dies | no | 1 |
 | `guild_hall` | Safe service hub | heal, services (2E), time grant | no | 0, +3 |
-| `treasure` | Loot | 1 chest (rarity rolls +1 tier); no enemies | no | 2 |
+| `treasure` | Loot | 1 chest, which rolls the 1B `treasure_room` loot table (2 rewards skewed toward better rarities); no enemies | no | 2 |
 | `trap` | Hazard puzzle | 2–4 trap entities + optional light encounter (0.5× budget); up to 2 tick-drain plates | only with hostiles | 1 |
 | `shrine` | Risk/reward trade | 1 shrine: HP → ticks, or HP → a random passive | no | 1 |
 | `elite` | Hard fight | encounter at 1.5× budget, including ≥ 1 elite | yes | 3, +1 on clear |

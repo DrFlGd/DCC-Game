@@ -111,17 +111,21 @@ Spawn positions depend only on `(floor_seed, room_id)`. They never depend on the
 
 ## 7. Rewards
 
+Drops roll the Wave 1B loot tables with `loot_rules.roll(db, table_id, seed, depth, room_id, salt)` ([CONTENT_RULES.md §7](CONTENT_RULES.md#7-loot-tables-loot_tablesjson)). Rarity follows the 1B `rarity_weights_by_depth` curve (common to legendary, with bands from depths 1, 3, 5 and 8), and each table's `rarity_multipliers` adjust it. This page decides **which table rolls when**, and the room-intensity adjustments.
+
 | Source | XP | Drop |
 | --- | --- | --- |
 | Normal enemy | `xp` from data (veteran ×1.5 per band) | none individually |
-| Normal room clear | — | 35 % chance of 1 pickup (light rooms 25 %, heavy rooms 50 %). Split: 70 % consumable / 20 % passive / 10 % weapon or active |
-| Elite enemy | ×2.5 | **guaranteed** 1 item at rarity +1 tier |
+| Normal room clear | — | `room_normal_clear`: 1 roll, `empty_chance` 0.55, mostly consumables. **Proposed:** light rooms +0.10 empty chance, heavy rooms −0.15 |
+| Elite enemy | ×2.5 | **guaranteed** 1 item. **Proposed** new table `elite_kill`: 1 roll, empty chance 0, minimum uncommon |
 | Elite room clear | — | +1 collapse tick ([COLLAPSE_SYSTEM.md §5](COLLAPSE_SYSTEM.md#5-room-type-policy-table)) |
-| Treasure chest | — | 1 item at rarity +1 tier |
-| Boss | boss `xp` | **Boss loot box:** pick 1 of 3 (4 with CHA mod ≥ +3); at least 1 of the 3 is a weapon or active item |
+| Treasure chest | — | `treasure_room`: 2 distinct rewards, skewed toward better rarities |
+| Boss | boss `xp` | **Boss loot box:** `boss_kill`, 2 distinct rewards that are never common; +1 roll at CHA mod ≥ +3 (`Events.loot_box_opened`, proposed) |
+| Floor start | — | `floor_start`: one cheap consumable |
+| Guild hall | — | `guild_hall_shop`: 4 offers (shop pricing in 2E) |
 | Summons, splitting copies, invulnerable traps | 0 | none |
 
-**Rarity roll by band** (common / uncommon / rare / epic): I 70/25/5/0 · II 60/30/9/1 · III 50/33/14/3. "+1 tier" shifts the roll one column right. The rarity names and item pools belong to the Wave 1B content data. This page only fixes the rates.
+Use a distinct `salt` for each roll source in the same room (`"clear"`, `"elite:<instance_id>"`, `"chest"`), so that rolls stay independent and deterministic.
 
 ## 8. Validation tests engineers must write
 

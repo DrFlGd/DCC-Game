@@ -11,7 +11,7 @@
 ## 1. Current prototype behaviour
 
 - **Atlas:** [`stone_crypt/tileset_16x16.png`](../../game/assets/biomes/stone_crypt/tileset_16x16.png). It is 128×32 px, an 8×2 grid with 12 filled slots: floor ×2, wall top, wall edge ×2, wall face, wall torch, door, stairs, barrel, chest, bones. The slot map is in the [asset README](../../game/assets/README.md).
-- **How `main.gd` draws a room:**
+- **How a room is drawn** (`main.gd` at 9bb993d; `room_renderer.gd` since the Wave 1A refactor):
   - **Floor:** the alternate floor tile is used where `(x × 17 + y × 13) mod 9 == 0`.
   - **North wall:** wall-top tiles on row −1 and wall-face tiles on row 0, with torches at columns 5 and 18.
   - **South wall and corners:** the **wall-top tile rotated** into place, as a stand-in for missing art.
@@ -24,7 +24,7 @@
 
 - **Gaps:**
   - The sampler has no south wall, corners, door jambs, or open/locked doors.
-  - `main.gd` draws atlas (48, 0) on the **west** wall and (64, 0) on the **east** wall. The asset README describes (48, 0) as the *eastern* edge. Check this visually and fix either the code or the README.
+  - The renderer draws atlas (48, 0) on the **west** wall and (64, 0) on the **east** wall. The asset README describes (48, 0) as the *eastern* edge. Check this visually and fix either the code or the README.
 - **Display scale:** at the default 960×540 window the room renders at ≈ 0.83× (`room_layout.gd`: (540 − 193) / 416). At the 720×480 minimum it renders at ≈ 0.69×. Native 16 px tiles therefore show at about 11–13 screen px with nearest-neighbour filtering at non-integer scales, so expect uneven pixels. See §8.
 
 ## 2. Standard atlas layout (all biomes)
@@ -94,7 +94,7 @@ The hazard numbers are defaults that the 2E hazard system implements as data (`d
 - **Palette:** `#0f1512` outline · `#1d2a22` `#2f4436` `#4a6650` ground ramp · `#6b4f7a` `#9a73b0` mycelium violet · `#7fe0b0` glow cyan-green · `#e6d38a` spore yellow.
 - **Lighting:** dark ambient. Glow caps make 48 px light pools.
 - **Features:** giant mushroom stalk (blocking), glow-cap cluster (non-blocking light).
-- **Hazard, spore patch:** a 2–6-cell patch. It puffs 0.4 s after the crawler enters (yellow swell telegraph) and applies Poison for 6 s. It re-arms after 3 s. Enemies with `spore` affinity are immune.
+- **Hazard, spore patch:** a 2–6-cell patch. It puffs 0.4 s after the crawler enters (yellow swell telegraph) and applies `poisoned` for 5 s (the 1B default). It re-arms after 3 s. Enemies with `spore` affinity are immune.
 - **Room features:** organic room edges drawn with inner-corner tiles. The collision stays 24×24.
 - **Destructible:** puffball. Breaking it releases one spore puff (2 cells, a hazard for enemies too).
 
@@ -103,7 +103,7 @@ The hazard numbers are defaults that the 2E hazard system implements as data (`d
 - **Palette:** `#0a1216` outline · `#16262e` `#24404a` `#3a6168` wet-stone ramp · `#2f6f7a` `#4fa3a5` water · `#c9e6df` foam · `#b08d57` old brass.
 - **Lighting:** caustic shimmer on water cells, as a 4-frame animation.
 - **Hazards:**
-  - **Shallow water:** move speed −25 % for both the crawler and enemies, and it cleanses Burn.
+  - **Shallow water:** move speed −25 % for both the crawler and enemies, and it cleanses `burning`.
   - **Deep water:** **blocks movement but not projectiles or LOS**. This needs a new cell class in the nav and collision code, separate from obstacles. It is never on door lanes.
 - **Features:** an ossuary niche wall, and a submerged pillar (blocking).
 - **Destructible:** a rotten crate that leaves a floating plank (cosmetic).
@@ -113,7 +113,7 @@ The hazard numbers are defaults that the 2E hazard system implements as data (`d
 - **Palette:** `#101114` outline · `#23262b` `#3a3f47` `#5a616b` concrete and steel ramp · `#d9b13b` hazard yellow · `#2b2b2b` stripe black · `#c4572e` rust · `#9fd2e8` steam.
 - **Lighting:** flickering strip lights, as a 2-frame animation on wall_face_lit.
 - **Hazards:**
-  - **Steam vent:** a 1×3 lane, 2.5 s on and 2.5 s off, with a 0.6 s hiss and particle telegraph. It applies Burn and 3 damage per second while the crawler is inside it.
+  - **Steam vent:** a 1×3 lane, 2.5 s on and 2.5 s off, with a 0.6 s hiss and particle telegraph. It applies `burning` and 3 damage per second while the crawler is inside it.
   - **Conveyor plate:** pushes actors at 30 px/s in its arrow direction, shown by an animated arrow.
 - **Features:** pipe bundle (blocking), control box (destructible: breaking it turns off one vent).
 
@@ -123,7 +123,7 @@ The hazard numbers are defaults that the 2E hazard system implements as data (`d
 - **Lighting:** orange underglow from the channels, with a slow 1.2 s pulse.
 - **Hazards:**
   - **Slag channel:** blocks movement, not projectiles. Standing next to it applies no damage.
-  - **Spatter:** every 4 s a channel cell telegraphs for 0.7 s, then splashes a radius of 20 px for 4 damage plus Burn.
+  - **Spatter:** every 4 s a channel cell telegraphs for 0.7 s, then splashes a radius of 20 px for 4 damage plus `burning`.
 - **Features:** anvil (blocking), bone pile (destructible; it may drop a consumable at 10 %).
 
 ### 4.6 `guild_interior`

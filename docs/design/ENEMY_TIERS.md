@@ -3,7 +3,7 @@
 - **Status:** Proposed. The four enemies in §1 are **implemented** in [`enemies.json`](../../game/data/enemies.json). The roles, bands, guardrails and the new archetypes are the target for Wave 2C.
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 4 (taxonomy, tiers, roster)
-- **Related:** [Encounter rules](ENCOUNTER_RULES.md) · [Combat and RPG](COMBAT_AND_RPG.md) · [Biomes](BIOMES_AND_TILESETS.md) · [Prototype spec](ROOM_ENEMY_RPG_PROTOTYPE.md)
+- **Related:** [Content rules (statuses)](CONTENT_RULES.md#4-statuses) · [Encounter rules](ENCOUNTER_RULES.md) · [Combat and RPG](COMBAT_AND_RPG.md) · [Biomes](BIOMES_AND_TILESETS.md) · [Prototype spec](ROOM_ENEMY_RPG_PROTOTYPE.md)
 
 Every enemy below is an **original design** (`adaptation_type: original`). The rat family already exists in the prototype. Names are working titles and do not refer to anything in the books. Units: px, s; the crawler moves at 105 px/s.
 
@@ -20,7 +20,7 @@ Every enemy below is an **original design** (`adaptation_type: original`). The r
 
 - No attack has a wind-up (see the telegraph rule in [COMBAT_AND_RPG.md §10](COMBAT_AND_RPG.md#10-enemy-telegraph-rule)).
 - `twin_shot` aims at ±0.15 rad around the crawler. At the spitting rat's 105 px preferred range each shot passes about 16 px to the side, while the crawler's hit radius is 8.5 px. **A stationary crawler is never hit at that range.** v1 aims one shot directly at the crawler and leads the other by 0.25 rad in the crawler's direction of motion.
-- Boss detection is hard-coded to the id `armored_brute`. v1 adds a `rank` field.
+- Boss detection is hard-coded to the id `armored_brute` (`game.gd` `BOSS_DEFINITION` after Wave 1A). v1 adds a `rank` field.
 - The hulking rat's claw (max 9) and the brute's maul (max 13) exceed the band I damage guardrail (§4). Proposed retune: hulking claw d4 (max 7), brute `damage_bonus` −2 (max 10).
 
 ## 2. Role taxonomy
@@ -93,11 +93,11 @@ There are 10 archetypes: 9 normal ones plus a trap. The base stats are at `min_b
 | 2 | `spitting_rat` | ranged | I | 3 | 5 / 12 | 37 | twin spit d4 + 2, wind-up 0.45 | 50 |
 | 3 | `hulking_rat` | tank (light) | I | 4 | 17 / 13 | 28 | claw d4 + 3, wind-up 0.40; hop-lunge | 100 |
 | 4 | `shellback_charger` | charger | II | 4 | 14 / 15 | 32 (charge 210) | ram d8 + 2, wind-up 0.6 | 90 |
-| 5 | `spore_puffer` | zoner | II | 3 | 12 / 10 | 0 | spore burst (Poison), wind-up 0.6 | 60 |
+| 5 | `spore_puffer` | zoner | II | 3 | 12 / 10 | 0 | spore burst (`poisoned`), wind-up 0.6 | 60 |
 | 6 | `nest_mother` | summoner | II | 5 | 16 / 12 | 30 | summons 2 `rat_pup`, wind-up 0.8 | 120 |
 | 7 | `bell_acolyte` | support | III | 4 | 10 / 13 | 40 | ally Shield 6, wind-up 0.6 | 90 |
 | 8 | `rubble_golem` | tank | III | 6 | 40 / 14, DR 2 | 26 | slam d10 + 3, wind-up 0.7 | 150 |
-| 9 | `lobber` | ranged (artillery) | III | 4 | 12 / 12 | 34 | bomb d8 fire + Burn, wind-up 0.5, flight 0.9 | 100 |
+| 9 | `lobber` | ranged (artillery) | III | 4 | 12 / 12 | 34 | bomb d8 fire + `burning`, wind-up 0.5, flight 0.9 | 100 |
 | 10 | `dart_idol` | trap | I–V | 2 | invulnerable (band II+ variant "cracked": 10 / 12) | 0 | dart d4, 140 px/s, wind-up 0.5 | 0 (cracked: 20) |
 | — | `rat_pup` (summon) | chaser | — | 0 | 3 / 10 | 50 | nip d3, wind-up 0.35 | 0 |
 
@@ -116,17 +116,17 @@ There are 10 archetypes: 9 normal ones plus a trap. The base stats are at `min_b
    - **Counter:** sidestep the lane. It recovers for 0.6 s after a hop, which is the moment to punish it.
 4. **Shellback charger:**
    - **Loop:** approach until it has LOS within 60–140 px → wind-up 0.6 s (scrapes the ground, 120 px lane rectangle; direction locks at 60 %) → charge 120 px at 210 px/s.
-   - Hitting an obstacle or wall leaves it stunned and Vulnerable for 1.2 s. Hitting the crawler deals d8 + 2 and 40 px of knockback.
+   - Hitting an obstacle or wall leaves it `stunned` and `vulnerable` (proposed status) for 1.2 s. Hitting the crawler deals d8 + 2 and 40 px of knockback.
    - **Counter:** sidestep late, and bait it into pillars. Its shell takes ×0.5 from the front 90° while it charges.
 5. **Spore puffer:**
-   - **Loop:** stationary. Every 4 s: swell wind-up 0.6 s (a yellow circle fills) → a spore cloud of radius 32 px around itself for 3 s (Poison on contact).
+   - **Loop:** stationary. Every 4 s: swell wind-up 0.6 s (a yellow circle fills) → a spore cloud of radius 32 px around itself for 3 s (`poisoned` on contact).
    - Band III veterans also lob a spore at the crawler's position: a 16 px area telegraph for 0.7 s.
    - **Counter:** shoot it from outside 32 px, or melee it right after a burst.
 6. **Nest mother:**
    - **Loop:** kite at about 120 px. Every 6 s: squeal wind-up 0.8 s (pulsing ring) → 2 pups appear next to her, with at most 4 alive. **The pups die when she dies.**
    - **Counter:** dive her; a spin attack clears pups.
 7. **Bell acolyte:**
-   - **Loop:** stays ≥ 90 px from the crawler, near allies. Every 5 s: ring wind-up 0.6 s (an expanding ripple ring of 80 px) → allies inside get Shielded 6 for 6 s (band IV veterans give Haste instead). It has no attack of its own.
+   - **Loop:** stays ≥ 90 px from the crawler, near allies. Every 5 s: ring wind-up 0.6 s (an expanding ripple ring of 80 px) → allies inside get `shielded` 6 for 6 s (band IV veterans give `hasted` instead). It has no attack of its own.
    - Any hit that causes knockback or a stun **interrupts** the ring.
    - **Counter:** kill it or interrupt it first.
 8. **Rubble golem:**
@@ -150,7 +150,7 @@ Base elite rules: HP ×1.75, damage ×1.15, XP ×2.5, threat ×2, a coloured out
 | Modifier | Effect | Telegraph / tell | Counter |
 | --- | --- | --- | --- |
 | **Volatile** (required) | On death, a 0.8 s pulse, then an explosion of radius 32 px for 2d6 that also hits enemies | Orange pulsing outline; a growing circle at death | Kill it at range, or dodge out; use it against groups |
-| **Bulwark** (required) | HP ×1.5 on top of elite HP; Shielded 8 that regenerates after 4 s without taking damage; knockback resist +0.25 | Blue outline; shield bubble | Sustained damage; don't let it rest |
+| **Bulwark** (required) | HP ×1.5 on top of elite HP; `shielded` 8 that regenerates after 4 s without taking damage; knockback resist +0.25 | Blue outline; shield bubble | Sustained damage; don't let it rest |
 | Swift (optional) | Move +25 %; cooldowns ×0.85 | Green outline, after-images | Keep spacing; dodge timing |
 | Splitting (optional) | On death, splits into 2 non-elite copies at 40 % HP, worth 0 XP | Purple outline | Area damage, spin attacks |
 
@@ -163,12 +163,12 @@ Both bosses are flagged `rank: "boss"`. Killing the boss is what unseals the exi
 - **Stats:** HP 42 (floor 2: ×1.25), AC 15, speed 31, radius 14, sprite 48×48.
 - **Escort:** floor 1 has 1 scavenger + 1 spitting rat (current table). Floor 2 has 2 scavengers + 1 spitting rat.
 - **Phase 1 (100–50 %):** chase. **Maul**: wind-up 0.5 s, a 120° arc outline at a reach of 30 px plus the target's radius, damage d8 + 2 (after the retune), recovery 0.6 s.
-- **Phase 2 (< 50 %):** alternates Maul and **Shoulder Charge**: wind-up 0.7 s with a 96 px lane, then a charge at 200 px/s. Hitting a wall stuns it for 1.0 s and makes it Vulnerable.
+- **Phase 2 (< 50 %):** alternates Maul and **Shoulder Charge**: wind-up 0.7 s with a 96 px lane, then a charge at 200 px/s. Hitting a wall stuns it for 1.0 s and makes it `vulnerable`.
 - **Counter:** stay outside 40 px between mauls, and bait the charge into pillars. The boss room keeps an open centre (24 obstacles, with clearance).
 
 ### 7.2 `sump_warden` (new), bands II–III, floors 3–6
 
-- **Stats:** HP 90 (band II) / 140 (band III), AC 14, speed 24, radius 16, sprite 48×48, knockback-immune, Chill-immune.
+- **Stats:** HP 90 (band II) / 140 (band III), AC 14, speed 24, radius 16, sprite 48×48, knockback-immune, `slowed`-immune.
 - **Phase 1 (100–60 %):**
   - **Tide Spray** every 3 s: wind-up 0.5 s, then a fan of 5 projectiles over 60° at 130 px/s, d6 each. The gaps between projectiles are ≥ 14 px at 100 px range.
   - **Flood Pulse** every 9 s: wind-up 1.0 s, marking one 12×12-cell quadrant, which becomes shallow water (−25 % speed) for 6 s.

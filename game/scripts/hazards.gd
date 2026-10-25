@@ -101,7 +101,8 @@ static func step(entries: Array, delta: float, player: Dictionary, foes: Array =
         else:
             entry["active_time"] = float(entry["active_time"]) + delta
             var interval: float = float(entry.get("interval", 0.0))
-            if interval > 0.0 and float(entry["active_time"]) >= interval * float(entry["activations"]):
+            if interval > 0.0 and float(entry["active_time"]) < float(entry["duration"]) \
+                    and float(entry["active_time"]) >= interval * float(entry["activations"]):
                 entry["activations"] = int(entry["activations"]) + 1
                 entry["hit"] = {}
         _collect_hits(entry, player, foes, hits)

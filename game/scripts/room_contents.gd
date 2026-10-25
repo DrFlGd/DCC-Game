@@ -166,7 +166,8 @@ static func _trap_plates(rng: RandomNumberGenerator, room_id: int, blocked: Dict
     rules.merge(plate_rules, true)
     var plates: Array[Dictionary] = []
     var wanted: int = rng.randi_range(int(rules["min"]), int(rules["max"]))
-    var drains: int = mini(int(rules["max_drain"]), rng.randi_range(1, 2))
+    # 1-2 drain plates (capped by max_drain), always leaving at least one spike.
+    var drains: int = mini(mini(int(rules["max_drain"]), rng.randi_range(1, 2)), wanted - 1)
     var candidates: Array[Vector2i] = []
     for y in range(3, SIZE - 3):
         for x in range(3, SIZE - 3):

@@ -30,9 +30,6 @@ const Hud = preload("res://scripts/ui/hud.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
-## Enemy definition whose death unlocks the exit.
-## TODO(enemies team): replace with a data-driven "boss" flag in enemies.json.
-const BOSS_DEFINITION := "armored_brute"
 
 var state: State = State.RUNNING
 var catalogue: Dictionary = {}
@@ -119,10 +116,11 @@ func _load_room(id: int) -> void:
         return
     var room: Dictionary = RunState.floor["rooms"][id]
     var floor_seed: int = RunState.floor_seed()
-    var contents: Dictionary = Contents.generate(floor_seed, id, room["neighbors"],
-        String(room["kind"]), int(RunState.config.get("obstacle_count", 38)))
-    var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue,
-        String(room["kind"]), floor_seed, id, contents["blocked"])
+    var kind: String = String(room["kind"])
+    var contents: Dictionary = Contents.generate(floor_seed, id, room["neighbors"], kind,
+        Enemies.obstacle_density(catalogue, kind, int(RunState.config.get("obstacle_count", 38))))
+    var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue, kind, floor_seed,
+        id, contents["blocked"], RunState.depth, room["neighbors"])
     RunState.room_states[id] = {"blocked": contents["blocked"], "props": contents["props"],
         "enemies": encounter}
 
@@ -246,7 +244,8 @@ func _character_context() -> Dictionary:
 
 func _on_enemy_killed(definition_id: String, xp: int, _position: Vector2) -> void:
     RunState.award_xp(xp)
-    if definition_id == BOSS_DEFINITION:
+    # Data-driven: any enemy flagged "boss" in enemies.json unlocks the exit.
+    if Enemies.is_boss(catalogue, definition_id):
         RunState.boss_defeated = true
         Events.boss_defeated.emit(definition_id)
         Events.say("Boss defeated! +%d XP | Exit unlocked." % xp, "progression")

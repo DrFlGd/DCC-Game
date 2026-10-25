@@ -1,18 +1,21 @@
 extends SceneTree
-## Determinism regression for seed 424242 against constants captured from the
-## pre-refactor monolithic main.gd (commit 9bb993d) with the same probes:
+## Determinism regression for seed 424242: same inputs -> same outputs. Probes:
 ## floor signature, every room's obstacle map, every room's encounter list,
 ## and a scripted combat trace (d20 rolls, damage, XP, HUD messages).
+## The floor signature is still the pre-refactor main.gd value (commit 9bb993d).
+## Obstacle, encounter and trace constants were regenerated in Wave 2C, when
+## threat-budget encounters and the boss-room obstacle cap replaced the count
+## tables; a mismatch prints the new hash so intended changes are easy to adopt.
 ## Run: godot --headless --path game --script res://tests/determinism_test.gd
 const Generator = preload("res://scripts/floor_generator.gd")
 const SEED := 424242
 const SIGNATURE_MD5 := "b4a17cba2d2d09d31d90f84d8f610610"
-const OBSTACLES_MD5 := "82fdd6810b55c960f1cf3b7bf9ce8a15"
-const ENCOUNTERS_MD5 := "1053351d85fe7132dd1cd5397e7bb9b2"
-const TRACE_MD5 := "99d79a3e32f45741df61183da0b74fbd"
+const OBSTACLES_MD5 := "8e23284dcf127de9d683a0f6d7bbfa03"
+const ENCOUNTERS_MD5 := "8313ee681010df7e7a8c08332f5ab4b0"
+const TRACE_MD5 := "3a5207df4159cc2358f737b5684bbcd2"
 ## First lines of the captured trace, kept readable for debugging diffs.
 const TRACE_HEAD := ["10 24 (192.0, 363.0)", "3 7 0 Missed Rat Scavenger (d20: 2)",
-    "2 7 25 Hit Rat Scavenger for 7 damage"]
+    "2 17 25 Hit Rat Scavenger for 7 damage"]
 var failures := 0
 var last_message := ""
 
@@ -57,21 +60,23 @@ func _run() -> void:
             foes.append("%s@%s hp%d cd%.6f" % [foe["instance_id"] + "/" + foe["definition"],
                 str(foe["pos"]), int(foe["hp"]), float(foe["attack_cooldown"])])
         encounters.append("%d:%s" % [id, ",".join(foes)])
-    check("|".join(obstacles).md5_text() == OBSTACLES_MD5, "obstacle maps match pre-refactor main")
-    check("|".join(encounters).md5_text() == ENCOUNTERS_MD5, "encounter lists match pre-refactor main")
+    check("|".join(obstacles).md5_text() == OBSTACLES_MD5, "obstacle maps match fixture (got %s)"
+        % "|".join(obstacles).md5_text())
+    check("|".join(encounters).md5_text() == ENCOUNTERS_MD5, "encounter lists match fixture (got %s)"
+        % "|".join(encounters).md5_text())
 
     var first: PackedStringArray = _combat_trace(game, run_state)
     for i in range(TRACE_HEAD.size()):
         check(i < first.size() and first[i] == TRACE_HEAD[i],
             "trace line %d: %s" % [i, first[i] if i < first.size() else "<missing>"])
-    check("\n".join(first).md5_text() == TRACE_MD5, "combat trace matches pre-refactor main:\n"
-        + "\n".join(first))
+    check("\n".join(first).md5_text() == TRACE_MD5, "combat trace matches fixture (got %s):\n"
+        % "\n".join(first).md5_text() + "\n".join(first))
     var second: PackedStringArray = _combat_trace(game, run_state)
     check(first == second, "restarting the same seed replays the identical trace")
 
     game.queue_free()
     if failures == 0:
-        print("PASS: seed 424242 floor, obstacles, encounters and combat trace match pre-refactor main")
+        print("PASS: seed 424242 floor, obstacles, encounters and combat trace match the fixtures")
     quit(1 if failures > 0 else 0)
 
 

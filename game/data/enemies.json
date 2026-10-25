@@ -1,8 +1,568 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "sprite_sheets": {
+    "rat": {
+      "path": "res://assets/enemies/rat/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        24,
+        24
+      ]
+    },
+    "spitting_rat": {
+      "path": "res://assets/enemies/spitting_rat/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        24,
+        24
+      ]
+    },
+    "hulking_rat": {
+      "path": "res://assets/enemies/hulking_rat/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        30,
+        30
+      ]
+    },
+    "rat_pup": {
+      "path": "res://assets/enemies/rat_pup/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        16,
+        16
+      ]
+    },
+    "nest_mother": {
+      "path": "res://assets/enemies/nest_mother/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        28,
+        28
+      ]
+    },
+    "shellback_charger": {
+      "path": "res://assets/enemies/shellback_charger/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        26,
+        26
+      ]
+    },
+    "spore_puffer": {
+      "path": "res://assets/enemies/spore_puffer/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        24,
+        24
+      ]
+    },
+    "bell_acolyte": {
+      "path": "res://assets/enemies/bell_acolyte/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        24,
+        24
+      ]
+    },
+    "rubble_golem": {
+      "path": "res://assets/enemies/rubble_golem/facing_8.png",
+      "frame": [
+        48,
+        48
+      ],
+      "render": [
+        34,
+        34
+      ]
+    },
+    "lobber": {
+      "path": "res://assets/enemies/lobber/facing_8.png",
+      "frame": [
+        32,
+        32
+      ],
+      "render": [
+        24,
+        24
+      ]
+    },
+    "brute_boss": {
+      "path": "res://assets/enemies/brute_boss/facing_8.png",
+      "frame": [
+        96,
+        96
+      ],
+      "render": [
+        48,
+        48
+      ]
+    },
+    "sump_warden": {
+      "path": "res://assets/enemies/sump_warden/facing_8.png",
+      "frame": [
+        96,
+        96
+      ],
+      "render": [
+        52,
+        52
+      ]
+    }
+  },
+  "bands": {
+    "1": {
+      "ref_hp": 20,
+      "level": [
+        1,
+        2
+      ],
+      "hp": [
+        3,
+        18
+      ],
+      "ac": [
+        10,
+        13
+      ],
+      "attack_bonus": [
+        2,
+        5
+      ],
+      "max_hit": 7,
+      "min_wind_up": 0.35,
+      "speed": [
+        25,
+        55
+      ],
+      "projectile_max": 140,
+      "xp_per_threat": [
+        10,
+        25
+      ],
+      "threat": [
+        1,
+        4
+      ],
+      "boss_hp": [
+        40,
+        60
+      ]
+    },
+    "2": {
+      "ref_hp": 36,
+      "level": [
+        2,
+        4
+      ],
+      "hp": [
+        8,
+        30
+      ],
+      "ac": [
+        10,
+        15
+      ],
+      "attack_bonus": [
+        3,
+        6
+      ],
+      "max_hit": 12,
+      "min_wind_up": 0.3,
+      "speed": [
+        25,
+        65
+      ],
+      "projectile_max": 160,
+      "xp_per_threat": [
+        15,
+        30
+      ],
+      "threat": [
+        2,
+        5
+      ],
+      "boss_hp": [
+        80,
+        110
+      ]
+    },
+    "3": {
+      "ref_hp": 50,
+      "level": [
+        3,
+        6
+      ],
+      "hp": [
+        10,
+        45
+      ],
+      "ac": [
+        12,
+        15
+      ],
+      "attack_bonus": [
+        4,
+        7
+      ],
+      "max_hit": 17,
+      "min_wind_up": 0.28,
+      "speed": [
+        25,
+        75
+      ],
+      "projectile_max": 180,
+      "xp_per_threat": [
+        15,
+        30
+      ],
+      "threat": [
+        2,
+        6
+      ],
+      "boss_hp": [
+        120,
+        160
+      ]
+    },
+    "4": {
+      "ref_hp": 70,
+      "level": [
+        5,
+        9
+      ],
+      "hp": [
+        20,
+        70
+      ],
+      "ac": [
+        13,
+        16
+      ],
+      "attack_bonus": [
+        5,
+        8
+      ],
+      "max_hit": 24,
+      "min_wind_up": 0.25,
+      "speed": [
+        30,
+        85
+      ],
+      "projectile_max": 200,
+      "xp_per_threat": [
+        20,
+        40
+      ],
+      "threat": [
+        3,
+        8
+      ],
+      "boss_hp": [
+        160,
+        220
+      ]
+    },
+    "5": {
+      "ref_hp": 95,
+      "level": [
+        8,
+        13
+      ],
+      "hp": [
+        35,
+        110
+      ],
+      "ac": [
+        14,
+        17
+      ],
+      "attack_bonus": [
+        7,
+        10
+      ],
+      "max_hit": 33,
+      "min_wind_up": 0.22,
+      "speed": [
+        30,
+        95
+      ],
+      "projectile_max": 230,
+      "xp_per_threat": [
+        30,
+        50
+      ],
+      "threat": [
+        4,
+        10
+      ],
+      "boss_hp": [
+        220,
+        320
+      ]
+    }
+  },
+  "encounters": {
+    "depth_bands": [
+      {
+        "band": 1,
+        "max_depth": 2
+      },
+      {
+        "band": 2,
+        "max_depth": 4
+      },
+      {
+        "band": 3,
+        "max_depth": 6
+      },
+      {
+        "band": 4,
+        "max_depth": 9
+      },
+      {
+        "band": 5,
+        "max_depth": 9999
+      }
+    ],
+    "budget": {
+      "base": 5,
+      "per_depth": 3,
+      "tolerance": 0.1,
+      "attempts": 12
+    },
+    "intensity": {
+      "light": {
+        "weight": 25,
+        "multiplier": 0.7
+      },
+      "standard": {
+        "weight": 55,
+        "multiplier": 1.0
+      },
+      "heavy": {
+        "weight": 20,
+        "multiplier": 1.3
+      }
+    },
+    "kind_multiplier": {
+      "normal": 1.0,
+      "elite": 1.5,
+      "boss": 0.5
+    },
+    "min_enemies": {
+      "normal": 2,
+      "elite": 2,
+      "boss": 1
+    },
+    "max_enemies": {
+      "1": 4,
+      "2": 5,
+      "3": 6,
+      "4": 7,
+      "5": 8
+    },
+    "role_caps": {
+      "1": {
+        "ranged": 2,
+        "summoner": 1,
+        "support": 1,
+        "zoner": 1,
+        "charger": 2
+      },
+      "2": {
+        "ranged": 3,
+        "summoner": 1,
+        "support": 1,
+        "zoner": 1,
+        "charger": 2,
+        "tank": 1
+      },
+      "3": {
+        "ranged": 3,
+        "summoner": 1,
+        "support": 1,
+        "zoner": 2,
+        "charger": 2,
+        "tank": 1
+      },
+      "4": {
+        "ranged": 3,
+        "summoner": 1,
+        "support": 1,
+        "zoner": 2,
+        "charger": 2
+      },
+      "5": {
+        "ranged": 3,
+        "summoner": 1,
+        "support": 1,
+        "zoner": 2,
+        "charger": 2
+      }
+    },
+    "pressure_roles": {
+      "1": [
+        "chaser"
+      ],
+      "2": [
+        "chaser",
+        "charger"
+      ],
+      "3": [
+        "chaser",
+        "charger"
+      ],
+      "4": [
+        "chaser",
+        "charger"
+      ],
+      "5": [
+        "chaser",
+        "charger"
+      ]
+    },
+    "repeat_cap": 3,
+    "support_min_company": 2,
+    "elite_chance": {
+      "1": 0.0,
+      "2": 0.0,
+      "3": 0.1,
+      "4": 0.15,
+      "5": 0.2
+    },
+    "escort_excluded_roles": {
+      "1": [
+        "summoner",
+        "support"
+      ]
+    },
+    "boss_pool": [
+      {
+        "min_depth": 1,
+        "max_depth": 2,
+        "options": [
+          {
+            "id": "armored_brute"
+          }
+        ]
+      },
+      {
+        "min_depth": 3,
+        "max_depth": 4,
+        "options": [
+          {
+            "id": "sump_warden"
+          }
+        ]
+      },
+      {
+        "min_depth": 5,
+        "max_depth": 9999,
+        "options": [
+          {
+            "id": "sump_warden"
+          },
+          {
+            "id": "armored_brute",
+            "elite": "bulwark"
+          }
+        ]
+      }
+    ],
+    "spawn": {
+      "portal_distance": 96,
+      "ranged_portal_distance": 120,
+      "fallback_center_distance": 82,
+      "gap": 11,
+      "escort_boss_gap": 48,
+      "attempts": 150
+    },
+    "boss_obstacle_cap": 24,
+    "dormancy": 0.6,
+    "first_cooldown": [
+      0.4,
+      1.0
+    ],
+    "summon_room_cap": 6
+  },
+  "elites": {
+    "base": {
+      "hp_mult": 1.75,
+      "damage_mult": 1.15,
+      "xp_mult": 2.5,
+      "threat_mult": 2
+    },
+    "modifiers": {
+      "bulwark": {
+        "name_prefix": "Bulwark",
+        "tint": "#5fa8ff",
+        "hp_mult": 1.5,
+        "shield": 8,
+        "shield_regen_delay": 4.0,
+        "knockback_resist_add": 0.25,
+        "ac_add": 1,
+        "tags": [
+          "warded"
+        ]
+      },
+      "volatile": {
+        "name_prefix": "Volatile",
+        "tint": "#ff8a3d",
+        "speed_mult": 1.1,
+        "tags": [
+          "volatile"
+        ],
+        "death_burst": {
+          "radius": 32,
+          "telegraph": 0.8,
+          "dice": 2,
+          "die": 6,
+          "damage_type": "fire",
+          "hits_enemies": true
+        }
+      }
+    }
+  },
   "enemies": {
     "rat_scavenger": {
       "name": "Rat Scavenger",
+      "role": "chaser",
+      "band": 1,
+      "min_depth": 1,
+      "max_depth": 6,
+      "threat": 2,
+      "weight": 2.0,
+      "tags": [
+        "beast",
+        "vermin"
+      ],
+      "boss": false,
+      "resistances": {},
       "sprite": "rat",
       "level": 1,
       "hp": 7,
@@ -19,6 +579,8 @@
       },
       "speed": 43,
       "collision_radius": 6,
+      "knockback_resist": 0.0,
+      "dr": 0,
       "behavior": {
         "mode": "chase",
         "pathfinding": "grid_bfs",
@@ -30,10 +592,14 @@
         {
           "id": "bite",
           "type": "melee",
+          "telegraph": "arc",
+          "arc": 100,
           "ability": "STR",
           "proficient": true,
           "range": 19,
           "cooldown": 1.05,
+          "wind_up": 0.35,
+          "recovery": 0.3,
           "damage_die": 4,
           "damage_bonus": 0
         }
@@ -41,7 +607,21 @@
     },
     "spitting_rat": {
       "name": "Spitting Rat",
-      "sprite": "rat",
+      "role": "ranged",
+      "band": 1,
+      "min_depth": 1,
+      "max_depth": 6,
+      "threat": 3,
+      "weight": 1.0,
+      "tags": [
+        "beast",
+        "vermin"
+      ],
+      "boss": false,
+      "resistances": {
+        "poisoned": 0.5
+      },
+      "sprite": "spitting_rat",
       "level": 1,
       "hp": 5,
       "ac": 12,
@@ -59,6 +639,8 @@
       },
       "speed": 37,
       "collision_radius": 6,
+      "knockback_resist": 0.0,
+      "dr": 0,
       "behavior": {
         "mode": "kite",
         "pathfinding": "grid_bfs",
@@ -70,25 +652,41 @@
         {
           "id": "spit",
           "type": "ranged",
+          "telegraph": "line",
           "ability": "DEX",
           "proficient": true,
           "range": 185,
           "cooldown": 2.2,
+          "wind_up": 0.45,
+          "recovery": 0.4,
           "damage_die": 4,
           "damage_bonus": 0,
+          "damage_type": "toxic",
           "projectile_speed": 117.5
         }
       ]
     },
     "hulking_rat": {
       "name": "Hulking Rat",
-      "sprite": "rat",
+      "role": "tank",
+      "band": 1,
+      "min_depth": 1,
+      "max_depth": 6,
+      "threat": 4,
+      "weight": 1.0,
+      "tags": [
+        "beast",
+        "vermin"
+      ],
+      "boss": false,
+      "resistances": {},
+      "sprite": "hulking_rat",
       "level": 2,
       "hp": 17,
       "ac": 13,
       "xp": 100,
       "abilities": [
-        "lunge"
+        "dash"
       ],
       "scores": {
         "STR": 16,
@@ -100,6 +698,8 @@
       },
       "speed": 28,
       "collision_radius": 9,
+      "knockback_resist": 0.25,
+      "dr": 0,
       "behavior": {
         "mode": "chase",
         "pathfinding": "grid_bfs",
@@ -109,26 +709,527 @@
       },
       "attacks": [
         {
+          "id": "hop_lunge",
+          "type": "dash",
+          "telegraph": "dash",
+          "ability": "STR",
+          "proficient": true,
+          "range": 72,
+          "min_range": 30,
+          "cooldown": 3.5,
+          "wind_up": 0.5,
+          "recovery": 0.6,
+          "dash_distance": 48,
+          "dash_speed": 70,
+          "damage_die": 4,
+          "damage_bonus": 0,
+          "knockback": 12
+        },
+        {
           "id": "claw",
           "type": "melee",
+          "telegraph": "arc",
+          "arc": 120,
           "ability": "STR",
           "proficient": true,
           "range": 23,
           "cooldown": 1.6,
-          "damage_die": 6,
+          "wind_up": 0.4,
+          "recovery": 0.4,
+          "damage_die": 4,
           "damage_bonus": 0
+        }
+      ]
+    },
+    "shellback_charger": {
+      "name": "Shellback Charger",
+      "role": "charger",
+      "band": 2,
+      "min_depth": 3,
+      "max_depth": 6,
+      "threat": 4,
+      "weight": 1.2,
+      "tags": [
+        "beast",
+        "armored",
+        "shelled"
+      ],
+      "boss": false,
+      "resistances": {
+        "bleeding": 0.5
+      },
+      "sprite": "shellback_charger",
+      "level": 3,
+      "hp": 14,
+      "ac": 15,
+      "xp": 90,
+      "abilities": [
+        "dash"
+      ],
+      "scores": {
+        "STR": 14,
+        "DEX": 10,
+        "CON": 14,
+        "INT": 2,
+        "WIS": 8,
+        "CHA": 4
+      },
+      "speed": 32,
+      "collision_radius": 8,
+      "knockback_resist": 0.5,
+      "dr": 0,
+      "behavior": {
+        "mode": "charge",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 90,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "ram",
+          "type": "dash",
+          "telegraph": "dash",
+          "ability": "STR",
+          "proficient": true,
+          "range": 140,
+          "min_range": 60,
+          "cooldown": 3.0,
+          "wind_up": 0.6,
+          "recovery": 0.5,
+          "dash_distance": 120,
+          "dash_speed": 210,
+          "stun_on_wall": 1.2,
+          "damage_die": 8,
+          "damage_bonus": 0,
+          "knockback": 40
+        }
+      ]
+    },
+    "spore_puffer": {
+      "name": "Spore Puffer",
+      "role": "zoner",
+      "band": 2,
+      "min_depth": 3,
+      "max_depth": 6,
+      "threat": 3,
+      "weight": 1.0,
+      "tags": [
+        "fungus",
+        "plant"
+      ],
+      "boss": false,
+      "resistances": {
+        "poisoned": 0.0,
+        "fire": 1.5
+      },
+      "sprite": "spore_puffer",
+      "level": 2,
+      "hp": 12,
+      "ac": 10,
+      "xp": 60,
+      "abilities": [
+        "puddle"
+      ],
+      "scores": {
+        "STR": 6,
+        "DEX": 6,
+        "CON": 14,
+        "INT": 1,
+        "WIS": 8,
+        "CHA": 3
+      },
+      "speed": 0,
+      "collision_radius": 7,
+      "knockback_resist": 1.0,
+      "dr": 0,
+      "behavior": {
+        "mode": "zone",
+        "pathfinding": "stationary",
+        "repath_seconds": 1.0,
+        "preferred_distance": 0,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "spore_burst",
+          "type": "puddle",
+          "telegraph": "circle",
+          "target": "self",
+          "range": 110,
+          "cooldown": 4.0,
+          "wind_up": 0.6,
+          "recovery": 0.4,
+          "aoe_radius": 32,
+          "requires_los": false,
+          "hazard": {
+            "telegraph": 0.0,
+            "duration": 3.0,
+            "tick": 1.0,
+            "damage": 2,
+            "status": "poisoned"
+          }
+        }
+      ]
+    },
+    "nest_mother": {
+      "name": "Nest Mother",
+      "role": "summoner",
+      "band": 2,
+      "min_depth": 3,
+      "max_depth": 6,
+      "threat": 5,
+      "weight": 0.8,
+      "tags": [
+        "beast",
+        "vermin"
+      ],
+      "boss": false,
+      "resistances": {},
+      "sprite": "nest_mother",
+      "level": 3,
+      "hp": 16,
+      "ac": 12,
+      "xp": 120,
+      "abilities": [
+        "summon"
+      ],
+      "scores": {
+        "STR": 10,
+        "DEX": 12,
+        "CON": 12,
+        "INT": 4,
+        "WIS": 12,
+        "CHA": 6
+      },
+      "speed": 30,
+      "collision_radius": 8,
+      "knockback_resist": 0.0,
+      "dr": 0,
+      "behavior": {
+        "mode": "summon",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 120,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "squeal",
+          "type": "summon",
+          "telegraph": "circle",
+          "range": 300,
+          "cooldown": 6.0,
+          "wind_up": 0.8,
+          "recovery": 0.5,
+          "aoe_radius": 22,
+          "requires_los": false,
+          "summon": {
+            "id": "rat_pup",
+            "count": 2,
+            "cap": 4
+          }
+        }
+      ]
+    },
+    "rat_pup": {
+      "name": "Rat Pup",
+      "role": "chaser",
+      "band": 2,
+      "min_depth": 3,
+      "max_depth": 6,
+      "threat": 0,
+      "weight": 0.0,
+      "summon_only": true,
+      "tags": [
+        "beast",
+        "vermin"
+      ],
+      "boss": false,
+      "resistances": {},
+      "sprite": "rat_pup",
+      "level": 1,
+      "hp": 3,
+      "ac": 10,
+      "xp": 0,
+      "abilities": [],
+      "scores": {
+        "STR": 8,
+        "DEX": 14,
+        "CON": 8,
+        "INT": 2,
+        "WIS": 8,
+        "CHA": 4
+      },
+      "speed": 50,
+      "collision_radius": 4,
+      "knockback_resist": 0.0,
+      "dr": 0,
+      "behavior": {
+        "mode": "chase",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.3,
+        "preferred_distance": 10,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "nip",
+          "type": "melee",
+          "telegraph": "arc",
+          "arc": 90,
+          "ability": "STR",
+          "proficient": true,
+          "range": 15,
+          "cooldown": 1.0,
+          "wind_up": 0.35,
+          "recovery": 0.3,
+          "damage_die": 3,
+          "damage_bonus": 0
+        }
+      ]
+    },
+    "bell_acolyte": {
+      "name": "Bell Acolyte",
+      "role": "support",
+      "band": 3,
+      "min_depth": 5,
+      "max_depth": 6,
+      "threat": 4,
+      "weight": 0.8,
+      "tags": [
+        "humanoid",
+        "cultist"
+      ],
+      "boss": false,
+      "resistances": {},
+      "sprite": "bell_acolyte",
+      "level": 4,
+      "hp": 10,
+      "ac": 13,
+      "xp": 90,
+      "abilities": [
+        "shield_allies",
+        "heal_allies"
+      ],
+      "scores": {
+        "STR": 8,
+        "DEX": 14,
+        "CON": 10,
+        "INT": 12,
+        "WIS": 14,
+        "CHA": 12
+      },
+      "speed": 40,
+      "collision_radius": 6,
+      "knockback_resist": 0.0,
+      "dr": 0,
+      "behavior": {
+        "mode": "support",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 90,
+        "detection_range": 450,
+        "ally_radius": 80
+      },
+      "attacks": [
+        {
+          "id": "ward_peal",
+          "type": "support",
+          "telegraph": "circle",
+          "effect": "shield",
+          "amount": 6,
+          "duration": 6.0,
+          "range": 400,
+          "cooldown": 5.0,
+          "wind_up": 0.6,
+          "recovery": 0.4,
+          "aoe_radius": 80,
+          "requires_los": false,
+          "interruptible": true
+        },
+        {
+          "id": "mending_toll",
+          "type": "support",
+          "telegraph": "circle",
+          "effect": "heal",
+          "amount": 4,
+          "range": 400,
+          "cooldown": 7.0,
+          "wind_up": 0.6,
+          "recovery": 0.4,
+          "aoe_radius": 80,
+          "requires_los": false,
+          "interruptible": true
+        }
+      ]
+    },
+    "rubble_golem": {
+      "name": "Rubble Golem",
+      "role": "tank",
+      "band": 3,
+      "min_depth": 5,
+      "max_depth": 6,
+      "threat": 6,
+      "weight": 0.8,
+      "tags": [
+        "construct",
+        "armored",
+        "stone"
+      ],
+      "boss": false,
+      "resistances": {
+        "fire": 0.5,
+        "poisoned": 0.0,
+        "bleeding": 0.0
+      },
+      "front_guard": {
+        "arc": 120,
+        "multiplier": 0.5,
+        "slot": "ranged"
+      },
+      "sprite": "rubble_golem",
+      "level": 5,
+      "hp": 40,
+      "ac": 14,
+      "xp": 150,
+      "abilities": [],
+      "scores": {
+        "STR": 16,
+        "DEX": 6,
+        "CON": 18,
+        "INT": 2,
+        "WIS": 8,
+        "CHA": 2
+      },
+      "speed": 26,
+      "collision_radius": 11,
+      "knockback_resist": 0.75,
+      "dr": 2,
+      "behavior": {
+        "mode": "chase",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 20,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "slam",
+          "type": "area",
+          "telegraph": "circle",
+          "target": "self",
+          "ability": "STR",
+          "proficient": true,
+          "range": 28,
+          "cooldown": 2.2,
+          "wind_up": 0.7,
+          "recovery": 0.8,
+          "aoe_radius": 28,
+          "damage_die": 10,
+          "damage_bonus": 0,
+          "knockback": 40
+        }
+      ]
+    },
+    "lobber": {
+      "name": "Cinder Lobber",
+      "role": "ranged",
+      "band": 3,
+      "min_depth": 5,
+      "max_depth": 6,
+      "threat": 4,
+      "weight": 0.8,
+      "tags": [
+        "humanoid",
+        "sapper"
+      ],
+      "boss": false,
+      "resistances": {
+        "fire": 0.5,
+        "burning": 0.0
+      },
+      "sprite": "lobber",
+      "level": 4,
+      "hp": 12,
+      "ac": 12,
+      "xp": 100,
+      "abilities": [
+        "puddle"
+      ],
+      "scores": {
+        "STR": 10,
+        "DEX": 14,
+        "CON": 12,
+        "INT": 8,
+        "WIS": 10,
+        "CHA": 6
+      },
+      "speed": 34,
+      "collision_radius": 6,
+      "knockback_resist": 0.0,
+      "dr": 0,
+      "behavior": {
+        "mode": "kite",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 140,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "firebomb",
+          "type": "puddle",
+          "telegraph": "circle",
+          "target": "player",
+          "ability": "DEX",
+          "range": 220,
+          "cooldown": 3.0,
+          "wind_up": 0.5,
+          "recovery": 0.4,
+          "aoe_radius": 22,
+          "requires_los": false,
+          "damage_die": 8,
+          "damage_bonus": 0,
+          "damage_type": "fire",
+          "hazard": {
+            "telegraph": 0.9,
+            "duration": 0.0,
+            "tick": 0.0,
+            "status": "burning"
+          }
         }
       ]
     },
     "armored_brute": {
       "name": "Armored Brute",
-      "sprite": "boss",
+      "role": "boss",
+      "band": 1,
+      "min_depth": 1,
+      "max_depth": 6,
+      "threat": 10,
+      "weight": 0.0,
+      "tags": [
+        "humanoid",
+        "armored",
+        "brute"
+      ],
+      "boss": true,
+      "resistances": {
+        "stunned": 0.0,
+        "rooted": 0.0,
+        "slowed": 0.5
+      },
+      "sprite": "brute_boss",
       "level": 3,
       "hp": 42,
+      "hp_by_band": {
+        "3": 120
+      },
       "ac": 15,
       "xp": 250,
       "abilities": [
-        "lunge"
+        "dash"
       ],
       "scores": {
         "STR": 18,
@@ -140,6 +1241,8 @@
       },
       "speed": 31,
       "collision_radius": 14,
+      "knockback_resist": 0.5,
+      "dr": 0,
       "behavior": {
         "mode": "chase",
         "pathfinding": "grid_bfs",
@@ -151,48 +1254,236 @@
         {
           "id": "maul",
           "type": "melee",
+          "telegraph": "arc",
+          "arc": 120,
           "ability": "STR",
           "proficient": true,
           "range": 30,
           "cooldown": 1.85,
+          "wind_up": 0.5,
+          "recovery": 0.6,
           "damage_die": 8,
-          "damage_bonus": 1
+          "damage_bonus": -2,
+          "knockback": 16
+        },
+        {
+          "id": "shoulder_charge",
+          "type": "dash",
+          "telegraph": "dash",
+          "ability": "STR",
+          "proficient": true,
+          "range": 150,
+          "min_range": 48,
+          "cooldown": 4.0,
+          "wind_up": 0.7,
+          "recovery": 0.6,
+          "dash_distance": 110,
+          "dash_speed": 200,
+          "stun_on_wall": 1.0,
+          "damage_die": 6,
+          "damage_bonus": -2,
+          "knockback": 36
+        }
+      ],
+      "phases": [
+        {
+          "below": 1.0,
+          "attacks": [
+            "maul"
+          ]
+        },
+        {
+          "below": 0.5,
+          "attacks": [
+            "shoulder_charge",
+            "maul"
+          ],
+          "announce": "The Armored Brute stops guarding and starts charging. Bold."
         }
       ]
-    }
-  },
-  "encounter_tables": {
-    "normal": {
-      "min": 2,
-      "max": 4,
-      "pool": [
-        "rat_scavenger",
-        "rat_scavenger",
-        "spitting_rat",
-        "hulking_rat"
+    },
+    "sump_warden": {
+      "name": "Sump Warden",
+      "role": "boss",
+      "band": 2,
+      "min_depth": 3,
+      "max_depth": 6,
+      "threat": 12,
+      "weight": 0.0,
+      "tags": [
+        "aquatic",
+        "construct",
+        "warden"
+      ],
+      "boss": true,
+      "resistances": {
+        "stunned": 0.0,
+        "rooted": 0.0,
+        "slowed": 0.0,
+        "toxic": 0.5
+      },
+      "sprite": "sump_warden",
+      "level": 5,
+      "hp": 90,
+      "hp_by_band": {
+        "3": 140
+      },
+      "ac": 14,
+      "xp": 450,
+      "abilities": [
+        "summon",
+        "puddle",
+        "enrage"
+      ],
+      "enrage_below": 0.25,
+      "scores": {
+        "STR": 14,
+        "DEX": 12,
+        "CON": 16,
+        "INT": 8,
+        "WIS": 12,
+        "CHA": 8
+      },
+      "speed": 24,
+      "collision_radius": 16,
+      "knockback_resist": 1.0,
+      "dr": 0,
+      "behavior": {
+        "mode": "kite",
+        "pathfinding": "grid_bfs",
+        "repath_seconds": 0.4,
+        "preferred_distance": 90,
+        "detection_range": 450
+      },
+      "attacks": [
+        {
+          "id": "tide_spray",
+          "type": "ranged",
+          "telegraph": "line",
+          "ability": "DEX",
+          "proficient": true,
+          "range": 220,
+          "cooldown": 3.0,
+          "wind_up": 0.5,
+          "recovery": 0.4,
+          "count": 5,
+          "spread": 60,
+          "projectile_speed": 130,
+          "damage_die": 6,
+          "damage_bonus": 0
+        },
+        {
+          "id": "tide_spray_wide",
+          "type": "ranged",
+          "telegraph": "line",
+          "ability": "DEX",
+          "proficient": true,
+          "range": 220,
+          "cooldown": 3.0,
+          "wind_up": 0.5,
+          "recovery": 0.4,
+          "count": 7,
+          "spread": 72,
+          "projectile_speed": 130,
+          "damage_die": 6,
+          "damage_bonus": 0
+        },
+        {
+          "id": "flood_pulse",
+          "type": "puddle",
+          "telegraph": "circle",
+          "target": "player",
+          "range": 320,
+          "cooldown": 9.0,
+          "wind_up": 1.0,
+          "recovery": 0.4,
+          "aoe_radius": 56,
+          "requires_los": false,
+          "hazard": {
+            "telegraph": 0.0,
+            "duration": 6.0,
+            "tick": 1.0,
+            "damage": 1,
+            "status": "slowed"
+          }
+        },
+        {
+          "id": "drain_call",
+          "type": "summon",
+          "telegraph": "circle",
+          "range": 400,
+          "cooldown": 8.0,
+          "wind_up": 0.8,
+          "recovery": 0.4,
+          "aoe_radius": 24,
+          "requires_los": false,
+          "summon": {
+            "id": "rat_pup",
+            "count": 2,
+            "cap": 4,
+            "at_edges": true
+          }
+        },
+        {
+          "id": "undertow",
+          "type": "area",
+          "telegraph": "circle",
+          "target": "self",
+          "range": 70,
+          "cooldown": 7.0,
+          "wind_up": 0.8,
+          "recovery": 0.1,
+          "aoe_radius": 60,
+          "pull": 32,
+          "requires_los": false,
+          "then": "slam"
+        },
+        {
+          "id": "slam",
+          "type": "melee",
+          "telegraph": "arc",
+          "arc": 120,
+          "ability": "STR",
+          "proficient": true,
+          "range": 34,
+          "cooldown": 7.0,
+          "wind_up": 0.5,
+          "recovery": 0.8,
+          "damage_die": 10,
+          "damage_bonus": 1,
+          "knockback": 24,
+          "follow_up_only": true
+        }
+      ],
+      "phases": [
+        {
+          "below": 1.0,
+          "attacks": [
+            "tide_spray",
+            "flood_pulse"
+          ]
+        },
+        {
+          "below": 0.6,
+          "attacks": [
+            "undertow",
+            "drain_call",
+            "tide_spray",
+            "flood_pulse"
+          ],
+          "announce": "The Sump Warden opens the drains. Something squeaks back."
+        },
+        {
+          "below": 0.25,
+          "attacks": [
+            "undertow",
+            "drain_call",
+            "tide_spray_wide",
+            "flood_pulse"
+          ],
+          "announce": "The Sump Warden is enraged. Please keep hands inside the arena."
+        }
       ]
-    },
-    "boss": {
-      "fixed": [
-        "armored_brute",
-        "rat_scavenger",
-        "spitting_rat"
-      ]
-    },
-    "start": {
-      "min": 0,
-      "max": 0,
-      "pool": []
-    },
-    "guild_hall": {
-      "min": 0,
-      "max": 0,
-      "pool": []
-    },
-    "exit": {
-      "min": 0,
-      "max": 0,
-      "pool": []
     }
   }
 }

@@ -11,6 +11,7 @@ A game-design and development project inspired by **Dungeon Crawler Carl**. The 
 - **[Godot prototype: setup and controls](game/README.md)** — import `game/project.godot`, play the seeded dungeon-room spike, and run smoke tests.
 - **[16×16 dungeon sampler and art files](game/assets/README.md)** — corrected crypt tiles, the user-provided 8-way rat sheet, independent character/enemy files, and asset conventions for future biomes and weapons.
 - **[Room, enemy AI and RPG prototype specification](docs/design/ROOM_ENEMY_RPG_PROTOTYPE.md)** — fixed dimensions, safe obstacle placement, JSON-configurable enemy types, combat stats and XP progression.
+- **[Content rules](docs/design/CONTENT_RULES.md)** — weapons, items, skills, effects, statuses and loot tables as data (Wave 1B).
 - **[Full-game build-out plan (2026-10-25)](docs/plans/2026-10-25-full-game-plan.md)** — three waves of PRs toward the vertical slice, and how to track them.
 - **[Game design: the run loop](docs/design/GAME_DESIGN.md)** — run, floor, room, boss, exit; victory and failure; what persists; screen flow; the dungeon-system announcer.
 - **[Collapse system](docs/design/COLLAPSE_SYSTEM.md)** — tick rules, budget scaling by depth, the room-type policy table, the zero-clock grace period, and worked examples.

@@ -28,7 +28,7 @@ These values were in `main.gd` at main @ 9bb993d. The Wave 1A refactor moved the
 | Aim | Mouse (or the right stick via the `aim_*` actions), continuous; facing snaps to 8 sprite directions | `player.gd` `aim_at` |
 | Ranged | `fire` held (LMB). Cooldown 0.28 s; projectile 215 px/s, life 2.0 s (≈ 430 px); stopped by obstacle cells. Hit = d20 + DEX mod + proficiency vs AC; damage d6 + DEX mod | `player.gd` `FIRE_COOLDOWN`; `combat.gd` `PLAYER_SHOT_*` |
 | Melee | `melee` held (Space). Cooldown 0.50 s. Hits every enemy within 32 px + its radius whose direction has a dot product > 0.45 with the aim (≈ ±63°, i.e. 127° total). Resolves instantly, with no LOS check. d20 + STR mod + proficiency; d6 + STR mod | `player.gd` `MELEE_COOLDOWN`; `combat.gd` `MELEE_REACH`, `MELEE_ARC_DOT` |
-| Melee visual | Arc of radius 30 px, ±0.7 rad (≈ ±40°), shown for 0.17 s. **Narrower than the hit cone** | renderer; `player.gd` `MELEE_FLASH` |
+| Melee visual | Arc of radius 30 px, ±0.7 rad (≈ ±40°), shown for 0.17 s. **Narrower than the hit cone** | `room_renderer.gd`; `player.gd` `MELEE_FLASH` |
 | Player i-frames after being hit | 0.8 s | `player.gd` `HIT_INVULNERABILITY` |
 | Crits | Natural 20 doubles the damage dice; natural 1 always misses | `rpg_rules.gd` |
 | Enemy attacks | No wind-up. When the cooldown is 0, the target is in range and LOS is clear, a melee attack resolves instantly and a ranged attack spawns its projectile instantly. The initial cooldown is a random 0.2–0.8 s | `combat.gd` |

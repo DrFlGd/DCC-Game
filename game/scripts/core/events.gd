@@ -102,10 +102,25 @@ signal achievement_unlocked(id: String)
 
 # --- Feature-team stubs (declared now so teams can wire them in parallel) ----
 
-## An item entered the inventory. Owned by the items team.
+## An item entered the inventory (scripts/inventory.gd, Wave 2B): a pickup,
+## a purchase or a swap. Emitted after RunState.inventory changed.
 signal item_picked_up(item_id: String)
-## An item or active effect was consumed. Owned by the items team.
+## An active item or a consumable was used (its on_use effects already ran).
 signal item_used(item_id: String)
+## Content id `item_id` was placed on the floor as a pickup at world
+## `position` (swap drops, loot drops, chest and loot-box contents) (2B).
+signal item_dropped(item_id: String, position: Vector2)
+## RunState.inventory changed in any way (slots, stacks, charges, credits).
+## Passive stat modifiers are recomputed in response (2B).
+signal inventory_changed()
+## Credits moved by `amount` (negative when spent); `total` is the new balance (2B).
+signal credits_changed(amount: int, total: int)
+## A status was added to (`active` true) or removed from (`active` false) an
+## actor. `target` is "player" or an enemy instance_id (2B, status_system.gd).
+signal status_changed(target: String, status_id: String, active: bool)
+## The boss loot box in `room_id` was opened and rolled `loot_ids` (the
+## boss_kill table); the ids are placed as pickups at the crate (2B).
+signal loot_box_opened(room_id: int, loot_ids: Array)
 ## The player learned a skill. Owned by the skills team.
 signal skill_learned(skill_id: String)
 

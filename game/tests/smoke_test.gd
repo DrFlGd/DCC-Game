@@ -179,8 +179,9 @@ func run_tests() -> void:
             var encounter: Array[Dictionary] = Enemies.generate_encounter(catalog,
                 String(room["kind"]), 1100+offset_seed, room_id, obstacle_map["blocked"])
             if room["kind"] == "normal":
-                check(encounter.size() >= 2 and encounter.size() <= 4,
-                    "normal room has multiple enemies")
+                # Depth 1 is band I: 2 <= count <= encounters.max_enemies["1"] (4).
+                check(encounter.size() >= 2 and encounter.size() <=
+                    int(catalog["encounters"]["max_enemies"]["1"]), "normal room has multiple enemies")
             if room["kind"] == "boss":
                 check(encounter.size() >= 2, "boss room has mixed encounter")
             for foe in encounter:

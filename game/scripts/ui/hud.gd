@@ -71,6 +71,7 @@ func _draw_hud() -> void:
     _text("  ".join(stat_parts), Vector2(14, 62), 12, Color("#afd4ce"))
     _text(message, Vector2(14, 83), 12, Color("#eccba6"))
     _draw_minimap(view)
+    _draw_boss_bar(view)
     _draw_clock(view)
     _draw_grace_vignette(view)
     _draw_prompt(view)
@@ -78,6 +79,30 @@ func _draw_hud() -> void:
         Vector2(14, view.y - 46), 14, Color("#dce9f2"))
     _text("Esc: pause / stats | M: map | R: replay | N: new seed | 24x24 room, 16px tiles",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
+
+
+## Small top-centre HP bar for a live boss in the current room (any enemy with
+## "boss": true), with its phase as pips. Self-contained: reads RunState only.
+func _draw_boss_bar(view: Vector2) -> void:
+    var boss: Dictionary = {}
+    for foe in RunState.current_room().get("enemies", []):
+        if bool(foe.get("boss", false)) and int(foe["hp"]) > 0:
+            boss = foe
+            break
+    if boss.is_empty():
+        return
+    var width := 240.0
+    var origin := Vector2(floorf(view.x * 0.5 - width * 0.5), 86.0)
+    var ratio: float = clampf(float(boss["hp"]) / float(maxi(1, int(boss["max_hp"]))), 0.0, 1.0)
+    canvas.draw_rect(Rect2(origin - Vector2(1, 1), Vector2(width + 2, 13)), Color("#0b0f16"))
+    canvas.draw_rect(Rect2(origin, Vector2(width * ratio, 11)), Color("#b8323c"))
+    if int(boss.get("shield", 0)) + int(boss.get("ward", 0)) > 0:
+        canvas.draw_rect(Rect2(origin + Vector2(0, 9), Vector2(width, 2)), Color("#7fc4ff"))
+    var phase: int = int(boss.get("phase", 0))
+    var label: String = "%s  %s" % [String(boss.get("name", "Boss")).to_upper(),
+        "I".repeat(phase + 1) if phase < 3 else str(phase + 1)]
+    canvas.draw_string(ThemeDB.fallback_font, origin + Vector2(0, 9), label,
+        HORIZONTAL_ALIGNMENT_CENTER, width, 10, Color.WHITE)
 
 
 # --- Collapse clock widget (Wave 2E) -------------------------------------------

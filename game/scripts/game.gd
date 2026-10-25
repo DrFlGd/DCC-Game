@@ -54,9 +54,6 @@ const Announcer = preload("res://scripts/ui/announcer.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
-## Enemy definition whose death unlocks the exit.
-## TODO(enemies team): replace with a data-driven "boss" flag in enemies.json.
-const BOSS_DEFINITION := "armored_brute"
 
 var state: State = State.TITLE
 var catalogue: Dictionary = {}
@@ -233,13 +230,10 @@ func _load_room(id: int) -> void:
         kind, int(RunState.config.get("obstacle_count", 38)),
         RunState.config.get("room_obstacle_caps", {}),
         RunState.config.get("hazards", {}).get("trap_plates", {}))
-    # Wave 2E: elite rooms borrow the normal table until enemies.json has one.
-    var encounter_kind: String = kind
-    if kind == "elite" and not catalogue.get("encounter_tables", {}).has(kind):
-        encounter_kind = "normal"
-    # RunState.depth is passed so depth-scaled encounters (2C) can use it.
-    var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue,
-        encounter_kind, floor_seed, id, contents["blocked"], RunState.depth)
+    # 2C: depth scales the threat budget; links drive portal-distance and
+    # reachability checks. Elite and trap rooms have their own budgets.
+    var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue, kind, floor_seed,
+        id, contents["blocked"], RunState.depth, room["neighbors"])
     RunState.room_states[id] = {"blocked": contents["blocked"], "props": contents["props"],
         "enemies": encounter, "interactables": contents["interactables"],
         "plates": contents["plates"]}
@@ -458,7 +452,8 @@ func _character_context() -> Dictionary:
 
 func _on_enemy_killed(definition_id: String, xp: int, _position: Vector2) -> void:
     RunState.award_xp(xp)
-    if definition_id == BOSS_DEFINITION:
+    # Data-driven: any enemy flagged "boss" in enemies.json unlocks the exit.
+    if Enemies.is_boss(catalogue, definition_id):
         RunState.boss_defeated = true
         Events.boss_defeated.emit(definition_id)
         Events.say("Boss defeated! +%d XP | Exit unlocked." % xp, "progression")

@@ -142,7 +142,8 @@
     "treasure": 13,
     "shrine": 13,
     "trap": 20,
-    "elite": 30
+    "elite": 30,
+    "boss": 24
   },
   "interaction": {
     "radius": 26,

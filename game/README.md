@@ -1,6 +1,6 @@
 # DCC Game — Godot 16×16 Stone-Crypt Prototype
 
-This is the **D-01 Option A technical spike**, not a finished game. The first environment now uses the **user-provided 16×16 dungeon sampler tiles** and separate graphics files for the stone-crypt biome, player, and two enemy types. All three actors have eight direction-dependent idle sprites. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
+This is the **D-01 Option A technical spike**, not a finished game. The first environment now uses the **user-provided 16×16 dungeon sampler tiles** and separate graphics files for the stone-crypt biome, the player and each enemy type (generated placeholders for most of the Wave 2C roster). All actors have eight direction-dependent idle sprites. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
 
 ## Engine
 
@@ -34,7 +34,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 
 Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). Reserved actions with default bindings for Wave 2 features: `dodge` (Shift / B), `use_item` (Q / LB), `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Aiming is still mouse-only.
 
-**Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms contain **2–4 enemies** using melee or ranged attacks and basic pathfinding; the boss room contains multiple enemies. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
+**Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms spend a **threat budget that grows with depth** (2–4 enemies on floors 1–2, up to 6 by floor 5); every enemy attack has a visible **wind-up telegraph** you can dodge, and enemies wait 0.6 s when you enter. Boss rooms hold the depth's boss (Armored Brute on floors 1–2, Sump Warden from floor 3) plus an escort; bosses change phase at HP thresholds and show an HP bar at the top. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
 ## What works
 
@@ -49,11 +49,11 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 - Omnidirectional aim; ranged fire and directional melee; basic damage and enemy AI; enemy health/state maintained across revisits.
 - A seeded smoke-test suite covering topology, deterministic generation, room tags, policies, and a route-budget diagnostic.
 - **16×16 dungeon sampler stone floors, masonry, torches, side edges, double-leaf doors and prop sprites**. Free sampler omits true corner/south wall pieces, so temporary matching wall-top rotations fill those joins.
-- **Eight-way facing sprites** for the player (mouse aim), rat enemy, and armored boss (AI pursuit direction).
+- **Eight-way facing sprites** for the player (mouse aim) and every enemy (AI facing); see [`assets/enemies/README.md`](assets/enemies/README.md).
 - **Separate per-biome and per-character/enemy assets** rather than a master atlas. See [asset conventions](assets/README.md).
 - **Fixed 24×24 interior tiles (384×384 world pixels)**; resize changes only rendering scale and screen-space HUD. Minimum window 720×480, with selectable common window resolutions from the pause menu.
 - **Deterministic rubble and pillar obstacles**, tested for walkable routes from room center to every connected exit.
-- **Data-driven multi-enemy encounters**, pathfinding/attack behavior, and a six-ability d20-inspired XP/level system.
+- **Data-driven enemy roster** (9 archetypes across 7 roles, 2 elite modifiers, 2 phased bosses), depth-scaled threat budgets, telegraphed attacks, hazards and summons, and a six-ability d20-inspired XP/level system.
 - **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
 - **Esc pause menu and character-stat page** with HP, AC, level, XP, proficiency, six scores/modifiers, and derived melee/ranged attack bonuses.
 
@@ -71,7 +71,7 @@ See [asset conventions and tile index](assets/README.md) for the complete mappin
 
 ## Enemy and RPG design references
 
-See [the gameplay systems specification](../docs/design/ROOM_ENEMY_RPG_PROTOTYPE.md) for how to add enemy types, pick chase/kite/guard behavior, choose BFS/direct/stationary navigation, edit melee or ranged attacks/abilities, and tune enemy XP. The player HUD shows six attributes, AC, HP, proficiency, level, and cumulative XP. D20 attacks use relevant stat modifiers, proficiency, and armor class. This is an action-game adaptation, **not full tabletop D&D**.
+See [the gameplay systems specification](../docs/design/ROOM_ENEMY_RPG_PROTOTYPE.md) for how to add enemy types, pick a behaviour mode, choose BFS/direct/stationary navigation, edit attacks and abilities, and tune enemy XP. [ENEMY_TIERS.md](../docs/design/ENEMY_TIERS.md) lists the roster, bands, guardrails and the `enemies.json` v2 schema; [ENCOUNTER_RULES.md](../docs/design/ENCOUNTER_RULES.md) the budgets and spawn rules. `Enemies.validate_catalogue()` rejects an unknown behaviour, attack type or ability by name, and checks every attack against the per-band guardrails (wind-up, damage, projectile speed). The player HUD shows six attributes, AC, HP, proficiency, level, and cumulative XP. D20 attacks use relevant stat modifiers, proficiency, and armor class. This is an action-game adaptation, **not full tabletop D&D**.
 
 ## Level-up and pause menus
 
@@ -155,6 +155,8 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `smoke_test.gd` | Pure logic: layout, assets, RPG math, allocation, catalogue, generation, obstacles, encounters, facing, Input Map |
 | `determinism_test.gd` | Seed 424242 floor signature, kind-masked geometry, obstacle maps, encounters and a scripted combat trace equal captured constants (regenerated in Wave 2E for the special rooms; the geometry and combat trace are unchanged since the pre-refactor `main.gd`) |
 | `run_state_test.gd` | `RunState`: start_run, multi-level XP, allocation, damage/heal clamps, ticks, telemetry, summary |
+| `enemies_test.gd` | Enemy schema v2 (shipped and broken records), roster, budgets within 10 % and composition rules over 20 seeds × depths 1–6, boss/elite rooms, spawn constraints, veteran/elite scaling, phases, twin_shot geometry, dormancy and wind-up state machine |
+| `enemy_combat_test.gd` | Live `Combat`: wind-up timing and dodging, dormancy on entry, twin_shot hits a still crawler, boss phase roars, bulwark/volatile elites, summon caps, hazards, support wards, knockback, `boss_defeated` for both bosses |
 | `events_test.gd` | `Events` signals during scripted door transitions, kills, boss gate, death, collapse and floor clear |
 | `menu_integration_test.gd` | Live `Main.tscn`: level-up/pause modals, state machine, resolution, F9/R, Input-Map-driven physics loop |
 | `run_loop_test.gd` | Title → `start_run`, room counts and budgets by depth (26 on floor 1 for 424242), exit → intermission → fresh floor with carried XP/HP, last-tick exit, victory on floor 6, summary after death/abandon with Retry/New/Title, run-time freeze, pause → settings, `user://` settings roundtrip |
@@ -209,12 +211,12 @@ game/
 │   ├── floor_generator.gd      # deterministic graph, special rooms, feasibility re-roll
 │   ├── room_layout.gd          # fixed 24x24 world, fit-to-window scale
 │   ├── room_contents.gd        # obstacles, chests/shrines/rest, trap plates, reachability
-│   ├── enemy_system.gd         # definitions, encounters, navigation
+│   ├── enemy_system.gd         # catalogue v2 + validator, threat budgets, spawns, enemy AI state machine
 │   ├── rpg_rules.gd            # six stats, d20 attack and XP progression
 │   └── collapse_policy.gd      # transition pricing, budget (via run_rules), route rooms, grace rules
 ├── data/
 │   ├── prototype_rules.json    # run (depths, rooms), collapse + budget, obstacles, abilities
-│   ├── enemies.json            # enemy behavior, stats, attacks, encounter tables
+│   ├── enemies.json            # enemy roster (schema v2), sprite sheets, band guardrails, budgets, elites
 │   ├── announcer.json          # system lines by trigger, toast/rate-limit settings
 │   └── achievements.json       # achievement definitions
 └── tests/
@@ -228,7 +230,7 @@ game/
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors only differ in size and seed so far (no depth-scaled enemies or biomes yet), and it has no classes or skill selection, no inventory/loot, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Chest loot is rolled and announced but not yet added to an inventory, and the guild-hall shop is a placeholder sign. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no inventory/loot, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Chest loot is rolled and announced but not yet added to an inventory, and the guild-hall shop is a placeholder sign. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

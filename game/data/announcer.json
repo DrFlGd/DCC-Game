@@ -137,6 +137,41 @@
       {"text": "Large rat, larger thud. Nicely done.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
       {"text": "That was a lot of rat. Now it is a lot of floor.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
     ],
+    "enemy_killed.rat_pup": [
+      {"text": "One fewer pup. The nursery files a complaint.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Pup removed. Its mother has been informed, and is next on the list.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Small rat, small problem, solved.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.nest_mother": [
+      {"text": "The nest mother is down. Childcare in this dungeon just got cheaper.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Brood cancelled. Please return all pups to the floor.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Matriarch eliminated. The squeaking stops. Mostly.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.shellback_charger": [
+      {"text": "The shellback has stopped charging. Its shell is now a decorative bowl.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Charger down. It finally found something harder than a wall.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "That shell was load-bearing. Was.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.spore_puffer": [
+      {"text": "Spore puffer popped. Please hold your breath for the next ten seconds.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "The puffer is deflated. Air quality improves to merely awful.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Fungus cleared. Allergy season continues elsewhere.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.bell_acolyte": [
+      {"text": "The bell acolyte has rung its last. Nobody is asking for an encore.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Acolyte down. The bells now toll for nobody in particular.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Support staff eliminated. Enemy morale drops sharply.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.rubble_golem": [
+      {"text": "The rubble golem is just rubble now. Same thing, less walking.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Golem dismantled. Building inspectors will not be notified.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "A pile of rocks stopped pretending to be a person. Good work.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
+    "enemy_killed.lobber": [
+      {"text": "The lobber is out of bombs and out of luck.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Cinder lobber down. Its insurance did not cover self-employment.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"},
+      {"text": "Artillery silenced. The ceiling thanks you.", "weight": 1.0, "priority": 1, "cooldown_seconds": 25, "once_per_run": false, "category": "flavour"}
+    ],
     "level_up": [
       {"text": "Level {level}! You are now slightly harder to kill. Congratulations, conditionally.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},
       {"text": "Level {level} reached. Your stats have improved. Your situation has not.", "weight": 1.0, "priority": 4, "cooldown_seconds": 0, "once_per_run": false, "category": "celebration"},

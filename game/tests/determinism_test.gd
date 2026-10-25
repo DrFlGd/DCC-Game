@@ -1,8 +1,11 @@
 extends SceneTree
-## Determinism regression for seed 424242 against constants captured from the
-## pre-refactor monolithic main.gd (commit 9bb993d) with the same probes:
+## Determinism regression for seed 424242: same inputs -> same outputs. Probes:
 ## floor signature, every room's obstacle map, every room's encounter list,
 ## and a scripted combat trace (d20 rolls, damage, XP, HUD messages).
+## The floor signature is still the pre-refactor main.gd value (commit 9bb993d).
+## Obstacle, encounter and trace constants were regenerated in Wave 2C, when
+## threat-budget encounters and the boss-room obstacle cap replaced the count
+## tables; a mismatch prints the new hash so intended changes are easy to adopt.
 ## Run: godot --headless --path game --script res://tests/determinism_test.gd
 const Generator = preload("res://scripts/floor_generator.gd")
 const SEED := 424242
@@ -12,14 +15,19 @@ const SEED := 424242
 ## values: b4a17cba2d2d09d31d90f84d8f610610 / 82fdd6810b55c960f1cf3b7bf9ce8a15 /
 ## 1053351d85fe7132dd1cd5397e7bb9b2. The geometry itself is unchanged:
 ## GEOMETRY_MD5 is the signature with every kind masked, equal before and after.
+## Merging 2E into 2C regenerated OBSTACLES/ENCOUNTERS/TRACE again: the boss
+## room obstacle cap (24) now lives in prototype_rules.json room_obstacle_caps,
+## elite and trap rooms get their own threat budgets (1.5x / 0.5x), and depth
+## scales every budget. Pre-merge 2E values: 3f1f9724997b9976972a33c98ccfc35a /
+## 71d3ba0cf8e273eb0b078683661aba0f / 99d79a3e32f45741df61183da0b74fbd.
 const SIGNATURE_MD5 := "1b0ee58c39bb5fb500913cf4125d7d4a"
 const GEOMETRY_MD5 := "1f25c833199dc62df2768615b93107fe"
-const OBSTACLES_MD5 := "3f1f9724997b9976972a33c98ccfc35a"
-const ENCOUNTERS_MD5 := "71d3ba0cf8e273eb0b078683661aba0f"
-const TRACE_MD5 := "99d79a3e32f45741df61183da0b74fbd"
+const OBSTACLES_MD5 := "1b3d7b6829448de54ed77743ccc0ec5f"
+const ENCOUNTERS_MD5 := "ecdbbdeabb4ccd583c478e9e49912475"
+const TRACE_MD5 := "3a5207df4159cc2358f737b5684bbcd2"
 ## First lines of the captured trace, kept readable for debugging diffs.
 const TRACE_HEAD := ["10 24 (192.0, 363.0)", "3 7 0 Missed Rat Scavenger (d20: 2)",
-    "2 7 25 Hit Rat Scavenger for 7 damage"]
+    "2 17 25 Hit Rat Scavenger for 7 damage"]
 var failures := 0
 var last_message := ""
 
@@ -81,8 +89,8 @@ func _run() -> void:
     for i in range(TRACE_HEAD.size()):
         check(i < first.size() and first[i] == TRACE_HEAD[i],
             "trace line %d: %s" % [i, first[i] if i < first.size() else "<missing>"])
-    check("\n".join(first).md5_text() == TRACE_MD5, "combat trace matches pre-refactor main:\n"
-        + "\n".join(first))
+    check("\n".join(first).md5_text() == TRACE_MD5, "combat trace matches fixture (got %s):\n"
+        % "\n".join(first).md5_text() + "\n".join(first))
     var second: PackedStringArray = _combat_trace(game, run_state)
     check(first == second, "restarting the same seed replays the identical trace")
 

@@ -202,6 +202,8 @@ func _refresh() -> void:
         _abandon_content(content)
     elif page == "achievements":
         _achievements_content(content)
+    elif page == "inventory":
+        _inventory_content(content)
     else:
         _pause_content(content)
 
@@ -288,6 +290,7 @@ func _pause_content(content: VBoxContainer) -> void:
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 10)
     content.add_child(row)
+    row.add_child(_button("Inventory", Callable(self, "_open_inventory_page")))
     row.add_child(_button("Settings", func(): settings_requested.emit()))
     row.add_child(_button("Achievements", Callable(self, "_open_achievements_page")))
     row.add_child(_button("Abandon run", Callable(self, "_open_abandon_page")))
@@ -371,6 +374,64 @@ func _achievements_content(content: VBoxContainer) -> void:
         rows.add_child(detail)
     content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
     content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+
+
+## Inventory page (Wave 2B): weapons, active item, passives with stack counts,
+## the consumable belt and credits, from context["inventory"]
+## (Inventory.describe(), passed in by Game so this script stays autoload-free).
+func _open_inventory_page() -> void:
+    if mode == "pause":
+        page = "inventory"
+        _refresh()
+
+
+func _inventory_content(content: VBoxContainer) -> void:
+    var view: Dictionary = context.get("inventory", {})
+    content.add_child(_text("INVENTORY   %d credits" % int(view.get("credits", 0)), 25,
+        Color("#f6d48d")))
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size = Vector2(538, 290)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    content.add_child(scroll)
+    var rows := VBoxContainer.new()
+    rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    rows.add_theme_constant_override("separation", 1)
+    scroll.add_child(rows)
+    for slot in [["melee", "Melee"], ["ranged", "Ranged"], ["active", "Active [Q]"]]:
+        var entry: Dictionary = view.get(slot[0], {})
+        var suffix := ""
+        if slot[0] == "active" and not entry.is_empty():
+            suffix = "   %d/%d charges" % [int(entry.get("charges", 0)), int(entry.get("max_charges", 1))]
+        _inventory_row(rows, "%s: %s%s" % [slot[1], String(entry.get("name", "(empty)")), suffix],
+            entry)
+    rows.add_child(_text("PASSIVES", 14, Color("#f6d48d")))
+    var passives: Array = view.get("passives", [])
+    if passives.is_empty():
+        rows.add_child(_text("None yet. The sponsors are watching your spending habits.", 12,
+            Color("#8ea3b3")))
+    for entry in passives:
+        _inventory_row(rows, "%s  x%d/%d" % [String(entry["name"]), int(entry["count"]),
+            int(entry.get("stack_max", 1))], entry)
+    rows.add_child(_text("BELT  (%d slots, C uses the selected one, V cycles)" % int(
+        view.get("belt_size", 6)), 14, Color("#f6d48d")))
+    var belt: Array = view.get("consumables", [])
+    if belt.is_empty():
+        rows.add_child(_text("Empty.", 12, Color("#8ea3b3")))
+    for i in range(belt.size()):
+        var entry: Dictionary = belt[i]
+        _inventory_row(rows, "%s%d. %s  x%d/%d" % ["> " if i == int(view.get("selected", 0)) else "  ",
+            i + 1, String(entry["name"]), int(entry["count"]), int(entry.get("stack_max", 1))], entry)
+    content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
+    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+
+
+func _inventory_row(rows: VBoxContainer, heading: String, entry: Dictionary) -> void:
+    rows.add_child(_text(heading, 15, entry.get("color", Color.WHITE)))
+    if String(entry.get("description", "")) != "":
+        var detail := _text(String(entry["description"]), 12, Color("#8ea3b3"))
+        detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        detail.custom_minimum_size.x = 510
+        rows.add_child(detail)
 
 
 func _button(label: String, callback: Callable) -> Button:

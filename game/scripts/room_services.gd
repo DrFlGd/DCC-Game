@@ -6,7 +6,8 @@ extends Node
 ## can show its prompt; the `interact` action calls try_interact().
 ##
 ## Interaction registry: behaviour is keyed by the entry `kind`
-## (interactables.gd). Built-ins: chest, shrine, rest, shop_sign. Other teams
+## (interactables.gd). Built-ins: chest, shrine, rest, shop_sign (the Wave 2E
+## placeholder; guild halls now place a "shop", registered by ItemSystem). Other teams
 ## add their own without editing this file:
 ##
 ##   services.register_interaction("shop", prompt_fn, action_fn)

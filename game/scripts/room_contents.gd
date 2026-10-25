@@ -87,7 +87,7 @@ static func density_for(kind: String, density: int, caps: Dictionary = {}) -> in
 
 ## Generates a room interior: {blocked, props, interactables, plates}.
 ## `props` are obstacles (rubble/pillar). `interactables` are
-## Interactables.make() entries (chest, shrine, rest, shop_sign) whose cells are
+## Interactables.make() entries (chest, shrine, rest, shop) whose cells are
 ## also blocked. `plates` are trap pressure plates {id, cell, kind
 ## ("spike" | "drain"), armed, rearm}. Obstacle draws are unchanged from the
 ## prototype; features use their own RNG stream so obstacle maps of existing
@@ -148,7 +148,8 @@ static func _add_features(result: Dictionary, seed_value: int, room_id: int, lin
                 room_id))
         "guild_hall":
             features.append(Interactables.make("rest", Vector2i(9, 9), room_id))
-            features.append(Interactables.make("shop_sign", Vector2i(14, 9), room_id,
+            # Wave 2B: the guild shop (ItemSystem registers the "shop" kind).
+            features.append(Interactables.make("shop", Vector2i(14, 9), room_id,
                 {"once": false}))
         "trap":
             result["plates"] = _trap_plates(rng, room_id, blocked, links, plate_rules)

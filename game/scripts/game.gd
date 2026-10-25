@@ -16,6 +16,8 @@ extends Node2D
 ## Wave 2E adds three children created here: CollapseClock (zero-clock grace,
 ## collapse_clock.gd), RoomServices (interactables and trap plates,
 ## room_services.gd) and FloorMap (the M overlay, ui/floor_map.gd).
+## Wave 2B adds ItemSystem (item_system.gd: inventory, statuses, triggers,
+## pickups, loot, shop); Game only routes input and frame steps to it.
 signal state_changed(previous: int, current: int)
 
 ## RUNNING: simulation ticks. LEVEL_UP / PAUSED: CharacterMenu is modal and the
@@ -51,6 +53,8 @@ const CollapseClock = preload("res://scripts/collapse_clock.gd")
 const RoomServices = preload("res://scripts/room_services.gd")
 const FloorMap = preload("res://scripts/ui/floor_map.gd")
 const Announcer = preload("res://scripts/ui/announcer.gd")
+const ItemSystem = preload("res://scripts/item_system.gd")
+const Inventory = preload("res://scripts/inventory.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -73,6 +77,8 @@ var settings_screen: SettingsScreen
 var clock: CollapseClock
 var services: RoomServices
 var floor_map: FloorMap
+## Wave 2B child (see the class comment).
+var items: ItemSystem
 ## Shared player settings (Settings.shared()), loaded and applied in _ready.
 var settings
 ## Dungeon-system announcer, achievements, profile and telemetry (Wave 2G).
@@ -104,12 +110,15 @@ func _ready() -> void:
     floor_map = _ensure_child("FloorMap", FloorMap) as FloorMap
     clock.setup(self)
     services.setup(self)
+    items = _ensure_child("ItemSystem", ItemSystem) as ItemSystem
     services.modal_opened.connect(func(): _change_state(State.DIALOG))
     services.modal_closed.connect(_on_modal_closed)
     settings = Settings.shared()
     settings.apply_window(get_window())
     announcer = _ensure_child("Announcer", Announcer) as Announcer
     combat.setup(player, catalogue)
+    # After services (the shop registers there), before Game's own Events hooks.
+    items.setup(self)
     renderer.setup(player, combat, null, catalogue)
     _relayout()
     character_menu.current_resolution = get_window().size
@@ -337,17 +346,21 @@ func _physics_process(delta: float) -> void:
         return
     RunState.advance_clock(delta)
     player.tick_timers(delta)
-    var door: String = player.move(player.read_move_axis() * player.speed * delta,
-        combat.blocked())
+    # Wave 2B: `stunned` (blocks_actions) stops movement and attacks; speed
+    # and attack cooldowns come from items (passives, statuses, weapons).
+    var can_act: bool = items.player_can_act()
+    var door := ""
+    if can_act:
+        door = player.move(player.read_move_axis() * items.move_speed() * delta, combat.blocked())
     if door != "":
         _enter_neighbor(door)
     if state != State.RUNNING:
         _redraw()
         return
     player.aim_at(Layout.screen_to_world(get_global_mouse_position(), layout))
-    if player.try_fire():
+    if can_act and player.try_fire(items.cooldown("ranged")):
         combat.player_fire()
-    if player.try_melee():
+    if can_act and player.try_melee(items.cooldown("melee")):
         combat.player_melee()
     combat.update_projectiles(delta)
     # A kill above may have opened the level-up modal; enemies freeze with it.
@@ -357,6 +370,8 @@ func _physics_process(delta: float) -> void:
     if state == State.RUNNING:
         combat.update_hazards(delta)
     if state == State.RUNNING:
+        items.update(delta)
+    if state == State.RUNNING:
         services.update(delta)
     if state == State.RUNNING:
         clock.update(delta)
@@ -365,7 +380,9 @@ func _physics_process(delta: float) -> void:
 
 func _redraw() -> void:
     renderer.queue_redraw()
-    hud.prompt = services.prompt if state == State.RUNNING else ""
+    hud.prompt = "" if state != State.RUNNING else (
+        items.prompt if items.prompt != "" else services.prompt)
+    hud.hover = items.hover if state == State.RUNNING else {}
     hud.refresh()
 
 
@@ -405,9 +422,20 @@ func _unhandled_input(event: InputEvent) -> void:
         return
     # Wave 2E: `interact` uses the interactable in reach (RoomServices).
     if event.is_action_pressed("interact"):
-        if state == State.RUNNING:
+        if state == State.RUNNING and not items.try_interact():
             services.try_interact()
         return
+    # Wave 2B: active item, selected consumable, belt cycling.
+    if state == State.RUNNING:
+        if event.is_action_pressed("use_item"):
+            items.use_active()
+            return
+        if event.is_action_pressed("use_consumable"):
+            items.use_consumable()
+            return
+        if event.is_action_pressed("next_consumable"):
+            items.next_consumable()
+            return
     # R / N restart mid-run and on the summary (muscle memory), not on the
     # title or intermission screens.
     if state != State.RUNNING and state != State.SUMMARY:
@@ -447,6 +475,7 @@ func _on_modal_closed() -> void:
 func _character_context() -> Dictionary:
     var context: Dictionary = RunState.progression_context()
     context["window_size"] = get_window().size
+    context["inventory"] = Inventory.describe()
     return context
 
 

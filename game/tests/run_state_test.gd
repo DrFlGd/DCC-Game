@@ -142,15 +142,16 @@ func _run() -> void:
     rs.reset_for_floor(2)
     check(rs.depth == 2 and rs.visited.is_empty() and not rs.boss_defeated, "floor reset")
     check(rs.floor_seed(1) == 5 and rs.floor_seed(2) != 5, "depth 1 keeps run seed")
-    var summary: Dictionary = rs.end_run("escaped")
-    check(rs.outcome == "escaped" and summary["outcome"] == "escaped", "end_run sets outcome")
+    var summary: Dictionary = rs.end_run("victory")
+    check(rs.outcome == "victory" and summary["outcome"] == "victory", "end_run sets outcome")
     for key in ["seed", "depth", "outcome", "level", "xp", "hp", "max_hp", "ticks",
-            "rooms_visited", "boss_defeated", "inventory", "skills"] + rs.TELEMETRY_KEYS:
+            "rooms_visited", "boss_defeated", "inventory", "skills", "cause", "floors",
+            "target_depth", "floor_budget"] + rs.TELEMETRY_KEYS:
         check(summary.has(key), "summary has " + key)
     check(summary["seed"] == 5 and summary["depth"] == 2 and summary["kills"] == 1,
         "summary values")
     check(is_equal_approx(float(summary["run_time_seconds"]), 1.5), "run time tracked")
-    check(_count("run_ended") == 1 and seen["run_ended"][0][0] == "escaped", "run_ended emitted")
+    check(_count("run_ended") == 1 and seen["run_ended"][0][0] == "victory", "run_ended emitted")
 
     if failures == 0:
         print("PASS: RunState start_run, XP/level-up, allocation, damage/heal clamps, ticks, telemetry, summary")

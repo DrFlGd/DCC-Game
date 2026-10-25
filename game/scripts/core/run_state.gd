@@ -12,8 +12,15 @@ extends Node
 const RPG = preload("res://scripts/rpg_rules.gd")
 const CONFIG_PATH := "res://data/prototype_rules.json"
 const DEFAULT_SEED := 424242
+## run_time_seconds only advances while Game is RUNNING (advance_clock).
+## ticks_granted = every floor budget assigned by reset_for_floor() plus every
+## in-floor grant (first-entry grants, positive add_ticks).
 const TELEMETRY_KEYS := ["rooms_entered", "shots_fired", "melee_swings", "kills",
-    "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds"]
+    "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds",
+    "floors_cleared", "ticks_granted"]
+## Telemetry keys snapshotted per floor for the intermission recap.
+const FLOOR_KEYS := ["rooms_entered", "kills", "damage_dealt", "damage_taken",
+    "ticks_spent", "ticks_granted", "run_time_seconds"]
 
 ## Parsed prototype_rules.json (see game/README.md for every key).
 var config: Dictionary = {}
@@ -30,6 +37,8 @@ var floor: Dictionary = {}
 var current_room_id := 0
 ## Remaining collapse budget.
 var ticks := 0
+## Starting budget of the current floor (RunRules.floor_budget; 0 until set).
+var floor_budget := 0
 var xp := 0
 var level := 1
 ## STR/DEX/CON/INT/WIS/CHA -> int.
@@ -40,14 +49,20 @@ var ac := 12
 var proficiency := 2
 var pending_stat_points := 0
 var boss_defeated := false
-## "running", "escaped", "collapsed" or "defeated".
+## "running", "victory", "collapsed", "defeated" or "abandoned".
+## ("escaped" was the single-floor prototype's success outcome; no longer used.)
 var outcome := "running"
+## Why the run ended: the killer's definition id for "defeated",
+## "collapse on floor N", "abandoned", or "" for victory / running.
+var cause := ""
+## One floor_stats() record per finished floor (cleared or failed), in order.
+var floor_history: Array[Dictionary] = []
 ## room_id -> true for rooms entered on this floor.
 var visited: Dictionary = {}
 ## room_id -> {"blocked": Dictionary, "props": Array, "enemies": Array}.
 ## Persisted so obstacles and enemy HP survive revisits.
 var room_states: Dictionary = {}
-## Every CollapsePolicy.evaluate() entry applied this run, in order.
+## Every CollapsePolicy.evaluate() entry applied on this floor, in order.
 var tick_ledger: Array[Dictionary] = []
 ## Reserved for the items team: item_id -> stack/instance data.
 var inventory: Dictionary = {}
@@ -55,6 +70,9 @@ var inventory: Dictionary = {}
 var skills: Array = []
 ## Counters for tuning; see TELEMETRY_KEYS. Updated from Events signals.
 var telemetry: Dictionary = {}
+## Telemetry values when the current floor started (see floor_stats()).
+var _floor_baseline: Dictionary = {}
+var _floor_closed := false
 
 
 func _init() -> void:
@@ -69,6 +87,7 @@ func _enter_tree() -> void:
     _connect(Events.enemy_damaged, _on_enemy_damaged)
     _connect(Events.enemy_killed, _on_enemy_killed)
     _connect(Events.room_entered, _on_room_entered)
+    _connect(Events.floor_cleared, _on_floor_cleared)
 
 
 func load_config(path: String = CONFIG_PATH) -> bool:
@@ -85,7 +104,9 @@ func ensure_config() -> bool:
 
 
 ## Resets every per-run field and announces `run_started`. Floor generation is
-## Game's job; it calls reset_for_floor() and fills `floor` afterwards.
+## Game's job; it calls reset_for_floor(depth, budget) and fills `floor`
+## afterwards. `start_ticks` is only a provisional clock until that budget is
+## set (and the value RunState alone uses, e.g. in unit tests).
 func start_run(new_seed: int) -> void:
     ensure_config()
     seed = new_seed
@@ -97,6 +118,9 @@ func start_run(new_seed: int) -> void:
     sync_progression()
     hp = max_hp
     outcome = "running"
+    cause = ""
+    floor_history.clear()
+    floor_budget = 0
     inventory = {}
     skills = []
     tick_ledger.clear()
@@ -105,14 +129,27 @@ func start_run(new_seed: int) -> void:
     Events.run_started.emit(seed)
 
 
-## Clears per-floor state. Character progression, ticks and inventory persist.
-func reset_for_floor(new_depth: int) -> void:
+## Clears per-floor state (visited rooms, room states, boss flag, tick ledger).
+## XP, level, ability scores, HP, inventory and skills persist. With
+## `budget` >= 0 the clock is set to that fresh floor budget (leftover ticks do
+## not carry over) and counted as ticks_granted; with the default -1 the clock
+## is left alone.
+func reset_for_floor(new_depth: int, budget: int = -1) -> void:
     depth = maxi(1, new_depth)
     floor = {}
     current_room_id = 0
     visited.clear()
     room_states.clear()
     boss_defeated = false
+    tick_ledger.clear()
+    if budget >= 0:
+        floor_budget = budget
+        _bump("ticks_granted", budget)
+        _set_ticks(budget, "floor %d budget" % depth)
+    _floor_closed = false
+    _floor_baseline = {}
+    for key in FLOOR_KEYS:
+        _floor_baseline[key] = telemetry.get(key, 0)
 
 
 ## Seed for generating floor `depth`. Depth 1 uses the run seed unchanged so
@@ -202,6 +239,7 @@ func heal_player(amount: int) -> int:
 func apply_tick_entry(entry: Dictionary) -> void:
     tick_ledger.append(entry)
     telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) + int(entry.get("cost", 0))
+    _bump("ticks_granted", maxi(0, int(entry.get("grant", 0))))
     _set_ticks(int(entry["after"]), String(entry.get("reason", "")))
 
 
@@ -211,16 +249,54 @@ func add_ticks(amount: int, reason: String) -> void:
     var next: int = maxi(0, ticks + amount)
     if next < ticks:
         telemetry["ticks_spent"] = int(telemetry["ticks_spent"]) + ticks - next
+    else:
+        _bump("ticks_granted", next - ticks)
     _set_ticks(next, reason)
 
 
+## Game calls this only while RUNNING, so menus and screens never count.
 func advance_clock(delta: float) -> void:
     telemetry["run_time_seconds"] = float(telemetry["run_time_seconds"]) + delta
 
 
-## Marks the run finished and emits `run_ended` with summary().
-func end_run(new_outcome: String) -> Dictionary:
+## Recap of the current floor: rooms explored / total, budget, ticks left,
+## and the FLOOR_KEYS telemetry gained since reset_for_floor().
+func floor_stats() -> Dictionary:
+    var result: Dictionary = {
+        "depth": depth, "rooms_explored": visited.size(),
+        "rooms_total": floor.get("rooms", []).size(), "budget": floor_budget,
+        "ticks_left": ticks, "boss_defeated": boss_defeated
+    }
+    for key in FLOOR_KEYS:
+        var gained = telemetry.get(key, 0) - _floor_baseline.get(key, 0)
+        result[key] = float(gained) if key == "run_time_seconds" else int(gained)
+    return result
+
+
+## Appends floor_stats() plus `result` ("cleared" or the run outcome) to
+## floor_history once per floor and returns the record.
+func close_floor(result: String) -> Dictionary:
+    var record: Dictionary = floor_stats()
+    record["result"] = result
+    if not _floor_closed:
+        _floor_closed = true
+        floor_history.append(record)
+    return record
+
+
+## Intermission heal (GAME_DESIGN §4): restores run.intermission_heal_ratio of
+## the *missing* HP, rounded up. Returns the HP restored.
+func intermission_heal() -> int:
+    var ratio: float = float(config.get("run", {}).get("intermission_heal_ratio", 0.5))
+    return heal_player(int(ceil(float(max_hp - hp) * clampf(ratio, 0.0, 1.0))))
+
+
+## Marks the run finished and emits `run_ended` with summary(). Closes the
+## current floor's record if the exit did not already.
+func end_run(new_outcome: String, new_cause: String = "") -> Dictionary:
     outcome = new_outcome
+    cause = new_cause
+    close_floor(new_outcome)
     var result: Dictionary = summary()
     Events.run_ended.emit(outcome, result)
     return result
@@ -229,7 +305,8 @@ func end_run(new_outcome: String) -> Dictionary:
 ## Values shown by the pause and character pages (window size is added by Game).
 func progression_context() -> Dictionary:
     return {
-        "depth": depth, "room_id": current_room_id, "ticks": ticks,
+        "depth": depth, "target_depth": int(config.get("run", {}).get("target_depth", 6)),
+        "room_id": current_room_id, "ticks": ticks,
         "level": level, "xp": xp,
         "next_xp": RPG.next_level_xp(level) if level < 20 else "MAX",
         "hp": hp, "max_hp": max_hp, "ac": ac, "proficiency": proficiency,
@@ -238,11 +315,16 @@ func progression_context() -> Dictionary:
     }
 
 
-## Snapshot for the end-of-run screen, telemetry export and tests.
+## Snapshot for the run summary screen, telemetry export and tests: every
+## TELEMETRY_KEYS counter (floors_cleared, ticks_granted, run_time_seconds, ...)
+## plus the fields below. `floors` is floor_history (one record per floor).
 func summary() -> Dictionary:
     var result: Dictionary = telemetry.duplicate(true)
     result.merge({
-        "seed": seed, "depth": depth, "outcome": outcome, "level": level,
+        "seed": seed, "depth": depth, "outcome": outcome, "cause": cause,
+        "target_depth": int(config.get("run", {}).get("target_depth", 6)),
+        "floor_budget": floor_budget, "floors": floor_history.duplicate(true),
+        "rooms_total": floor.get("rooms", []).size(), "level": level,
         "xp": xp, "hp": hp, "max_hp": max_hp, "ticks": ticks,
         "rooms_visited": visited.size(), "boss_defeated": boss_defeated,
         "ability_scores": ability_scores.duplicate(true),
@@ -290,6 +372,10 @@ func _on_enemy_damaged(_instance_id: String, amount: int, _critical: bool) -> vo
 
 func _on_enemy_killed(_definition_id: String, _xp: int, _position: Vector2) -> void:
     _bump("kills")
+
+
+func _on_floor_cleared(_depth: int) -> void:
+    _bump("floors_cleared")
 
 
 func _on_room_entered(_room_id: int, _kind: String, _entry: Dictionary, first_visit: bool) -> void:

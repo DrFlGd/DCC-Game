@@ -1,14 +1,14 @@
 extends SceneTree
 ## Proves the live Game emits the Events bus signals during scripted play:
 ## door transitions, a revisit, kills, player shots/swings, boss gate, death,
-## collapse and escape.
+## collapse and floor clear (exit -> intermission).
 ## Run: godot --headless --path game --script res://tests/events_test.gd
 const SEED := 424242
 const OPPOSITE := {"N": "S", "S": "N", "E": "W", "W": "E"}
 const RECORDED := ["run_started", "floor_started", "room_entered", "ticks_changed",
     "enemy_damaged", "enemy_killed", "xp_gained", "room_cleared", "projectile_fired",
     "melee_swung", "player_damaged", "player_died", "boss_defeated", "floor_cleared",
-    "run_ended", "message"]
+    "run_ended", "message", "game_state_changed"]
 var failures := 0
 var seen: Dictionary = {}
 
@@ -68,7 +68,10 @@ func _run() -> void:
     var game = load("res://scenes/Main.tscn").instantiate()
     get_root().add_child(game)
 
-    # Booting the scene starts a run on floor 1 and enters the start room.
+    # Booting shows the title screen; start_run begins floor 1 in the start room.
+    check(_count("run_started") == 0 and game.state == game.State.TITLE, "boot shows TITLE")
+    game.start_run(SEED)
+    check(_last("game_state_changed") == ["TITLE", "RUNNING"], "game_state_changed(names)")
     check(_count("run_started") == 1 and _last("run_started")[0] == SEED, "run_started(seed)")
     check(_count("floor_started") == 1 and _last("floor_started")[0] == 1, "floor_started(1, floor)")
     check(_last("room_entered") == [0, "start", {}, true], "start room entered on boot")
@@ -150,9 +153,8 @@ func _run() -> void:
         game._change_state(game.State.RUNNING)
     game._enter_neighbor(to_exit)
     check(seen.get("floor_cleared", []) == [[1]], "floor_cleared(depth)")
-    check(_last("run_ended")[0] == "escaped" and _last("run_ended")[1]["outcome"] == "escaped",
-        "run_ended(escaped, summary)")
-    check(game.state == game.State.ENDED, "Game enters ENDED")
+    check(_count("run_ended") == 0 and rs.outcome == "running", "floor 1 exit does not end the run")
+    check(game.state == game.State.INTERMISSION, "Game enters INTERMISSION")
 
     # Death: enemy hits until HP is gone.
     game.start_run(SEED)
@@ -166,6 +168,7 @@ func _run() -> void:
         "player_damaged(amount, source)")
     check(seen.get("player_died", []) == [["rat_scavenger"]], "player_died(cause) once")
     check(_last("run_ended")[0] == "defeated" and rs.outcome == "defeated", "defeat ends the run")
+    check(_last("run_ended")[1]["cause"] == "rat_scavenger", "summary carries the cause")
     check(_last("message")[0] == "YOU DIED! R = retry, N = new seed.", "death message kept")
 
     # Collapse: a first entry that drains the last ticks.
@@ -175,10 +178,10 @@ func _run() -> void:
     game._enter_neighbor(_first_normal_direction(rs))
     check(_last("ticks_changed") == [2, 0, "normal first entry (cost 2, grant 0)"],
         "ticks_changed to zero")
-    check(_last("run_ended")[0] == "collapsed" and game.state == game.State.ENDED,
+    check(_last("run_ended")[0] == "collapsed" and game.state == game.State.SUMMARY,
         "collapse ends the run")
 
     game.queue_free()
     if failures == 0:
-        print("PASS: Events bus fires for doors, ticks, kills, XP, shots, boss gate, death, collapse, escape")
+        print("PASS: Events bus fires for doors, ticks, kills, XP, shots, boss gate, death, collapse, floor clear")
     quit(1 if failures > 0 else 0)

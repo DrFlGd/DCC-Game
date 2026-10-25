@@ -1,6 +1,12 @@
 {
   "seed": 424242,
-  "room_count": 22,
+  "run": {
+    "target_depth": 6,
+    "rooms_by_depth": [22, 26, 30, 34, 40, 44],
+    "rooms_per_extra_depth": 6,
+    "max_rooms": 80,
+    "intermission_heal_ratio": 0.5
+  },
   "start_ticks": 26,
   "player_speed": 105,
   "collapse": {
@@ -23,6 +29,10 @@
       "exit": {
         "first_entry_cost": 1
       }
+    },
+    "budget": {
+      "min_slack": 8,
+      "slack_ratio": 0.45
     }
   },
   "player_ability_scores": {

@@ -18,6 +18,9 @@ extends Node2D
 ## room_services.gd) and FloorMap (the M overlay, ui/floor_map.gd).
 ## Wave 2B adds ItemSystem (item_system.gd: inventory, statuses, triggers,
 ## pickups, loot, shop); Game only routes input and frame steps to it.
+## Wave 2D adds DoorLock (D-07 door lock and failsafe, door_lock.gd), the dodge
+## roll (try_dodge), stamina regen, attack movement penalties and hit-stop
+## (Combat.advance_feedback freezes the simulation).
 signal state_changed(previous: int, current: int)
 
 ## RUNNING: simulation ticks. LEVEL_UP / PAUSED: CharacterMenu is modal and the
@@ -55,6 +58,7 @@ const FloorMap = preload("res://scripts/ui/floor_map.gd")
 const Announcer = preload("res://scripts/ui/announcer.gd")
 const ItemSystem = preload("res://scripts/item_system.gd")
 const Inventory = preload("res://scripts/inventory.gd")
+const DoorLock = preload("res://scripts/door_lock.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -83,6 +87,8 @@ var items: ItemSystem
 var settings
 ## Dungeon-system announcer, achievements, profile and telemetry (Wave 2G).
 var announcer: Announcer
+## D-07 door lock (Wave 2D).
+var door_lock: DoorLock
 
 
 func _ready() -> void:
@@ -119,7 +125,11 @@ func _ready() -> void:
     combat.setup(player, catalogue)
     # After services (the shop registers there), before Game's own Events hooks.
     items.setup(self)
+    player.configure(RunState.config.get("feel", {}))
+    door_lock = _ensure_child("DoorLock", DoorLock) as DoorLock
+    door_lock.setup(self)
     renderer.setup(player, combat, null, catalogue)
+    renderer.door_lock = door_lock
     _relayout()
     character_menu.current_resolution = get_window().size
     character_menu.allocation_confirmed.connect(_confirm_stat_allocation)
@@ -254,9 +264,14 @@ func _load_room(id: int) -> void:
 ## the sealed exit refuses). The cost clamps at 0; reaching 0 starts the grace
 ## period after the room swap (CollapseClock), and entries during grace are
 ## free while first-entry grants still apply.
+## Wave 2D (D-07): doors sealed by DoorLock also refuse, until the room is
+## cleared; the grace unlock wins (DoorLock.is_locked() is false during grace).
 func _enter_neighbor(direction: String) -> void:
     var room: Dictionary = RunState.floor["rooms"][RunState.current_room_id]
     if not room["neighbors"].has(direction):
+        return
+    if door_lock.is_locked():
+        door_lock.bump_door()
         return
     var next_id: int = int(room["neighbors"][direction])
     var next_room: Dictionary = RunState.floor["rooms"][next_id]
@@ -344,14 +359,27 @@ func _physics_process(delta: float) -> void:
     if state != State.RUNNING:
         _redraw()
         return
-    RunState.advance_clock(delta)
-    player.tick_timers(delta)
-    # Wave 2B: `stunned` (blocks_actions) stops movement and attacks; speed
-    # and attack cooldowns come from items (passives, statuses, weapons).
+    # Wave 2D: a dodge press is buffered first so a press during hit-stop is
+    # kept; hit-stop then freezes the simulation and only the rest of the frame runs.
+    if Input.is_action_just_pressed("dodge"):
+        player.dodge_buffer = float(player.dodge_settings["buffer"])
+    var step: float = combat.advance_feedback(delta)
+    if step <= 0.0:
+        _redraw()
+        return
+    RunState.advance_clock(step)
+    RunState.regen_stamina(step)
+    player.tick_timers(step)
+    # Wave 2B: `stunned` (blocks_actions) stops movement, dodges and attacks
+    # (a roll already under way finishes); speed and attack cooldowns come
+    # from items (passives, statuses, weapons).
     var can_act: bool = items.player_can_act()
-    var door := ""
-    if can_act:
-        door = player.move(player.read_move_axis() * items.move_speed() * delta, combat.blocked())
+    var axis: Vector2 = player.read_move_axis() if can_act else Vector2.ZERO
+    if can_act and player.dodge_buffer > 0.0:
+        try_dodge(axis)
+    var change: Vector2 = player.step_dash(step) if player.is_dodging() \
+        else axis * items.move_speed() * combat.player_move_multiplier() * step
+    var door: String = player.move(change, combat.blocked())
     if door != "":
         _enter_neighbor(door)
     if state != State.RUNNING:
@@ -360,28 +388,47 @@ func _physics_process(delta: float) -> void:
     player.aim_at(Layout.screen_to_world(get_global_mouse_position(), layout))
     if can_act and player.try_fire(items.cooldown("ranged")):
         combat.player_fire()
-    if can_act and player.try_melee(items.cooldown("melee")):
+    if can_act and player.try_melee(items.cooldown("melee"),
+            String(items.profile("melee").get("pattern", "melee"))):
         combat.player_melee()
-    combat.update_projectiles(delta)
+    combat.update_projectiles(step)
     # A kill above may have opened the level-up modal; enemies freeze with it.
     if state == State.RUNNING:
-        combat.update_enemies(delta)
+        combat.update_enemies(step)
     # Wave 2E: hazards, plates/prompts and the grace timer, each frozen by modals.
     if state == State.RUNNING:
-        combat.update_hazards(delta)
+        combat.update_hazards(step)
     if state == State.RUNNING:
-        items.update(delta)
+        items.update(step)
     if state == State.RUNNING:
-        services.update(delta)
+        services.update(step)
     if state == State.RUNNING:
-        clock.update(delta)
+        clock.update(step)
+    if state == State.RUNNING:
+        door_lock.update(step)
     _redraw()
+
+
+## Starts a dodge roll if the crawler can dodge and has the stamina (35 by
+## default). `move_axis` picks the direction (the aim when still). Returns true
+## when the roll started. Skills that dash call player.start_dash() and then
+## combat.on_player_dodged() themselves (see game/README.md "Feel").
+func try_dodge(move_axis: Vector2) -> bool:
+    if state != State.RUNNING or not player.can_dodge():
+        return false
+    if not RunState.spend_stamina(player.dodge_cost):
+        return false
+    combat.on_player_dodged(player.start_dodge(move_axis))
+    return true
 
 
 func _redraw() -> void:
     renderer.queue_redraw()
-    hud.prompt = "" if state != State.RUNNING else (
-        items.prompt if items.prompt != "" else services.prompt)
+    var shown: String = ""
+    if state == State.RUNNING:
+        shown = door_lock.prompt() if door_lock.prompt() != "" else (
+            items.prompt if items.prompt != "" else services.prompt)
+    hud.prompt = shown
     hud.hover = items.hover if state == State.RUNNING else {}
     hud.refresh()
 

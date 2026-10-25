@@ -18,8 +18,12 @@ extends Node
 ## Loadout.attack_profile() (ContentDB.attack_profile + passives + statuses):
 ## melee arc / thrust / spin, ranged single / spread / burst / beam, with
 ## pierce. Statuses (status_system.gd) and item triggers (effect_runner.gd)
-## run inside apply_damage(); weapon knockback rides in the damage context
-## (`knockback`, `knockback_direction`) and is not applied yet (combat-feel PR).
+## run inside apply_damage(); the weapon's knockback rides in the damage
+## context (`knockback`, `direction`) and 2D's finalise step applies it.
+## Wave 2D (feel): apply_damage() finalises with hit feedback (fx.gd: hit-stop,
+## flash, numbers, shake, death bursts) and then knockback; the dodge hook
+## on_player_dodged() and the attack movement penalty player_move_multiplier()
+## live here too. Feedback never touches RunState.rng.
 const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
@@ -28,6 +32,8 @@ const Hazards = preload("res://scripts/hazards.gd")
 const Loadout = preload("res://scripts/loadout.gd")
 const StatusSystem = preload("res://scripts/status_system.gd")
 const EffectRunner = preload("res://scripts/effect_runner.gd")
+const Fx = preload("res://scripts/fx.gd")
+const Settings = preload("res://scripts/core/settings.gd")
 
 const PLAYER_SHOT_SPEED := 215.0
 const PLAYER_SHOT_TTL := 2.0
@@ -68,21 +74,38 @@ var beams: Array[Dictionary] = []
 ## Wave 2B: the last player swing for the renderer {pattern, origin, direction,
 ## reach, arc_degrees, width}; drawn while player.melee_flash > 0.
 var last_swing: Dictionary = {}
+## Hit feedback state (fx.gd); RoomRenderer draws it, Game honours its hit-stop.
+var fx = Fx.new()
+## Seconds of hit-stop left (the simulation freezes while > 0). Alias of fx.hitstop.
+var hitstop: float:
+    get:
+        return fx.hitstop
+    set(value):
+        fx.hitstop = maxf(0.0, value)
+## `feel` from prototype_rules.json (knockback, attack movement multipliers).
+var feel: Dictionary = {}
 
 
 func _ready() -> void:
     Events.room_entered.connect(_on_room_entered)
+    Events.settings_changed.connect(_on_settings_changed)
+    Events.player_healed.connect(_on_player_healed)
+    Events.grace_started.connect(func(_seconds): fx.shake(Fx.SHAKE_HEAVY))
 
 
 func setup(player_node: Player, enemy_catalogue: Dictionary) -> void:
     player = player_node
     catalogue = enemy_catalogue
+    feel = RunState.config.get("feel", {})
+    fx.configure(feel.get("hitstop", {}))
+    _sync_settings()
 
 
 ## Every room entry (first visit or revisit) puts the room's enemies back on
 ## their spawn points, dormant for `encounters.dormancy` s. (Game clears
 ## hazards before the room swap.)
 func _on_room_entered(_room_id: int, _kind: String, _entry: Dictionary, _first: bool) -> void:
+    fx.clear()
     _last_player_pos = Vector2.INF
     player_velocity = Vector2.ZERO
     var dormancy: float = float(catalogue.get("encounters", {}).get("dormancy", 0.6))
@@ -134,7 +157,7 @@ func update_hazards(delta: float) -> void:
         return
     var hits: Array[Dictionary] = Hazards.step(hazards, delta, {
         "pos": player.world_position, "radius": Player.RADIUS,
-        "invulnerable": player.invulnerability > 0.0}, enemies())
+        "invulnerable": player.is_invulnerable()}, enemies())
     for hit in hits:
         var source: String = String(hit["entry"]["source"])
         # Wave 2B: a hazard's `status` (spore puddles, firebombs, floods) is applied.
@@ -321,9 +344,16 @@ static func melee_hits(profile: Dictionary, origin: Vector2, aim: Vector2, foes:
 
 
 ## Damage-context keys for a player weapon hit (merged by hit_enemy).
+## Damage context for a player weapon hit. Melee knockback gets the same
+## +5 % per positive STR modifier as 2D's default melee shove, so the crowbar
+## (knockback 20) matches the prototype swing exactly.
 func _attack_context(profile: Dictionary, slot: String, direction: Vector2) -> Dictionary:
+    var knockback: float = float(profile.get("knockback", 0.0))
+    if slot == "melee" and knockback > 0.0:
+        var strength: int = maxi(0, RPG.modifier(int(RunState.ability_scores.get("STR", 10))))
+        knockback *= 1.0 + float(feel.get("knockback", {}).get("str_bonus_per_mod", 0.05)) * strength
     return {"slot": slot, "direction": direction, "weapon_id": String(profile["weapon_id"]),
-        "knockback": float(profile.get("knockback", 0.0)), "knockback_direction": direction,
+        "knockback": knockback, "knockback_direction": direction,
         "effects": Array(profile.get("effects", [])).duplicate()}
 
 
@@ -350,6 +380,7 @@ func hit_enemy(index: int, to_hit: int, die: int, damage_bonus: int,
     if not bool(attack["hit"]):
         Events.say("Missed %s (d20: %d)" % [foe.get("name", definition["name"]),
             int(attack["d20"])], "combat")
+        fx.number(String(foe["instance_id"]), Vector2(foe["pos"]), "MISS", "miss")
         return
     var damage: int = RPG.roll_damage(RunState.rng, die, damage_bonus, bool(attack["critical"]))
     var context := {"critical": bool(attack["critical"]), "source": "player", "index": index}
@@ -359,39 +390,48 @@ func hit_enemy(index: int, to_hit: int, die: int, damage_bonus: int,
 
 ## Enemy attack roll against the player; ignored during invulnerability.
 ## `damage_mult` is the elite multiplier (rounded down, minimum 1). `source` is
-## the attacker's definition id. `status` (Wave 2B) is applied on a hit.
-## Returns true when the attack landed.
+## the attacker's definition id. Returns true when the attack landed.
+## `extra` is merged into the apply_damage context (knockback, direction, and
+## Wave 2B's `status`: a status id applied to the crawler on a hit).
 func hit_player(to_hit: int, die: int, damage_bonus: int, source: String = "enemy",
-        damage_mult: float = 1.0, status: String = "") -> bool:
-    if player.invulnerability > 0.0 or StatusSystem.has_flag("player", "invulnerable"):
+        damage_mult: float = 1.0, extra: Dictionary = {}) -> bool:
+    if player.is_invulnerable():
         return false
     var attack: Dictionary = RPG.roll_to_hit(RunState.rng, to_hit, RunState.ac)
     if not bool(attack["hit"]):
         Events.say("Enemy missed you (d20: %d)." % int(attack["d20"]), "combat")
+        fx.number("player", player.world_position, "MISS", "miss")
         return false
     var damage: int = RPG.roll_damage(RunState.rng, die, damage_bonus, bool(attack["critical"]))
     if damage_mult != 1.0:
         damage = maxi(1, int(floorf(float(damage) * damage_mult)))
-    apply_damage(player, damage, {"critical": bool(attack["critical"]), "source": source,
-        "status": status})
+    var context := {"critical": bool(attack["critical"]), "source": source}
+    context.merge(extra)
+    apply_damage(player, damage, context)
     return true
 
 
 ## The damage pipeline. `target` is the Player node or an enemy dictionary from
 ## the current room. `context` keys: critical (bool), source (String), index
 ## (int, optional enemy index hint), damage_type ("physical" default), slot
-## ("melee"/"ranged"), direction (Vector2 of travel). Returns the damage applied.
+## ("melee"/"ranged"), direction (Vector2 of travel), knockback (px; melee
+## defaults to feel.knockback.default_melee), origin (Vector2, knockback source
+## when there is no direction). Returns the damage applied.
 ## Enemy side, in order: phase-roar invulnerability, Enemies.mitigate()
 ## (resistances, front guard, DR), then ward and shield pools absorb, then the
 ## `shielded` status (2B); after the HP change: on_hit (player attacks, i.e.
 ## source "player"), death, room_cleared, then on_kill (player, status: and
-## effect: sources). Player side (2B): `evasive` ignores the hit, then
-## damage_taken_mult, then `shielded` absorbs; after the HP change the
-## context `status` is applied and on_damage_taken fires. Status ticks
-## (source "status:<id>") do not start hit i-frames.
-## Wave 2B context keys: weapon_id, knockback (px), knockback_direction
-## (Vector2), effects (weapon effect ids), status (to apply on the player),
-## triggers (false suppresses item triggers). Knockback is carried, not applied.
+## effect: sources). Player side: dodge i-frames (2D; the `evasive` status
+## sets them, 2B) ignore the hit, then damage_taken_mult, then `shielded`
+## absorbs; after the HP change the context `status` is applied and
+## on_damage_taken fires. Status ticks (source "status:<id>") do not start
+## hit i-frames.
+## Wave 2B context keys: weapon_id, effects (weapon effect ids), status (to
+## apply on the player), triggers (false suppresses item triggers);
+## knockback_direction is kept as an alias of direction.
+## Finalise (Wave 2D): after HP and signals, _feedback() (hit-stop, flash,
+## number, shake, death burst), then knockback (_apply_knockback; no
+## wall-slam damage) on a surviving target.
 func apply_damage(target, amount: int, context: Dictionary = {}) -> int:
     if amount <= 0:
         return 0
@@ -435,8 +475,11 @@ func _damage_enemy(foe: Dictionary, amount: int, context: Dictionary) -> int:
             "origin": Vector2(foe["pos"])}, String(context.get("slot", "")),
             String(context.get("weapon_id", "")))
     if int(foe["hp"]) > 0:
+        _feedback(foe, amount, context, false)
         _check_phase(foe, definition)
+        _apply_knockback(foe, context, definition)
         return amount
+    _feedback(foe, amount, context, true)
     var foes: Array = enemies()
     var index: int = int(context.get("index", -1))
     if index < 0 or index >= foes.size() or not is_same(foes[index], foe):
@@ -507,6 +550,8 @@ func _check_phase(foe: Dictionary, definition: Dictionary) -> void:
             projectiles.remove_at(i)
     var line: String = String(phases[index].get("announce", "%s changes tactics." % foe["name"]))
     Events.say(line, "combat")
+    fx.hitstop_for("phase")
+    fx.shake(Fx.SHAKE_HEAVY)
     Events.announcement_requested.emit("boss_phase_changed", {"text": line, "priority": 4,
         "category": "warning", "enemy": String(foe["name"]), "phase": index + 1})
 
@@ -514,7 +559,9 @@ func _check_phase(foe: Dictionary, definition: Dictionary) -> void:
 func _damage_player(amount: int, context: Dictionary) -> int:
     var source: String = String(context.get("source", "enemy"))
     var from_status: bool = source.begins_with("status:")
-    if StatusSystem.has_flag("player", "invulnerable"):
+    # Dodge i-frames (the `evasive` window) block every source, DoT included.
+    # ItemSystem mirrors an `evasive` status into dodge_iframes every frame.
+    if player.dodge_iframes > 0.0:
         return 0
     var mult: float = float(Loadout.player_stats().get("damage_taken_mult", 1.0))
     if mult != 1.0:
@@ -528,6 +575,10 @@ func _damage_player(amount: int, context: Dictionary) -> int:
     if not from_status:
         player.start_invulnerability()
     var applied: int = RunState.apply_damage_to_player(amount, source)
+    if applied > 0:
+        _feedback(player, applied, context, RunState.hp <= 0)
+        if RunState.hp > 0:
+            _apply_knockback(player, context)
     if applied <= 0 or RunState.hp <= 0:
         return applied
     var status: String = String(context.get("status", ""))
@@ -576,7 +627,8 @@ func update_projectiles(delta: float) -> void:
         elif position.distance_to(player.world_position) < Player.RADIUS + HIT_SLOP:
             hit_player(int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]),
                 String(bullet.get("source", "enemy")), float(bullet.get("mult", 1.0)),
-                String(bullet.get("status", "")))
+                {"status": String(bullet.get("status", "")),
+                    "direction": Vector2(bullet["velocity"]).normalized()})
             collided = true
         if collided and i < projectiles.size() and is_same(projectiles[i], bullet):
             projectiles.remove_at(i)
@@ -643,11 +695,16 @@ func _resolve_enemy_action(foe: Dictionary, definition: Dictionary, action: Dict
             if not bool(action["hit"]) or StatusSystem.has_flag("player", "untargetable"):
                 return
             var landed := true
+            # Wave 2D: attack knockback is the last step of apply_damage's finalise.
+            var shove := {"knockback": float(attack.get("knockback", 0.0)),
+                "direction": action["direction"], "origin": Vector2(foe["pos"]),
+                "status": String(attack.get("status", ""))}
             if attack.has("damage_die"):
                 var numbers: Dictionary = Enemies.attack_numbers(foe, definition, attack)
                 landed = hit_player(int(numbers["to_hit"]), int(numbers["die"]),
-                    int(numbers["bonus"]), source, float(numbers["mult"]),
-                    String(attack.get("status", "")))
+                    int(numbers["bonus"]), source, float(numbers["mult"]), shove)
+            elif float(shove["knockback"]) > 0.0:
+                _apply_knockback(player, shove)
             if not landed:
                 return
             var obstacles: Dictionary = blocked()
@@ -656,9 +713,6 @@ func _resolve_enemy_action(foe: Dictionary, definition: Dictionary, action: Dict
                 var room_left: float = maxf(0.0, inward.length() - float(foe["radius"]) - Player.RADIUS)
                 player.world_position = Enemies.push(player.world_position, inward,
                     minf(float(attack["pull"]), room_left), Player.RADIUS, obstacles)
-            if float(attack.get("knockback", 0.0)) > 0.0:
-                player.world_position = Enemies.push(player.world_position, action["direction"],
-                    float(attack["knockback"]), Player.RADIUS, obstacles)
         "projectiles":
             var numbers: Dictionary = Enemies.attack_numbers(foe, definition, attack)
             for direction in action["directions"]:
@@ -756,3 +810,152 @@ func _support(foe: Dictionary, attack: Dictionary) -> void:
         else:
             ally["ward"] = maxi(int(ally.get("ward", 0)), amount)
             ally["ward_time"] = float(attack.get("duration", 6.0))
+
+
+# --- Combat feel (Wave 2D) -------------------------------------------------------
+
+## Game calls this first in every RUNNING frame: advances the feedback timers
+## and returns the seconds the simulation may run (0 while hit-stop freezes it).
+func advance_feedback(delta: float) -> float:
+    return fx.consume(delta)
+
+
+## Finalise step 1: hit-stop, flash, floating number, shake and death burst for
+## `amount` damage to `target` (the Player or an enemy dictionary).
+## DoT (`source` "status:<id>") gets a small number and no stop or shake.
+func _feedback(target, amount: int, context: Dictionary, killed: bool) -> void:
+    var source: String = String(context.get("source", ""))
+    var dot: bool = source.begins_with("status:")
+    var critical: bool = bool(context.get("critical", false))
+    if target is Dictionary:
+        var key: String = String(target["instance_id"])
+        fx.flash(key, Color(4, 4, 4, 1))
+        fx.number(key, Vector2(target["pos"]), amount, "dot" if dot else ("crit" if critical else "normal"))
+        if killed:
+            fx.burst(Vector2(target["pos"]), _burst_color(target), 8, key.hash())
+        if dot or source != "player":
+            return
+        fx.hitstop_for("kill" if killed else ("crit" if critical else "hit"))
+        fx.shake(Fx.SHAKE_CRIT if critical or killed else Fx.SHAKE_LIGHT)
+        return
+    fx.flash("player", Color(4, 0.8, 0.8, 1))
+    fx.number("player", player.world_position, amount, "dot" if dot else "player")
+    if not dot:
+        fx.hitstop_for("player_hit")
+        fx.shake(Fx.SHAKE_MEDIUM)
+
+
+func _burst_color(foe: Dictionary) -> Color:
+    if String(foe.get("tint", "")) != "":
+        return Color(String(foe["tint"]))
+    return Color("#ff6b5a") if bool(foe.get("boss", false)) else Color("#d8c3a5")
+
+
+## Finalise step 2: knockback. `context.knockback` (px; a melee hit without one
+## uses feel.knockback.default_melee, scaled +5 % per positive STR mod) along
+## `context.direction`, or away from `context.origin` / the crawler. Enemies go
+## through Enemies.apply_knockback (knockback_resist, walls, interruptible
+## wind-ups); bosses take at most `boss_knockback_mult` (definition) or
+## feel.knockback.boss_mult (0.25) of it. The crawler is pushed the same way;
+## pushes stop at obstacles and the room edge, so they can never carry anyone
+## through a doorway, locked or not. Wall slams deal no damage.
+## Returns the distance actually moved.
+func _apply_knockback(target, context: Dictionary, definition: Dictionary = {}) -> float:
+    var rules: Dictionary = feel.get("knockback", {})
+    var distance: float = float(context.get("knockback", -1.0))
+    if distance < 0.0:
+        distance = float(rules.get("default_melee", 20.0)) \
+            if String(context.get("slot", "")) == "melee" else 0.0
+        if String(context.get("source", "")) == "player" and distance > 0.0:
+            var strength: int = maxi(0, RPG.modifier(int(RunState.ability_scores.get("STR", 10))))
+            distance *= 1.0 + float(rules.get("str_bonus_per_mod", 0.05)) * strength
+    if distance <= 0.0:
+        return 0.0
+    var at: Vector2 = Vector2(target["pos"]) if target is Dictionary else player.world_position
+    var direction: Vector2 = context.get("direction", Vector2.ZERO)
+    if direction.length_squared() < 0.0001:
+        var origin: Vector2 = context.get("origin",
+            player.world_position if target is Dictionary else at)
+        direction = at - origin
+    if direction.length_squared() < 0.0001:
+        return 0.0
+    if target is Dictionary:
+        if definition.is_empty():
+            definition = definition_of(target)
+        if bool(target.get("boss", false)):
+            var cap: float = float(definition.get("boss_knockback_mult",
+                rules.get("boss_mult", 0.25)))
+            var keep: float = 1.0 - clampf(float(target.get("knockback_resist", 0.0)), 0.0, 1.0)
+            if keep <= 0.0:
+                return 0.0
+            distance *= minf(1.0, cap / keep)
+        return Enemies.apply_knockback(target, direction, distance, blocked(), definition)
+    var start: Vector2 = player.world_position
+    player.world_position = Enemies.push(start, direction, distance, Player.RADIUS, blocked())
+    return start.distance_to(player.world_position)
+
+
+## Content hook for a dodge (and skill dashes that reuse it): emits
+## Events.dodged and is where the `on_dodge` trigger fires.
+## Wave 2B: the roll's i-frame window is also the `evasive` status (same
+## length as dodge i-frames, so content conditions and the HUD can see it),
+## then loadout `on_dodge` effects fire.
+func on_player_dodged(direction: Vector2) -> void:
+    Events.dodged.emit(direction)
+    var window: float = float(player.dodge_settings.get("iframes", 0.0)) if player != null else 0.0
+    if window > 0.0:
+        StatusSystem.apply("player", {"status": "evasive", "duration": window}, "dodge")
+    EffectRunner.fire(self, "on_dodge", {"direction": direction})
+
+
+## Movement speed multiplier for the attack in progress (COMBAT_AND_RPG §3):
+## arc 60 %, thrust 40 %, spin 50 %, ranged 85 % while its wind-up, active or
+## recovery frames run; 1.0 otherwise (and during a dash, which sets its own
+## speed). The pattern is the player's begin_attack() pattern; the prototype's
+## generic "melee" resolves to the equipped melee weapon's attack_pattern when
+## RunState.inventory names one, else arc.
+func player_move_multiplier() -> float:
+    if player == null or player.attack_pattern == "" or player.is_dodging():
+        return 1.0
+    var multipliers: Dictionary = {"arc": 0.6, "thrust": 0.4, "spin": 0.5, "ranged": 0.85}
+    multipliers.merge(feel.get("attack_move_multipliers", {}), true)
+    var pattern: String = player.attack_pattern
+    if pattern == "melee":
+        pattern = _equipped_pattern("melee", "arc")
+    elif pattern != "arc" and pattern != "thrust" and pattern != "spin":
+        pattern = "ranged"
+    return float(multipliers.get(pattern, 1.0))
+
+
+## attack_pattern of the weapon in `slot`, read defensively from
+## RunState.inventory (a weapon record, or a record under "weapons"/"equipped").
+func _equipped_pattern(slot: String, fallback: String) -> String:
+    var inventory: Dictionary = RunState.inventory
+    # Wave 2B: RunState.inventory[slot] is a weapon id.
+    if inventory.get(slot) is String and String(inventory[slot]) != "":
+        var weapon_pattern: String = String(Loadout.ContentDB.weapon(String(inventory[slot])).get(
+            "attack_pattern", ""))
+        if weapon_pattern != "":
+            return weapon_pattern
+    for holder in [inventory, inventory.get("weapons", {}), inventory.get("equipped", {})]:
+        if holder is Dictionary and holder.get(slot) is Dictionary:
+            var pattern: String = String(holder[slot].get("attack_pattern", ""))
+            if pattern != "":
+                return pattern
+    return fallback
+
+
+func _sync_settings() -> void:
+    var settings = Settings.shared()
+    fx.show_numbers = bool(settings.show_damage_numbers)
+    fx.shake_scale = clampf(float(settings.screen_shake), 0.0, 1.0)
+
+
+func _on_settings_changed(values: Dictionary) -> void:
+    fx.show_numbers = bool(values.get("show_damage_numbers", fx.show_numbers))
+    fx.shake_scale = clampf(float(values.get("screen_shake", fx.shake_scale)), 0.0, 1.0)
+
+
+func _on_player_healed(amount: int) -> void:
+    if player != null:
+        fx.number("player_heal", player.world_position, amount, "heal")

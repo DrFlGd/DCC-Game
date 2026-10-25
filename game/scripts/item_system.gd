@@ -143,7 +143,7 @@ func update(delta: float) -> void:
         recompute()
     StatusSystem.tick_all(game.combat, delta)
     if RunState.statuses.has("evasive"):
-        game.player.invulnerability = maxf(game.player.invulnerability,
+        game.player.dodge_iframes = maxf(game.player.dodge_iframes,
             float(RunState.statuses["evasive"].get("remaining", 0.0)))
     game.player.speed = move_speed()
     Inventory.advance_active("seconds", delta)

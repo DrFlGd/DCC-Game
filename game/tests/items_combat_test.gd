@@ -57,6 +57,7 @@ func _run() -> void:
     _test_boss_immunity_and_enemy_stun()
     _test_kill_and_damage_triggers()
     _test_hazard_status()
+    _test_feel_integration()
     await _test_render()
     game.queue_free()
     if failures == 0:
@@ -75,6 +76,7 @@ func _arena(foes: Array, at: Vector2 = Vector2(100, 192)) -> Array:
     game.player.world_position = at
     game.player.aim_direction = Vector2.RIGHT
     game.player.invulnerability = 0.0
+    game.player.dodge_iframes = 0.0
     game.player.fire_cooldown = 0.0
     game.player.melee_cooldown = 0.0
     rs.statuses = {}
@@ -299,6 +301,7 @@ func _test_shield_and_player_statuses() -> void:
     game.combat.apply_damage(game.player, 5, {"source": "rat_scavenger"})
     check(rs.hp == hp and int(rs.statuses["shielded"]["magnitude"]) == 3, "shielded absorbs 5 of 8")
     game.player.invulnerability = 0.0
+    game.player.dodge_iframes = 0.0
     game.combat.apply_damage(game.player, 5, {"source": "rat_scavenger"})
     check(rs.hp == hp - 2 and not rs.statuses.has("shielded"), "the rest goes to HP; empty shield removed")
     # Enemy shielded status.
@@ -340,6 +343,7 @@ func _test_shield_and_player_statuses() -> void:
     hp = rs.hp
     for _i in range(120):
         game.player.invulnerability = 0.0
+        game.player.dodge_iframes = 0.0
         game.combat.update_enemies(FRAME)
     check(Vector2(rat["pos"]).distance_to(Vector2(140, 160)) < 39.0 and rs.hp == hp,
         "the rat goes for the decoy, not the crawler next to it (rat at %s, HP %d/%d)" % [rat["pos"], rs.hp, hp])
@@ -349,6 +353,7 @@ func _test_shield_and_player_statuses() -> void:
     var hurt := false
     for _i in range(180):
         game.player.invulnerability = 0.0
+        game.player.dodge_iframes = 0.0
         game.combat.update_enemies(FRAME)
         hurt = hurt or rs.hp < rs.max_hp
     check(hurt, "without the decoy the same rat bites the crawler")
@@ -383,17 +388,63 @@ func _test_kill_and_damage_triggers() -> void:
     near["pos"] = Vector2(130, 192)
     var before: int = int(near["hp"])
     game.player.invulnerability = 0.0
+    game.player.dodge_iframes = 0.0
     game.combat.apply_damage(game.player, 2, {"source": "rat_scavenger"})
     check(int(near["hp"]) == before - 3, "spite battery: on_damage_taken hits enemies within 48 px")
     game.player.invulnerability = 0.0
+    game.player.dodge_iframes = 0.0
     game.combat.apply_damage(game.player, 2, {"source": "rat_scavenger"})
     check(int(near["hp"]) == before - 3, "its 2 s internal cooldown holds")
     # A burn tick on the crawler does not start hit i-frames.
     game.player.invulnerability = 0.0
+    game.player.dodge_iframes = 0.0
     game.combat.apply_damage(game.player, 1, {"source": "status:burning"})
     check(game.player.invulnerability == 0.0, "status ticks do not grant i-frames")
     rs.inventory["passives"] = []
     events.inventory_changed.emit()
+
+
+## Wave 2D merge: a dodge applies `evasive` for its i-frame window and fires
+## on_dodge; the equipped weapon's pattern drives the attack move penalty; the
+## weapon's knockback is applied by the finalise step.
+func _test_feel_integration() -> void:
+    _arena([])
+    _equip("wpn_crowbar")
+    rs.inventory["passives"] = [{"id": "itm_knockoff_sneakers", "count": 1}]
+    rs.inventory["effect_cooldowns"] = {}
+    events.inventory_changed.emit()
+    game.items.recompute()
+    game.player.reset(Vector2(150, 150), 105.0)
+    rs.refill_stamina()
+    check(game.try_dodge(Vector2.RIGHT), "the crawler can dodge")
+    check(rs.statuses.has("evasive") and absf(float(rs.statuses["evasive"]["remaining"])
+        - float(game.player.dodge_settings["iframes"])) < 0.001, "a dodge applies evasive for its i-frames")
+    check(rs.statuses.has("hasted"), "on_dodge fires loadout effects (knockoff sneakers haste)")
+    rs.inventory["passives"] = []
+    events.inventory_changed.emit()
+    game.items.recompute()
+    game.player.reset(Vector2(150, 150), 105.0)
+    rs.statuses = {}
+    _equip("wpn_mop_pike")
+    game.player.begin_attack(String(game.items.profile("melee")["pattern"]), 0.0, 0.1, 0.18)
+    check(is_equal_approx(game.combat.player_move_multiplier(), 0.4), "the pike's thrust slows to 40 %")
+    game.player.begin_attack("melee", 0.0, 0.1, 0.18)
+    check(is_equal_approx(game.combat.player_move_multiplier(), 0.4),
+        "a generic melee attack resolves the equipped weapon id's pattern")
+    game.player.reset(Vector2(100, 192), 105.0)
+    _equip("wpn_demolition_maul")
+    var rat: Dictionary = _foe(Vector2(120, 192), "kb")
+    _arena([rat])
+    var profile: Dictionary = game.items.profile("melee")
+    var context: Dictionary = game.combat._attack_context(profile, "melee", Vector2.RIGHT)
+    var str_mod: int = maxi(0, RPG.modifier(int(rs.ability_scores["STR"])))
+    check(is_equal_approx(float(context["knockback"]), 60.0 * (1.0 + 0.05 * str_mod)),
+        "melee weapon knockback is STR-scaled like the default shove")
+    var before: float = float(rat["pos"].x)
+    game.combat.apply_damage(rat, 1, context.merged({"source": "player"}))
+    check(float(rat["pos"].x) > before + 10.0, "the maul's knockback is applied (moved %.1f)"
+        % (float(rat["pos"].x) - before))
+    _equip("wpn_crowbar")
 
 
 func _test_hazard_status() -> void:
@@ -404,7 +455,7 @@ func _test_hazard_status() -> void:
     game.combat.update_hazards(FRAME)
     check(rs.statuses.has("poisoned"), "a spore puddle poisons the crawler")
     _arena([], Vector2(150, 150))
-    game.combat.hit_player(100, 4, 0, "lobber", 1.0, "burning")
+    game.combat.hit_player(100, 4, 0, "lobber", 1.0, {"status": "burning"})
     check(rs.statuses.has("burning") or rs.hp == rs.max_hp, "an attack's status lands with the hit")
 
 

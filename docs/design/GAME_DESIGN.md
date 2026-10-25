@@ -99,7 +99,7 @@ The floor ends with **exit** (success), **death** or **collapse**.
 
 - **Before entry:** each door shows the net tick change for the room behind it, plus a kind colour for scouted rooms. This is implemented as a label like `E-2` and tinted doors.
 - **On entry:** pay the cost. If the room has living hostiles and its kind locks (D-07, [COMBAT_AND_RPG.md §9](COMBAT_AND_RPG.md#9-d-07--door-lock-and-room-persistence)), the doors close 0.5 s after the crawler is 24 px inside the room. Enemies are dormant for 0.6 s after entry.
-- **Clear:** when the last non-trap hostile dies, the doors unlock and a short "room clear" sting plays. Room rewards drop at this point (see [ENCOUNTER_RULES.md §7](ENCOUNTER_RULES.md#7-rewards)).
+- **Clear:** when the last non-trap hostile dies, the doors unlock and a short "room clear" sting plays (**implemented in 2D**: hit-stop, a "ROOM CLEAR" banner, doors fading open and an announcer line; the door lock itself is [COMBAT_AND_RPG.md §9](COMBAT_AND_RPG.md#9-d-07--door-lock-and-room-persistence)). Room rewards drop at this point (see [ENCOUNTER_RULES.md §7](ENCOUNTER_RULES.md#7-rewards)).
 - **Revisit:** free under the default policy, with no respawns. Pickups that were left behind remain on the floor.
 
 ### 3.4 Boss and exit

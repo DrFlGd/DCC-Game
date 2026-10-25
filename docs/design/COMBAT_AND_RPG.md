@@ -1,6 +1,6 @@
 # Combat and RPG — rules v1
 
-- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2B **implemented** the weapon patterns (§4.1, §5), statuses on actors (§7), the item side of the damage pipeline (§6) and the D-09 inventory (§12), each with the deviations noted there. Everything else labelled *Proposed default* is the target for Wave 2D (feel) and 2F (skills).
+- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2D implemented §3 (dodge, stamina, movement penalties), the knockback step of §6, §8 (hit feedback) and §9 (D-07 door lock). Wave 2B implemented the weapon patterns (§4.1, §5), statuses on actors (§7), the item side of the damage pipeline (§6) and the D-09 inventory (§12). Each section lists its deviations. Everything else labelled *Proposed default* is the target for 2F (skills).
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 1C and 1D
 - **Decisions covered:** D-02 (aim input), D-07 (door lock), D-09 (inventory and resources), D-10 (companions), D-14 (melee ruleset)
@@ -69,6 +69,15 @@ Gamepad aim keeps the last direction when the stick is released (deadzone 0.25).
 
 ## 3. Movement, dodge and stamina
 
+**Implemented in Wave 2D** (`player.gd` dodge/dash state and attack phases, `RunState` stamina, `Game.try_dodge`, `Combat.player_move_multiplier`; tunables in `prototype_rules.json` `feel.stamina`, `feel.dodge`, `feel.attack_timing`, `feel.attack_move_multipliers`). Deviations:
+
+- The roll follows an ease-out curve (fast start), covering exactly 48 px in 0.25 s.
+- I-frames are a dedicated `player.dodge_iframes` timer that blocks every damage source, DoT included. Since the 2B merge, `Combat.on_player_dodged()` also applies the `evasive` status for the same window and fires `on_dodge`. ItemSystem mirrors any `evasive` status, such as one from an item, into `dodge_iframes`.
+- The prototype melee and ranged attacks still resolve instantly, so they have no wind-up. Melee has 0.10 s active and 0.18 s recovery (arc defaults), and ranged has 0.28 s recovery, so holding `fire` keeps the 85 % speed. 2B's patterns call `player.begin_attack(pattern, windup, active, recovery)`.
+- A dodge press is buffered for 0.12 s, so a press during recovery still fires.
+- WIS scaling is +10 % regen per positive modifier, so the starting WIS 12 regenerates 33/s. The two-chain rule holds: the third dodge is ready 0.75 s after the second.
+- The content stat `dodge_cooldown` is `player.dodge_gap` (from `feel.dodge.cooldown`, 0); the items team sets it from loadout modifiers.
+
 - **Move:** 105 px/s. Movement speed while attacking: arc 60 %, thrust 40 %, spin 50 %, ranged 85 %.
 - **Dodge roll (Proposed default, `dodge` action):** travels 48 px (3 tiles) over 0.25 s in the movement direction, or the aim direction when standing still.
   - **I-frames** for the first 0.20 s, implemented by applying the Wave 1B `evasive` status (`invulnerable` flag) for 0.20 s. Then 0.10 s of recovery during which the crawler cannot dodge or attack.
@@ -102,7 +111,7 @@ The shape numbers (reach, angle, cooldown, dice, knockback, pierce) come from ea
 
 Proposed new optional weapon fields for 2B/2D (to be added to the content schema): `windup`, `active` and `recovery` in seconds. When absent, the defaults above apply. `cooldown` keeps its 1B meaning: the time from one swing start to the next.
 
-*Implemented (2B):* the three hit shapes, targets per swing and knockback directions in the table (`Combat.melee_hits()`; thrust half-width 5 px plus the target radius; arc and spin keep the prototype's resolution order), read from `Loadout.attack_profile("melee")` with passives and statuses applied. The swing outline is drawn as the real shape (sector at `reach` with the weapon's `arc_degrees`, the thrust lane, the spin circle), which fixes the ±40° / ±63° mismatch. **Deviations:** swings still resolve instantly when pressed (no wind-up / active / recovery frames, no per-swing LOS), and knockback is computed and carried in the damage context but not applied; both are left to the combat-feel PR (2D). `wpn_crowbar`'s 127° gives a dot threshold of 0.446 instead of 0.45.
+*Implemented (2B):* the three hit shapes, targets per swing and knockback directions in the table (`Combat.melee_hits()`; thrust half-width 5 px plus the target radius; arc and spin keep the prototype's resolution order), read from `Loadout.attack_profile("melee")` with passives and statuses applied. The swing outline is drawn as the real shape (sector at `reach` with the weapon's `arc_degrees`, the thrust lane, the spin circle), which fixes the ±40° / ±63° mismatch. After the 2D merge, a swing calls `player.begin_attack(<weapon pattern>, 0, melee_active, melee_recovery)`, so the per-pattern movement penalty applies. The weapon's `knockback` (STR-scaled like 2D's default shove) goes in the damage context, and 2D's finalise step applies it. **Deviations:** hits still resolve on the press. There is no wind-up, the phase lengths come from `feel.attack_timing` rather than per-weapon data, and there is no per-swing LOS. `wpn_crowbar`'s 127° gives a dot threshold of 0.446 instead of 0.45.
 
 ### 4.2 Rules
 
@@ -143,17 +152,18 @@ Wave 1A made `combat.gd` `apply_damage(target, amount, context)` the **only** pl
 | 5. **Armour** | `apply_damage` | Subtract flat damage reduction (enemy `dr`), but never below 1. Apply the type multiplier: resist ×0.5, weak ×1.5, immune ×0. Then the `shielded` pool absorbs damage before HP. |
 | 6. **Finalise** | `apply_damage` | Round down. The minimum is 1 on a hit unless the target is immune. Change HP, emit the signals, then run `on_hit`, `on_kill` and `on_damage_taken` effects, then knockback. |
 
+- **Knockback step — Implemented (2D)** in `Combat._apply_knockback`, after the signals and `_feedback()`, on a surviving target only. It reads `context.knockback` in px; a melee hit without one uses `feel.knockback.default_melee` (20 px), +5 % per positive STR mod. The direction is `context.direction`, otherwise away from `context.origin` or the crawler. Enemies go through `Enemies.apply_knockback`, which applies `knockback_resist`, stops at walls and interrupts interruptible wind-ups. Bosses take at most ×0.25 (`feel.knockback.boss_mult`, or `boss_knockback_mult` on the definition): the effective factor is min(1 − resist, cap). The crawler is pushed through `Enemies.push`. Enemy strike knockback now enters through `hit_player(..., extra)` and the same step. Deviations: the push is applied instantly rather than over 0.12 s. A wall slam deals no damage. A push stops at obstacles and at the room edge, so it can never carry an actor through a doorway, whether the door is locked or not.
 - **Proposed `context` keys:** `critical`, `source` and `index` exist today. v1 adds `damage_type`, `slot` (`melee`/`ranged`), `attacker` and `breakdown`, an array of `{step, delta}` that floating numbers and telemetry can read.
 - **AC vs armour:** AC decides **whether** a hit lands, and armour DR decides **how much** gets through. Both exist on purpose.
 - **Status ticks and `damage` effects** (1B: auto-hit, no AC) enter at step 4 with `context.source = "status:<id>"` or `"effect:<id>"`.
 
-*Implemented (2B + 2C):* step 1–2 in `hit_enemy` / `hit_player` with the weapon's numbers from `Loadout.attack_profile()` (step 3's passive damage and attack bonuses are already inside the profile, so they are not added again in `apply_damage`). Enemy side of `apply_damage`: phase-roar invulnerability, `Enemies.mitigate()` (resistances, front guard, DR, 2C), ward and shield pools (2C), then the `shielded` status (2B); after the HP change: `Events.enemy_damaged`, `on_hit` (only for player attacks, `source == "player"`), death, `room_cleared`, then `on_kill` (credited for `player`, `status:` and `effect:` sources). Player side: `evasive` ignores the hit, `damage_taken_mult`, `shielded` absorbs, HP changes (status ticks do not start the 0.8 s hit i-frames), then the context `status` is applied (enemy attacks and hazards such as spore puddles, firebombs and floods) and `on_damage_taken` fires. Context keys added by 2B: `weapon_id`, `knockback` (px), `knockback_direction` (Vector2), `effects` (the weapon's effect ids), `status`, `triggers` (false suppresses item triggers), plus `effect`/`status`/`applied_by` on effect and DoT damage. **Not yet:** `weakened` / `vulnerable` / `marked` (not in the data), `crit_threshold`, the `breakdown` array, and applying knockback (2D).
+*Implemented (2B + 2C):* step 1–2 in `hit_enemy` / `hit_player` with the weapon's numbers from `Loadout.attack_profile()` (step 3's passive damage and attack bonuses are already inside the profile, so they are not added again in `apply_damage`). Enemy side of `apply_damage`: phase-roar invulnerability, `Enemies.mitigate()` (resistances, front guard, DR, 2C), ward and shield pools (2C), then the `shielded` status (2B); after the HP change: `Events.enemy_damaged`, `on_hit` (only for player attacks, `source == "player"`), death, `room_cleared`, then `on_kill` (credited for `player`, `status:` and `effect:` sources). Player side: dodge i-frames (which `evasive` sets) ignore the hit, `damage_taken_mult`, `shielded` absorbs, HP changes (status ticks do not start the 0.8 s hit i-frames), then the context `status` is applied (enemy attacks and hazards such as spore puddles, firebombs and floods) and `on_damage_taken` fires. Context keys added by 2B: `weapon_id`, `knockback` (px; applied by 2D's finalise step), `direction` (`knockback_direction` is kept as an alias), `effects` (the weapon's effect ids), `status`, `triggers` (false suppresses item triggers), plus `effect`/`status`/`applied_by` on effect and DoT damage. **Not yet:** `weakened` / `vulnerable` / `marked` (not in the data), `crit_threshold`, and the `breakdown` array.
 
 ## 7. Status effects
 
 **Implemented as data (Wave 1B, `effects.json`):** see [CONTENT_RULES.md §4](CONTENT_RULES.md#4-statuses) for the full stacking rules.
 
-*Implemented on actors (2B, [`status_system.gd`](../../game/scripts/status_system.gd)):* the crawler's map is `RunState.statuses` and each enemy's is `enemy["statuses"]`; `ItemSystem` ticks both every frame through `EffectResolver.tick_statuses`. Periodic damage goes through `combat.apply_damage` (`source = "status:<id>"`, damage type from the status tag: fire, toxic, else physical, so enemy resistances and DR apply). `slowed` / `hasted` scale the crawler's speed and each enemy's `speed` for its AI step; `hasted` also shortens both attack cooldowns. `stunned` blocks the crawler's movement and attacks and puts an enemy's AI into its 2C `stunned` state (interrupting a wind-up). `shielded` absorbs before HP on both sides. `evasive` holds the crawler's i-frames. `concealed` places a decoy where it was used: enemies path to it and their strikes land on it (projectiles already fired can still hit). Every rule below is implemented except the proposed statuses themselves. Markers are coloured pips above HP bars (`room_renderer.gd` `draw_status_markers()`), and the HUD lists the crawler's statuses with their time left.
+*Implemented on actors (2B, [`status_system.gd`](../../game/scripts/status_system.gd)):* the crawler's map is `RunState.statuses` and each enemy's is `enemy["statuses"]`; `ItemSystem` ticks both every frame through `EffectResolver.tick_statuses`. Periodic damage goes through `combat.apply_damage` (`source = "status:<id>"`, damage type from the status tag: fire, toxic, else physical, so enemy resistances and DR apply). `slowed` / `hasted` scale the crawler's speed and each enemy's `speed` for its AI step; `hasted` also shortens both attack cooldowns. `stunned` blocks the crawler's movement and attacks and puts an enemy's AI into its 2C `stunned` state (interrupting a wind-up). `shielded` absorbs before HP on both sides. `evasive` holds the crawler's dodge i-frames, and every dodge applies it for the i-frame window (then `on_dodge` fires). `concealed` places a decoy where it was used: enemies path to it and their strikes land on it (projectiles already fired can still hit). Every rule below is implemented except the proposed statuses themselves. Markers are coloured pips above HP bars (`room_renderer.gd` `draw_status_markers()`), and the HUD lists the crawler's statuses with their time left.
 
 | Status | Behaviour (1B defaults) |
 | --- | --- |
@@ -198,7 +208,23 @@ Wave 1A made `combat.gd` `apply_damage(target, amount, context)` the **only** pl
 
 Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen shake* is a 0–100 % slider. Hit-stop stays on, because it carries timing information.
 
+**Implemented in Wave 2D:** `scripts/fx.gd` holds the state (pure, no RNG). Combat owns `combat.fx` and calls `_feedback()` in the finalise step. Game freezes the simulation while `combat.hitstop` runs and simulates only the remainder of the frame that ends it. `room_renderer.gd` draws the cues in self-contained functions (`_draw_fx`, `_flash_modulation`, `_crawler_modulation`, `_draw_dodge_trail`, `feel_shake`). Values and deviations:
+
+- **Hit-stop.** Only hits by the crawler stop time: 40 ms for a hit, 70 ms for a crit, 90 ms for a kill. A boss phase change gives 90 ms, the crawler being hit 50 ms, and a room clear 120 ms. Requests take the longest, not the sum, and stay within the 120 ms per 0.5 s budget; only the room clear is forced past it. DoT never stops time.
+- **Flash.** 0.08 s. Enemies go HDR-white and the crawler red. The crawler also blinks during hit and dodge i-frames.
+- **Damage numbers.** Gated by `settings.show_damage_numbers`. A crit is larger and yellow, `MISS` is grey, DoT (`source = "status:*"`) is small, the crawler's numbers are red and heals green. Numbers on one target merge within 0.1 s.
+- **Shake.** Hits 0.6 px / 0.06 s, crits and kills 1 px / 0.08 s, crawler damage 2 px / 0.15 s, boss phase changes and grace start 4 px / 0.25 s. It is scaled by `settings.screen_shake` and added to the grace shake as a renderer offset.
+- **Death bursts.** 8 squares, 0.3 s, in the elite tint (else bone, red for bosses).
+- **Room clear.** The 120 ms hit-stop, a ~1.1 s "ROOM CLEAR" HUD banner with the gold border pulse, doors fading open over 0.5 s, and an announcer `room_cleared` line. There is no sound yet (audio is Wave 3).
+
 ## 9. D-07 — Door lock and room persistence
+
+**Implemented in Wave 2D** (`scripts/door_lock.gd`, a child node of Game; tunables in `feel.door_lock`). The lock emits `Events.doors_locked(room_id)` and `doors_unlocked(room_id, reason)`, where `reason` is `cleared`, `grace` or `failsafe`. `_enter_neighbor` refuses while the doors are sealed, and the HUD prompt reads *Sealed until clear*. Sealed doors are drawn with a red tint, an iron bar and a gold lock, and they fade open. Deviations:
+
+- **Inside.** The crawler counts as "inside" when it is ≥ 24 px from *every linked doorway*, not from every wall, so hugging a far wall cannot keep the doors open.
+- **Grace.** The grace unlock always wins. If grace ends by stabilising while hostiles live, the doors seal again.
+- **Failsafe path test.** It uses plain grid connectivity, which is the enemy pathfinder's fallback, from the crawler's cell to each hostile's cell or a cell next to it. It runs every 0.25 s while sealed.
+- **Failsafe despawn.** It emits no `enemy_killed` and no `room_cleared`, so no XP, clear grant or achievement is awarded. A despawned boss still sets `boss_defeated`, so the floor cannot softlock. The despawn is logged with `push_warning` and the `failsafe_despawns` telemetry counter.
 
 **Proposed default (D-07):** doors lock until the room is cleared in rooms that contain hostiles, and never in safe rooms.
 
@@ -212,7 +238,7 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 
 ## 10. Enemy telegraph rule
 
-**Implemented in Wave 2C** for every enemy attack (data fields `wind_up`, `recovery` and `telegraph` ∈ `arc | line | circle | dash`; see [ENEMY_TIERS.md §8](ENEMY_TIERS.md#8-data-schema-enemiesjson-schema_version-2-implemented)). Room-entry dormancy (§9) is implemented too; the door lock is not.
+**Implemented in Wave 2C** for every enemy attack (data fields `wind_up`, `recovery` and `telegraph` ∈ `arc | line | circle | dash`; see [ENEMY_TIERS.md §8](ENEMY_TIERS.md#8-data-schema-enemiesjson-schema_version-2-implemented)). Room-entry dormancy (§9) is implemented too; the door lock followed in Wave 2D.
 
 **Rule:** every enemy attack has a visible wind-up of at least **0.35 s at band I**. Validation tests enforce the per-band minimum ([ENEMY_TIERS.md §4](ENEMY_TIERS.md#4-stat-guardrails-per-band)): 0.35 / 0.30 / 0.28 / 0.25 / 0.22 s for bands I–V. Boss heavy attacks and any area attack need **≥ 0.5 s** at every band.
 
@@ -280,7 +306,7 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 - Passives and consumables are collected on contact. Weapons, actives and loot boxes need `interact`.
 - **Credits** are the run currency: they come from kills (XP × 0.1, minimum 1) and room clears, and are spent at the guild-hall `shop`.
 - The HUD has a loadout panel (weapons, active, belt, credits, statuses) and the 1.5× floor tooltip. The pause menu has an Inventory page.
-- **Deviation:** there is no stamina resource yet. Dodge keeps its 1A cooldown.
+- Stamina is Wave 2D's pool (§3). A dodge also applies the `evasive` status for its i-frame window and fires loadout `on_dodge` effects.
 - **Deviation:** `swap_weapon` stays unused.
 - **Deviation:** a passive already at `stack_max` stays on the floor instead of being picked up.
 

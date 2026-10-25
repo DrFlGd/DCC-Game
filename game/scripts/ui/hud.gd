@@ -25,6 +25,9 @@ var prompt := ""
 ## drawn at 1.5x above it (COMBAT_AND_RPG §12).
 var hover: Dictionary = {}
 var canvas: Control
+## Seconds left on the "ROOM CLEAR" flourish (show_room_clear, Wave 2D).
+var room_clear_left := 0.0
+const ROOM_CLEAR_SECONDS := 1.1
 
 
 func _ready() -> void:
@@ -38,7 +41,14 @@ func _ready() -> void:
     Events.message.connect(_on_message)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+    room_clear_left = maxf(0.0, room_clear_left - delta)
+    refresh()
+
+
+## Starts the ~1 s "ROOM CLEAR" flourish (DoorLock calls it on a locking room's clear).
+func show_room_clear() -> void:
+    room_clear_left = ROOM_CLEAR_SECONDS
     refresh()
 
 
@@ -69,6 +79,7 @@ func _draw_hud() -> void:
         maxi(0, RunState.hp), RunState.max_hp, RunState.ac, level, RunState.xp,
         str(RPG.next_level_xp(level)) if level < 20 else "MAX",
         RunState.proficiency], Vector2(14, 43), 15, Color("#e5eafa"))
+    _draw_stamina_bar(Vector2(14, 47))
     var stat_parts: PackedStringArray = []
     for ability in RPG.ABILITIES:
         var score: int = int(RunState.ability_scores[ability])
@@ -82,10 +93,50 @@ func _draw_hud() -> void:
     _draw_loadout(view)
     _draw_tooltip()
     _draw_prompt(view)
-    _text("WASD: move | Mouse: aim | LMB: shoot | Space: melee | E: interact | Q: item | C/V: belt",
+    _draw_room_clear(view)
+    _text("WASD: move | Mouse: aim | LMB: shoot | Space: melee | Shift: dodge | E: interact | Q: item | C/V: belt",
         Vector2(14, view.y - 46), 14, Color("#dce9f2"))
     _text("Esc: pause / stats | M: map | R: replay | N: new seed | 24x24 room, 16px tiles",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
+
+
+## Stamina pool (Wave 2D): a thin bar under the HP line; amber when a dodge
+## (35) is not affordable. Self-contained: reads RunState only.
+func _draw_stamina_bar(origin: Vector2) -> void:
+    var width := 120.0
+    var maximum: float = maxf(1.0, RunState.max_stamina)
+    var ratio: float = clampf(RunState.stamina / maximum, 0.0, 1.0)
+    var cost: float = float(RunState.config.get("feel", {}).get("dodge", {}).get("cost", 35.0))
+    var fill := Color("#6fd3a0") if RunState.stamina >= cost else Color("#d9a441")
+    canvas.draw_rect(Rect2(origin - Vector2(1, 1), Vector2(width + 2, 6)), Color("#0b0f16"))
+    canvas.draw_rect(Rect2(origin, Vector2(width * ratio, 4)), fill)
+    var tick: float = width * clampf(cost / maximum, 0.0, 1.0)
+    for i in range(1, int(maximum / maxf(1.0, cost)) + 1):
+        canvas.draw_line(origin + Vector2(tick * i, 0), origin + Vector2(tick * i, 4),
+            Color(0, 0, 0, 0.5), 1.0)
+    _text("STA", origin + Vector2(width + 6, 5), 9, Color("#a7cfcb"))
+
+
+## "ROOM CLEAR" banner across the top third with a gold border pulse.
+func _draw_room_clear(view: Vector2) -> void:
+    if room_clear_left <= 0.0:
+        return
+    var t: float = 1.0 - room_clear_left / ROOM_CLEAR_SECONDS
+    var alpha: float = clampf(minf(t * 6.0, room_clear_left * 3.0), 0.0, 1.0)
+    var scale: float = 1.0 + 0.25 * maxf(0.0, 1.0 - t * 5.0)
+    var size: int = int(34.0 * scale)
+    var text := "ROOM CLEAR"
+    var font: Font = ThemeDB.fallback_font
+    var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+    var at := Vector2((view.x - width) * 0.5, view.y * 0.32)
+    canvas.draw_rect(Rect2(Vector2(0, at.y - size - 8), Vector2(view.x, size + 22)),
+        Color(0.05, 0.04, 0.02, 0.55 * alpha))
+    var border := Color(1.0, 0.84, 0.35, 0.8 * alpha * (0.6 + 0.4 * sin(t * 18.0)))
+    canvas.draw_rect(Rect2(Vector2(3, 3), view - Vector2(6, 6)), border, false, 3.0)
+    canvas.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, 5,
+        Color(0.1, 0.06, 0.0, alpha))
+    canvas.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size,
+        Color(1.0, 0.86, 0.4, alpha))
 
 
 ## Small top-centre HP bar for a live boss in the current room (any enemy with

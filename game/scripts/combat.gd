@@ -13,11 +13,21 @@ extends Node
 ## that changes HP and emits `Events.enemy_damaged` / `enemy_killed` /
 ## `player_damaged` / `player_died`. All d20 and damage rolls use `RunState.rng`
 ## in a fixed order, which keeps seeded runs reproducible.
+##
+## Wave 2B: the crawler's attacks read the equipped weapon through
+## Loadout.attack_profile() (ContentDB.attack_profile + passives + statuses):
+## melee arc / thrust / spin, ranged single / spread / burst / beam, with
+## pierce. Statuses (status_system.gd) and item triggers (effect_runner.gd)
+## run inside apply_damage(); weapon knockback rides in the damage context
+## (`knockback`, `knockback_direction`) and is not applied yet (combat-feel PR).
 const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Player = preload("res://scripts/player.gd")
 const Hazards = preload("res://scripts/hazards.gd")
+const Loadout = preload("res://scripts/loadout.gd")
+const StatusSystem = preload("res://scripts/status_system.gd")
+const EffectRunner = preload("res://scripts/effect_runner.gd")
 
 const PLAYER_SHOT_SPEED := 215.0
 const PLAYER_SHOT_TTL := 2.0
@@ -29,6 +39,12 @@ const MELEE_DIE := 6
 const ENEMY_SHOT_TTL := 2.8
 const PROJECTILE_RADIUS := 2.0
 const HIT_SLOP := 3.0
+## Half-width of a thrust's hit capsule (COMBAT_AND_RPG §4.1: 10 px wide).
+const THRUST_HALF_WIDTH := 5.0
+## Seconds a beam tick stays drawn.
+const BEAM_FLASH := 0.08
+## Damage sources that credit the crawler with a kill (on_kill triggers).
+const PLAYER_SOURCES := ["player", "status:", "effect:"]
 ## Enemy puddle colours by status tag (drawn by hazards.gd).
 const PUDDLE_COLORS := {"poisoned": Color("#9bd34a"), "burning": Color("#ff7a2e"),
     "slowed": Color("#4fa3ff")}
@@ -45,6 +61,13 @@ var player_velocity := Vector2.ZERO
 var _last_player_pos := Vector2.INF
 var player: Player
 var catalogue: Dictionary = {}
+## Wave 2B: queued burst shots {delay, weapon_id} (fired from update_projectiles).
+var pending_shots: Array[Dictionary] = []
+## Wave 2B: beam ticks for the renderer {from, to, ttl}.
+var beams: Array[Dictionary] = []
+## Wave 2B: the last player swing for the renderer {pattern, origin, direction,
+## reach, arc_degrees, width}; drawn while player.melee_flash > 0.
+var last_swing: Dictionary = {}
 
 
 func _ready() -> void:
@@ -85,6 +108,8 @@ func definition_of(foe: Dictionary) -> Dictionary:
 
 func clear_projectiles() -> void:
     projectiles.clear()
+    pending_shots.clear()
+    beams.clear()
 
 
 # --- Ground hazards (Wave 2E) -------------------------------------------------
@@ -112,50 +137,203 @@ func update_hazards(delta: float) -> void:
         "invulnerable": player.invulnerability > 0.0}, enemies())
     for hit in hits:
         var source: String = String(hit["entry"]["source"])
+        # Wave 2B: a hazard's `status` (spore puddles, firebombs, floods) is applied.
+        var status: String = String(hit["entry"].get("status", ""))
         if hit["target"] is String:
             if int(hit["damage"]) > 0 and RunState.hp > 0:
-                apply_damage(player, int(hit["damage"]), {"source": source})
+                apply_damage(player, int(hit["damage"]), {"source": source, "status": status,
+                    "damage_type": String(hit["entry"].get("damage_type", "physical"))})
+            elif status != "" and RunState.hp > 0:
+                StatusSystem.apply_default("player", status, source)
             if int(hit["ticks"]) > 0:
                 RunState.add_ticks(-int(hit["ticks"]), source)
         elif int(hit["target"]["hp"]) > 0:
             apply_damage(hit["target"], int(hit["damage"]), {"source": source,
                 "damage_type": String(hit["entry"].get("damage_type", "physical"))})
+            if status != "" and int(hit["target"]["hp"]) > 0:
+                StatusSystem.apply_default(hit["target"], status, source)
 
 
-## Spawns a player bolt along the current aim (cooldown is the Player's job).
+## Fires the equipped ranged weapon along the current aim (the cooldown is the
+## Player's job; Game passes the profile's cooldown to try_fire). Patterns:
+## single, spread (projectile_count over spread_degrees), burst (burst_count
+## shots burst_interval apart, jittered by spread_degrees), beam (one hitscan
+## tick per trigger, i.e. every `cooldown` seconds while held).
+## wpn_nail_pistol reproduces the prototype shot exactly.
 func player_fire() -> void:
-    var scores: Dictionary = RunState.ability_scores
+    var profile: Dictionary = Loadout.attack_profile("ranged")
+    var aim: Vector2 = player.aim_direction
+    match String(profile.get("pattern", "single")):
+        "spread":
+            for angle in spread_angles(int(profile["projectile_count"]),
+                    float(profile["spread_degrees"])):
+                _spawn_player_shot(profile, aim.rotated(deg_to_rad(angle)))
+        "burst":
+            _spawn_player_shot(profile, _jittered(aim, profile))
+            for i in range(1, maxi(1, int(profile.get("burst_count", 1)))):
+                pending_shots.append({"delay": float(profile["burst_interval"]) * float(i),
+                    "weapon_id": String(profile["weapon_id"])})
+        "beam":
+            fire_beam(profile, player.world_position, aim)
+        _:
+            for angle in spread_angles(int(profile["projectile_count"]),
+                    float(profile["spread_degrees"])):
+                _spawn_player_shot(profile, aim.rotated(deg_to_rad(angle)))
+
+
+## Fan angles in degrees for `count` projectiles over `spread` degrees total
+## (centred on 0; one projectile flies straight).
+static func spread_angles(count: int, spread: float) -> Array[float]:
+    var angles: Array[float] = []
+    if count <= 1:
+        angles.append(0.0)
+        return angles
+    for i in range(count):
+        angles.append(-spread * 0.5 + spread * float(i) / float(count - 1))
+    return angles
+
+
+func _jittered(aim: Vector2, profile: Dictionary) -> Vector2:
+    var jitter: float = float(profile.get("spread_degrees", 0.0))
+    if jitter <= 0.0:
+        return aim
+    return aim.rotated(deg_to_rad(RunState.rng.randf_range(-jitter * 0.5, jitter * 0.5)))
+
+
+## One player projectile: the prototype keys (pos, velocity, ttl, owner, die,
+## bonus, attack_bonus, source) plus pierce, knockback, effects (the weapon's
+## effect ids), weapon_id, slot and hit (instance ids already hit).
+func _spawn_player_shot(profile: Dictionary, direction: Vector2) -> Dictionary:
     var shot := {
-        "pos": player.world_position + player.aim_direction * PLAYER_SHOT_SPAWN,
-        "velocity": player.aim_direction * PLAYER_SHOT_SPEED, "ttl": PLAYER_SHOT_TTL,
-        "owner": "player", "die": PLAYER_SHOT_DIE,
-        "bonus": RPG.modifier(int(scores["DEX"])),
-        "attack_bonus": RPG.attack_bonus(scores, "DEX", RunState.level),
-        "source": "player"
+        "pos": player.world_position + direction * PLAYER_SHOT_SPAWN,
+        "velocity": direction * float(profile["projectile_speed"]), "ttl": float(profile["ttl"]),
+        "owner": "player", "die": int(profile["die"]), "bonus": int(profile["damage_bonus"]),
+        "attack_bonus": int(profile["attack_bonus"]), "source": "player",
+        "pierce": int(profile["pierce"]), "knockback": float(profile["knockback"]),
+        "effects": Array(profile.get("effects", [])).duplicate(),
+        "weapon_id": String(profile["weapon_id"]), "slot": "ranged", "hit": {}
     }
     projectiles.append(shot)
     Events.projectile_fired.emit("player", shot)
+    return shot
 
 
-## Resolves a melee arc in front of the player against every enemy in reach.
+## Hitscan beam tick from `origin` along `aim` up to profile.range, stopped by
+## obstacles; hits up to 1 + pierce enemies in order along the beam. Returns
+## the enemy dictionaries hit (before the rolls).
+func fire_beam(profile: Dictionary, origin: Vector2, aim: Vector2) -> Array:
+    var obstacles: Dictionary = blocked()
+    var reach: float = float(profile.get("range", 200.0))
+    var travelled := PLAYER_SHOT_SPAWN
+    while travelled < reach:
+        if not Contents.can_occupy(origin + aim * (travelled + 2.0), PROJECTILE_RADIUS, obstacles):
+            break
+        travelled += 2.0
+    var end: Vector2 = origin + aim * travelled
+    var candidates: Array = []
+    for foe in enemies():
+        var along: float = (Vector2(foe["pos"]) - origin).dot(aim)
+        if along <= 0.0 or along > travelled + float(foe["radius"]):
+            continue
+        var side: float = absf((Vector2(foe["pos"]) - origin).cross(aim))
+        if side <= float(foe["radius"]) + HIT_SLOP:
+            candidates.append([along, foe])
+    candidates.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
+    var hits: Array = []
+    for pair in candidates.slice(0, 1 + int(profile.get("pierce", 0))):
+        hits.append(pair[1])
+    beams.append({"from": origin + aim * PLAYER_SHOT_SPAWN, "to": end, "ttl": BEAM_FLASH})
+    Events.projectile_fired.emit("player", {"pos": origin, "velocity": Vector2.ZERO, "ttl": 0.0,
+        "owner": "player", "die": int(profile["die"]), "bonus": int(profile["damage_bonus"]),
+        "attack_bonus": int(profile["attack_bonus"]), "source": "player", "beam": true,
+        "weapon_id": String(profile["weapon_id"])})
+    for foe in hits:
+        var index: int = _index_of(foe)
+        if index >= 0:
+            hit_enemy(index, int(profile["attack_bonus"]), int(profile["die"]),
+                int(profile["damage_bonus"]), _attack_context(profile, "ranged", aim))
+    return hits
+
+
+## Swings the equipped melee weapon (COMBAT_AND_RPG §4.1): arc (sector of
+## reach + enemy radius, width arc_degrees), thrust (a 10 px capsule of length
+## reach along the aim, 1 + pierce targets nearest first) or spin (circle).
+## Resolves instantly as in the prototype; wind-up/active/recovery frames and
+## LOS belong to the combat-feel PR. wpn_crowbar reproduces the prototype
+## swing (32 px, 0.5 s, d6 STR; 127 degrees = dot 0.446 vs the old 0.45).
 func player_melee() -> void:
     Events.melee_swung.emit("player", player.world_position, player.aim_direction)
-    var scores: Dictionary = RunState.ability_scores
-    var foes: Array = enemies()
-    for i in range(foes.size() - 1, -1, -1):
-        if i >= foes.size():
+    var profile: Dictionary = Loadout.attack_profile("melee")
+    var origin: Vector2 = player.world_position
+    var aim: Vector2 = player.aim_direction
+    last_swing = {"pattern": String(profile["pattern"]), "origin": origin, "direction": aim,
+        "reach": float(profile["reach"]), "arc_degrees": float(profile["arc_degrees"]),
+        "width": THRUST_HALF_WIDTH * 2.0}
+    var targets: Array = []
+    for i in melee_hits(profile, origin, aim, enemies()):
+        targets.append(enemies()[i])
+    for foe in targets:
+        var index: int = _index_of(foe)
+        if index < 0:
             continue
-        var foe: Dictionary = foes[i]
-        var toward: Vector2 = Vector2(foe["pos"]) - player.world_position
-        if toward.length() <= MELEE_REACH + float(foe["radius"]) and toward.length() > 0.01:
-            if player.aim_direction.dot(toward.normalized()) > MELEE_ARC_DOT:
-                hit_enemy(i, RPG.attack_bonus(scores, "STR", RunState.level),
-                    MELEE_DIE, RPG.modifier(int(scores["STR"])),
-                    {"slot": "melee", "direction": toward.normalized()})
+        var toward: Vector2 = Vector2(foe["pos"]) - origin
+        var push: Vector2 = aim if String(profile["pattern"]) == "thrust" else toward.normalized()
+        hit_enemy(index, int(profile["attack_bonus"]), int(profile["die"]),
+            int(profile["damage_bonus"]), _attack_context(profile, "melee", push))
+
+
+## Indices of `foes` a swing hits, in resolution order (pure, for tests).
+## Arc and spin keep the prototype's order (highest index first); thrust is
+## nearest first and capped at 1 + pierce.
+static func melee_hits(profile: Dictionary, origin: Vector2, aim: Vector2, foes: Array) -> Array[int]:
+    var result: Array[int] = []
+    var reach: float = float(profile.get("reach", MELEE_REACH))
+    match String(profile.get("pattern", "arc")):
+        "thrust":
+            var line: Array = []
+            for i in range(foes.size()):
+                var toward: Vector2 = Vector2(foes[i]["pos"]) - origin
+                var radius: float = float(foes[i]["radius"])
+                var along: float = toward.dot(aim)
+                if along > 0.0 and along <= reach + radius \
+                        and absf(toward.cross(aim)) <= THRUST_HALF_WIDTH + radius:
+                    line.append([along, i])
+            line.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
+            for pair in line.slice(0, 1 + int(profile.get("pierce", 0))):
+                result.append(int(pair[1]))
+        "spin":
+            for i in range(foes.size() - 1, -1, -1):
+                var distance: float = (Vector2(foes[i]["pos"]) - origin).length()
+                if distance <= reach + float(foes[i]["radius"]):
+                    result.append(i)
+        _:
+            var threshold: float = float(profile.get("dot_threshold", MELEE_ARC_DOT))
+            for i in range(foes.size() - 1, -1, -1):
+                var toward: Vector2 = Vector2(foes[i]["pos"]) - origin
+                if toward.length() <= reach + float(foes[i]["radius"]) and toward.length() > 0.01:
+                    if aim.dot(toward.normalized()) > threshold:
+                        result.append(i)
+    return result
+
+
+## Damage-context keys for a player weapon hit (merged by hit_enemy).
+func _attack_context(profile: Dictionary, slot: String, direction: Vector2) -> Dictionary:
+    return {"slot": slot, "direction": direction, "weapon_id": String(profile["weapon_id"]),
+        "knockback": float(profile.get("knockback", 0.0)), "knockback_direction": direction,
+        "effects": Array(profile.get("effects", [])).duplicate()}
+
+
+func _index_of(foe: Dictionary) -> int:
+    var foes: Array = enemies()
+    for i in range(foes.size()):
+        if is_same(foes[i], foe):
+            return i
+    return -1
 
 
 ## Player attack roll against enemy `index` of the current room. `extra` is
-## merged into the apply_damage context (slot, direction, damage_type).
+## merged into the apply_damage context (slot, direction, damage_type, and from
+## Wave 2B weapon_id, knockback, knockback_direction, effects).
 func hit_enemy(index: int, to_hit: int, die: int, damage_bonus: int,
         extra: Dictionary = {}) -> void:
     var foes: Array = enemies()
@@ -177,10 +355,11 @@ func hit_enemy(index: int, to_hit: int, die: int, damage_bonus: int,
 
 ## Enemy attack roll against the player; ignored during invulnerability.
 ## `damage_mult` is the elite multiplier (rounded down, minimum 1). `source` is
-## the attacker's definition id. Returns true when the attack landed.
+## the attacker's definition id. `status` (Wave 2B) is applied on a hit.
+## Returns true when the attack landed.
 func hit_player(to_hit: int, die: int, damage_bonus: int, source: String = "enemy",
-        damage_mult: float = 1.0) -> bool:
-    if player.invulnerability > 0.0:
+        damage_mult: float = 1.0, status: String = "") -> bool:
+    if player.invulnerability > 0.0 or StatusSystem.has_flag("player", "invulnerable"):
         return false
     var attack: Dictionary = RPG.roll_to_hit(RunState.rng, to_hit, RunState.ac)
     if not bool(attack["hit"]):
@@ -189,7 +368,8 @@ func hit_player(to_hit: int, die: int, damage_bonus: int, source: String = "enem
     var damage: int = RPG.roll_damage(RunState.rng, die, damage_bonus, bool(attack["critical"]))
     if damage_mult != 1.0:
         damage = maxi(1, int(floorf(float(damage) * damage_mult)))
-    apply_damage(player, damage, {"critical": bool(attack["critical"]), "source": source})
+    apply_damage(player, damage, {"critical": bool(attack["critical"]), "source": source,
+        "status": status})
     return true
 
 
@@ -198,9 +378,16 @@ func hit_player(to_hit: int, die: int, damage_bonus: int, source: String = "enem
 ## (int, optional enemy index hint), damage_type ("physical" default), slot
 ## ("melee"/"ranged"), direction (Vector2 of travel). Returns the damage applied.
 ## Enemy side, in order: phase-roar invulnerability, Enemies.mitigate()
-## (resistances, front guard, DR), then ward and shield pools absorb.
-## Feature teams: resistances, shields, status effects and on-hit item
-## triggers belong here, before HP changes.
+## (resistances, front guard, DR), then ward and shield pools absorb, then the
+## `shielded` status (2B); after the HP change: on_hit (player attacks, i.e.
+## source "player"), death, room_cleared, then on_kill (player, status: and
+## effect: sources). Player side (2B): `evasive` ignores the hit, then
+## damage_taken_mult, then `shielded` absorbs; after the HP change the
+## context `status` is applied and on_damage_taken fires. Status ticks
+## (source "status:<id>") do not start hit i-frames.
+## Wave 2B context keys: weapon_id, knockback (px), knockback_direction
+## (Vector2), effects (weapon effect ids), status (to apply on the player),
+## triggers (false suppresses item triggers). Knockback is carried, not applied.
 func apply_damage(target, amount: int, context: Dictionary = {}) -> int:
     if amount <= 0:
         return 0
@@ -229,6 +416,7 @@ func _damage_enemy(foe: Dictionary, amount: int, context: Dictionary) -> int:
         var absorbed: int = mini(int(foe.get(pool, 0)), amount)
         foe[pool] = int(foe.get(pool, 0)) - absorbed
         amount -= absorbed
+    amount = StatusSystem.absorb(foe, amount)
     if amount <= 0:
         Events.say("%s's shield soaks the hit." % label, "combat")
         return 0
@@ -236,6 +424,12 @@ func _damage_enemy(foe: Dictionary, amount: int, context: Dictionary) -> int:
     Events.enemy_damaged.emit(String(foe["instance_id"]), amount,
         bool(context.get("critical", false)))
     Events.say("Hit %s for %d damage" % [label, amount], "combat")
+    var triggers: bool = bool(context.get("triggers", true))
+    if triggers and String(context.get("source", "")) == "player":
+        EffectRunner.fire(self, "on_hit", {"target": foe, "slot": String(context.get("slot", "")),
+            "weapon_id": String(context.get("weapon_id", "")), "damage": amount,
+            "origin": Vector2(foe["pos"])}, String(context.get("slot", "")),
+            String(context.get("weapon_id", "")))
     if int(foe["hp"]) > 0:
         _check_phase(foe, definition)
         return amount
@@ -254,7 +448,19 @@ func _damage_enemy(foe: Dictionary, amount: int, context: Dictionary) -> int:
     _on_enemy_death(foe)
     if foes.is_empty():
         Events.room_cleared.emit(RunState.current_room_id)
+    if triggers and _credits_player(context):
+        EffectRunner.fire(self, "on_kill", {"target": foe, "slot": String(context.get("slot", "")),
+            "weapon_id": String(context.get("weapon_id", "")), "origin": Vector2(foe["pos"])},
+            String(context.get("slot", "")), String(context.get("weapon_id", "")))
     return amount
+
+
+static func _credits_player(context: Dictionary) -> bool:
+    var source: String = String(context.get("source", ""))
+    for prefix in PLAYER_SOURCES:
+        if source == prefix or (prefix.ends_with(":") and source.begins_with(prefix)):
+            return true
+    return false
 
 
 ## Death side effects: summons die with their summoner (0 XP), volatile elites
@@ -302,13 +508,34 @@ func _check_phase(foe: Dictionary, definition: Dictionary) -> void:
 
 
 func _damage_player(amount: int, context: Dictionary) -> int:
+    var source: String = String(context.get("source", "enemy"))
+    var from_status: bool = source.begins_with("status:")
+    if StatusSystem.has_flag("player", "invulnerable"):
+        return 0
+    var mult: float = float(Loadout.player_stats().get("damage_taken_mult", 1.0))
+    if mult != 1.0:
+        amount = maxi(0 if mult <= 0.0 else 1, int(floorf(float(amount) * mult)))
+    amount = StatusSystem.absorb("player", amount)
+    if amount <= 0:
+        Events.say("Your shield absorbs the hit.", "combat")
+        return 0
     var remaining: int = maxi(0, RunState.hp - amount)
     Events.say("You take %d damage. %d/%d HP." % [amount, remaining, RunState.max_hp], "combat")
-    player.start_invulnerability()
-    return RunState.apply_damage_to_player(amount, String(context.get("source", "enemy")))
+    if not from_status:
+        player.start_invulnerability()
+    var applied: int = RunState.apply_damage_to_player(amount, source)
+    if applied <= 0 or RunState.hp <= 0:
+        return applied
+    var status: String = String(context.get("status", ""))
+    if status != "":
+        StatusSystem.apply_default("player", status, source)
+    if bool(context.get("triggers", true)):
+        EffectRunner.fire(self, "on_damage_taken", {"damage": applied, "source": source})
+    return applied
 
 
 func update_projectiles(delta: float) -> void:
+    _update_pending_shots(delta)
     var obstacles: Dictionary = blocked()
     for i in range(projectiles.size() - 1, -1, -1):
         if i >= projectiles.size():
@@ -323,12 +550,24 @@ func update_projectiles(delta: float) -> void:
             continue
         var collided := false
         if String(bullet["owner"]) == "player":
+            # Wave 2B: a projectile hits each enemy once and passes through
+            # `pierce` of them (prototype bolts have no "hit" registry: pierce 0).
             var foes: Array = enemies()
+            var struck: Dictionary = bullet.get("hit", {})
             for j in range(foes.size() - 1, -1, -1):
+                if struck.has(String(foes[j]["instance_id"])):
+                    continue
                 if position.distance_to(Vector2(foes[j]["pos"])) < float(foes[j]["radius"]) + HIT_SLOP:
+                    struck[String(foes[j]["instance_id"])] = true
+                    bullet["hit"] = struck
+                    var direction: Vector2 = Vector2(bullet["velocity"]).normalized()
                     hit_enemy(j, int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]),
-                        {"slot": "ranged", "direction": Vector2(bullet["velocity"]).normalized()})
-                    collided = true
+                        {"slot": "ranged", "direction": direction,
+                            "weapon_id": String(bullet.get("weapon_id", "")),
+                            "knockback": float(bullet.get("knockback", 0.0)),
+                            "knockback_direction": direction,
+                            "effects": bullet.get("effects", [])})
+                    collided = struck.size() > int(bullet.get("pierce", 0))
                     break
         elif position.distance_to(player.world_position) < Player.RADIUS + HIT_SLOP:
             hit_player(int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]),
@@ -338,18 +577,48 @@ func update_projectiles(delta: float) -> void:
             projectiles.remove_at(i)
 
 
+## Fires queued burst shots whose delay elapsed and ages beam flashes.
+func _update_pending_shots(delta: float) -> void:
+    for i in range(beams.size() - 1, -1, -1):
+        beams[i]["ttl"] = float(beams[i]["ttl"]) - delta
+        if float(beams[i]["ttl"]) <= 0.0:
+            beams.remove_at(i)
+    if pending_shots.is_empty():
+        return
+    var due: Array[Dictionary] = []
+    for i in range(pending_shots.size() - 1, -1, -1):
+        pending_shots[i]["delay"] = float(pending_shots[i]["delay"]) - delta
+        if float(pending_shots[i]["delay"]) <= 0.0:
+            due.push_front(pending_shots[i])
+            pending_shots.remove_at(i)
+    for entry in due:
+        var profile: Dictionary = Loadout.attack_profile("ranged", String(entry["weapon_id"]))
+        _spawn_player_shot(profile, _jittered(player.aim_direction, profile))
+
+
 ## Steps every enemy's state machine (dormancy, wind-up, resolution, recovery)
 ## and resolves the actions it returns. Hazards tick in update_hazards().
 func update_enemies(delta: float) -> void:
     _track_player(delta)
     var foes: Array = enemies()
-    var world := {"player_pos": player.world_position, "player_velocity": player_velocity,
+    # Wave 2B: a concealed crawler is replaced by its decoy as the AI target;
+    # slowed/hasted scale each enemy's speed for this step only.
+    var decoy: Vector2 = StatusSystem.decoy_position()
+    var world := {"player_pos": player.world_position if decoy == Vector2.INF else decoy,
+        "player_velocity": player_velocity if decoy == Vector2.INF else Vector2.ZERO,
         "blocked": blocked(), "allies": foes}
     for foe in foes.duplicate():
         if int(foe["hp"]) <= 0:
             continue
         var definition: Dictionary = definition_of(foe)
-        for action in Enemies.step(foe, definition, delta, world):
+        var speed_mult: float = StatusSystem.speed_multiplier(foe)
+        var base_speed = foe.get("speed")
+        if speed_mult != 1.0 and base_speed != null:
+            foe["speed"] = float(base_speed) * speed_mult
+        var actions: Array[Dictionary] = Enemies.step(foe, definition, delta, world)
+        if speed_mult != 1.0 and base_speed != null:
+            foe["speed"] = base_speed
+        for action in actions:
             _resolve_enemy_action(foe, definition, action)
 
 
@@ -365,13 +634,15 @@ func _resolve_enemy_action(foe: Dictionary, definition: Dictionary, action: Dict
     var source: String = String(foe["definition"])
     match String(action["type"]):
         "strike":
-            if not bool(action["hit"]):
+            # Wave 2B: while concealed, strikes land on the decoy.
+            if not bool(action["hit"]) or StatusSystem.has_flag("player", "untargetable"):
                 return
             var landed := true
             if attack.has("damage_die"):
                 var numbers: Dictionary = Enemies.attack_numbers(foe, definition, attack)
                 landed = hit_player(int(numbers["to_hit"]), int(numbers["die"]),
-                    int(numbers["bonus"]), source, float(numbers["mult"]))
+                    int(numbers["bonus"]), source, float(numbers["mult"]),
+                    String(attack.get("status", "")))
             if not landed:
                 return
             var obstacles: Dictionary = blocked()

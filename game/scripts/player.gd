@@ -91,18 +91,19 @@ func aim_at(target: Vector2) -> void:
 
 
 ## True (and starts the cooldown) when `fire` is held and the weapon is ready.
-func try_fire() -> bool:
+## Wave 2B: Game passes the equipped weapon's cooldown (attack profile).
+func try_fire(cooldown: float = FIRE_COOLDOWN) -> bool:
     if not Input.is_action_pressed("fire") or fire_cooldown > 0.0:
         return false
-    fire_cooldown = FIRE_COOLDOWN
+    fire_cooldown = cooldown
     return true
 
 
 ## True (and starts the cooldown and arc telegraph) when `melee` is held and ready.
-func try_melee() -> bool:
+func try_melee(cooldown: float = MELEE_COOLDOWN) -> bool:
     if not Input.is_action_pressed("melee") or melee_cooldown > 0.0:
         return false
-    melee_cooldown = MELEE_COOLDOWN
+    melee_cooldown = cooldown
     melee_flash = MELEE_FLASH
     return true
 

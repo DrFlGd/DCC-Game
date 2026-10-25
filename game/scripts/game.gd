@@ -350,7 +350,10 @@ func _physics_process(delta: float) -> void:
     if state != State.RUNNING:
         _redraw()
         return
-    # Wave 2D: hit-stop freezes the simulation; only the rest of the frame runs.
+    # Wave 2D: a dodge press is buffered first so a press during hit-stop is
+    # kept; hit-stop then freezes the simulation and only the rest of the frame runs.
+    if Input.is_action_just_pressed("dodge"):
+        player.dodge_buffer = float(player.dodge_settings["buffer"])
     var step: float = combat.advance_feedback(delta)
     if step <= 0.0:
         _redraw()
@@ -359,8 +362,6 @@ func _physics_process(delta: float) -> void:
     RunState.regen_stamina(step)
     player.tick_timers(step)
     var axis: Vector2 = player.read_move_axis()
-    if Input.is_action_just_pressed("dodge"):
-        player.dodge_buffer = float(player.dodge_settings["buffer"])
     if player.dodge_buffer > 0.0:
         try_dodge(axis)
     var change: Vector2 = player.step_dash(step) if player.is_dodging() \

@@ -5,7 +5,8 @@
     "rooms_by_depth": [22, 26, 30, 34, 40, 44],
     "rooms_per_extra_depth": 6,
     "max_rooms": 80,
-    "intermission_heal_ratio": 0.5
+    "intermission_heal_ratio": 0.5,
+    "starting_loadout": ["wpn_crowbar", "wpn_nail_pistol"]
   },
   "start_ticks": 26,
   "player_speed": 105,
@@ -160,5 +161,52 @@
   },
   "obstacle_count": 38,
   "stat_points_per_level": 2,
-  "stat_score_cap": 20
+  "stat_score_cap": 20,
+  "items": {
+    "consumable_slots": 6,
+    "pickup_radius": 10,
+    "hover_radius": 14,
+    "drop_spread": 18,
+    "floor_start_every_floor": true,
+    "room_clear_kinds": ["normal", "elite", "trap"],
+    "room_clear_chance_by_depth": [
+      {
+        "min_depth": 1,
+        "chance": 0.8
+      },
+      {
+        "min_depth": 3,
+        "chance": 0.9
+      },
+      {
+        "min_depth": 5,
+        "chance": 1.0
+      }
+    ],
+    "nearby_enemy_radius": 64
+  },
+  "credits": {
+    "start": 0,
+    "per_kill_xp_ratio": 0.1,
+    "min_per_kill": 1,
+    "room_clear": {
+      "normal": 4,
+      "elite": 10,
+      "trap": 4,
+      "boss": 20
+    }
+  },
+  "shop": {
+    "offers": 3,
+    "rarity_price_multipliers": {
+      "common": 1.0,
+      "uncommon": 1.25,
+      "rare": 1.5,
+      "epic": 2.0,
+      "legendary": 3.0
+    },
+    "cha_discount_per_mod": 0.1,
+    "max_discount": 0.5,
+    "min_price": 1
+  }
 }

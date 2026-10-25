@@ -162,7 +162,7 @@ func _test_contents() -> void:
     var kinds: Array = []
     for entry in guild["interactables"]:
         kinds.append(entry["kind"])
-    check(kinds == ["rest", "shop_sign"], "guild hall has a rest station and the shop sign")
+    check(kinds == ["rest", "shop"], "guild hall has a rest station and the shop")
 
 
 func _enter_room(game, rs: Node, id: int) -> void:
@@ -267,9 +267,13 @@ func _test_guild_rest(game, rs: Node) -> void:
     rs.hp = 2
     game.services.try_interact()
     check(rs.hp == 2 and rests == 1, "rest only once per floor")
-    var sign: Dictionary = _feature(rs, "shop_sign")
-    game.player.world_position = Vector2(sign["pos"]) + Vector2(0, 16)
-    check(game.services.try_interact() and game.services.try_interact(), "shop sign is repeatable")
+    # Wave 2B: the shop sign became the guild shop (a repeatable choice dialog).
+    var shop: Dictionary = _feature(rs, "shop")
+    game.player.world_position = Vector2(shop["pos"]) + Vector2(0, 16)
+    check(game.services.try_interact() and game.services.is_modal_open(), "shop opens its dialog")
+    game.services.dialog.cancel()
+    check(game.services.try_interact(), "shop is repeatable")
+    game.services.dialog.cancel()
     # A new floor brings a new guild hall and a fresh rest.
     game._start_floor(2)
     _enter_room(game, rs, int(rs.floor["guild_id"]))

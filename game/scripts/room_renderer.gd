@@ -20,6 +20,8 @@ const Enemies = preload("res://scripts/enemy_system.gd")
 const Hazards = preload("res://scripts/hazards.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const Settings = preload("res://scripts/core/settings.gd")
+const Inventory = preload("res://scripts/inventory.gd")
+const StatusSystem = preload("res://scripts/status_system.gd")
 
 const TILE := 16.0
 const SIZE := 24
@@ -113,6 +115,7 @@ func _draw_room() -> void:
     for prop in RunState.current_room().get("props", []):
         _draw_obstacle(prop)
     _draw_room_features()
+    _draw_pickups()
 
     var links: Dictionary = room["neighbors"]
     _draw_walls(links)
@@ -178,7 +181,7 @@ func _draw_room_features() -> void:
             "rest":
                 draw_rect(Rect2(center - Vector2(7, 4), Vector2(14, 8)), Color("#6e9e8a", tint.a))
                 draw_rect(Rect2(center - Vector2(7, 4), Vector2(4, 8)), Color("#e8f2ea", tint.a))
-            "shop_sign":
+            "shop_sign", "shop":
                 draw_rect(Rect2(center - Vector2(6, 7), Vector2(12, 8)), Color("#a77b4f"))
                 draw_line(center + Vector2(0, 1), center + Vector2(0, 7), Color("#6b4a2b"), 2.0)
             _:
@@ -282,8 +285,10 @@ func _draw_actors() -> void:
     _draw_dodge_trail(at)
     _draw_facing_sprite(CRAWLER, at, Vector2(24, 24), player.facing, _crawler_modulation())
     draw_line(at, at + aim * 13.0, Color("#f9dc92"), 1.0)
+    # Wave 2B: the swing outline is the weapon's hit shape (arc / thrust / spin).
     if player.melee_flash > 0.0:
-        draw_arc(at, 30.0, aim.angle() - 0.7, aim.angle() + 0.7, 14, Color("#fff1a7"), 3.0)
+        _draw_swing(combat.last_swing)
+    _draw_item_overlay()
     if player.invulnerability > 0.0:
         draw_arc(at, 12.0, 0.0, TAU, 24, Color(1, 1, 1, 0.42), 1.0)
     _draw_fx()
@@ -391,6 +396,106 @@ func _draw_facing_sprite(sheet: Texture2D, center: Vector2, size: Vector2, facin
 func _text(value: String, position: Vector2, font_size: int, color: Color) -> void:
     draw_string(ThemeDB.fallback_font, position, value,
         HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color)
+
+
+# --- Wave 2B: pickups, swings, beams, decoy and status markers -----------------
+
+## Floor loot: a rarity-coloured diamond (weapons get a blade line, the loot
+## box is a gold crate) with a slow pulse ring. The tooltip is the HUD's job.
+func _draw_pickups() -> void:
+    var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 260.0)
+    for entry in RunState.current_room().get("pickups", []):
+        var center: Vector2 = entry["pos"]
+        var id: String = String(entry["id"])
+        if id == "loot_box":
+            draw_rect(Rect2(center - Vector2(7, 6), Vector2(14, 12)), Color("#b8862f"))
+            draw_rect(Rect2(center - Vector2(7, 6), Vector2(14, 12)), Color("#ffe08a"), false, 1.0)
+            draw_line(center + Vector2(-7, -1), center + Vector2(7, -1), Color("#ffe08a"), 1.0)
+            draw_arc(center, 11.0 + pulse * 2.0, 0.0, TAU, 24, Color("#ffd24a", 0.6), 1.0)
+            continue
+        var info: Dictionary = Inventory.label(id)
+        var color: Color = info["color"]
+        var diamond := PackedVector2Array([center + Vector2(0, -6), center + Vector2(5, 0),
+            center + Vector2(0, 6), center + Vector2(-5, 0)])
+        draw_colored_polygon(diamond, Color(color, 0.85))
+        draw_polyline(diamond + PackedVector2Array([center + Vector2(0, -6)]), Color.WHITE, 1.0)
+        if String(info["kind"]) == "weapon":
+            draw_line(center + Vector2(-4, 4), center + Vector2(4, -4), Color("#20262e"), 1.5)
+        draw_arc(center, 8.0 + pulse * 1.5, 0.0, TAU, 20, Color(color, 0.45), 1.0)
+        if int(entry.get("count", 1)) > 1:
+            _text(str(int(entry["count"])), center + Vector2(4, -4), 8, Color.WHITE)
+
+
+## The last swing's hit shape: a sector at reach (arc), a 10 px lane (thrust)
+## or a circle (spin).
+func _draw_swing(swing: Dictionary) -> void:
+    if swing.is_empty():
+        return
+    var origin: Vector2 = player.world_position
+    var aim: Vector2 = swing.get("direction", player.aim_direction)
+    var reach: float = float(swing.get("reach", 32.0))
+    var color := Color("#fff1a7")
+    match String(swing.get("pattern", "arc")):
+        "thrust":
+            var side: Vector2 = aim.orthogonal() * float(swing.get("width", 10.0)) * 0.5
+            var far: Vector2 = origin + aim * reach
+            draw_colored_polygon(PackedVector2Array([origin + side, far + side, far - side,
+                origin - side]), Color(color, 0.25))
+            draw_polyline(PackedVector2Array([origin + side, far + side, far - side,
+                origin - side]), color, 1.5)
+        "spin":
+            draw_circle(origin, reach, Color(color, 0.12))
+            draw_arc(origin, reach, 0.0, TAU, 32, color, 2.0)
+        _:
+            var half: float = deg_to_rad(float(swing.get("arc_degrees", 127.0))) * 0.5
+            var fan := PackedVector2Array([origin])
+            for i in range(15):
+                fan.append(origin + aim.rotated(-half + 2.0 * half * float(i) / 14.0) * reach)
+            draw_colored_polygon(fan, Color(color, 0.18))
+            draw_arc(origin, reach, aim.angle() - half, aim.angle() + half, 16, color, 2.5)
+
+
+## Beam ticks, the concealment decoy and status markers on every actor.
+func _draw_item_overlay() -> void:
+    for beam in combat.beams:
+        var fade: float = clampf(float(beam["ttl"]) / 0.08, 0.0, 1.0)
+        draw_line(beam["from"], beam["to"], Color(1.0, 0.3, 0.25, 0.9 * fade), 2.0)
+        draw_line(beam["from"], beam["to"], Color(1, 1, 1, 0.7 * fade), 0.7)
+    var decoy: Vector2 = StatusSystem.decoy_position()
+    if decoy != Vector2.INF:
+        _draw_facing_sprite(CRAWLER, decoy, Vector2(24, 24), 2, Color(1, 1, 1, 0.55))
+        _text("FAN CLUB", decoy + Vector2(-20, -16), 8, Color("#ffd2f0"))
+    draw_status_markers()
+
+
+## Status pips above each enemy's HP bar and above the crawler: one coloured
+## square per status (StatusSystem.COLORS), with the stack count when > 1.
+## Self-contained: reads RunState and the enemy catalogue only.
+func draw_status_markers() -> void:
+    for foe in RunState.current_room().get("enemies", []):
+        var statuses: Dictionary = foe.get("statuses", {})
+        if statuses.is_empty() or int(foe.get("hp", 0)) <= 0:
+            continue
+        var definition: Dictionary = catalogue.get("enemies", {}).get(foe["definition"], {})
+        var sprite_size: Vector2 = _sheet(String(definition.get("sprite", "rat")))["render"]
+        var top: float = Vector2(foe["pos"]).y - sprite_size.y * 0.5 - 13.0
+        _draw_status_row(statuses, Vector2(Vector2(foe["pos"]).x, top))
+    if not RunState.statuses.is_empty():
+        _draw_status_row(RunState.statuses, player.world_position + Vector2(0, -19))
+
+
+func _draw_status_row(statuses: Dictionary, center: Vector2) -> void:
+    var ids: Array = statuses.keys()
+    ids.sort()
+    var start: float = center.x - float(ids.size()) * 3.5
+    for i in range(ids.size()):
+        var at := Vector2(start + float(i) * 7.0, center.y)
+        var color: Color = StatusSystem.COLORS.get(String(ids[i]), Color.WHITE)
+        draw_rect(Rect2(at, Vector2(5, 5)), color)
+        draw_rect(Rect2(at, Vector2(5, 5)), Color("#0b0f16"), false, 1.0)
+        var stacks: int = int(statuses[ids[i]].get("stacks", 1))
+        if stacks > 1:
+            _text(str(stacks), at + Vector2(0, -1), 6, Color.WHITE)
 
 
 # --- Combat feel (Wave 2D) -------------------------------------------------------

@@ -1,6 +1,6 @@
 # Combat and RPG — rules v1
 
-- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2D implemented §3 (dodge, stamina, movement penalties), the knockback step of §6, §8 (hit feedback) and §9 (D-07 door lock); each section lists its deviations. Everything else labelled *Proposed default* is the target for 2B (inventory) and 2F (skills).
+- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2D implemented §3 (dodge, stamina, movement penalties), the knockback step of §6, §8 (hit feedback) and §9 (D-07 door lock). Wave 2B implemented the weapon patterns (§4.1, §5), statuses on actors (§7), the item side of the damage pipeline (§6) and the D-09 inventory (§12). Each section lists its deviations. Everything else labelled *Proposed default* is the target for 2F (skills).
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 1C and 1D
 - **Decisions covered:** D-02 (aim input), D-07 (door lock), D-09 (inventory and resources), D-10 (companions), D-14 (melee ruleset)
@@ -47,19 +47,23 @@ Rows marked *1A* are bound in `project.godot` today. Rows marked *proposed* are 
 
 | Action | Keyboard / mouse | Gamepad | Status |
 | --- | --- | --- | --- |
-| `move_up/down/left/right` | WASD / arrows | Left stick, D-pad | 1A |
+| `move_up/down/left/right` | WASD / arrows | Left stick | 1A (the D-pad was removed in 2B and now drives the belt) |
 | `aim_up/down/left/right` | (mouse position) | Right stick | 1A |
 | `fire` | LMB (hold repeats) | RT | 1A |
 | `melee` | Space (hold repeats) | RB | 1A |
 | `dodge` | Shift | B | 1A (bound; action implemented in 2D) |
-| `use_item` (active item) | Q | LB | 1A (bound) |
+| `use_item` (active item) | Q | LB | **2B** (live) |
 | `swap_weapon` | Tab | Y | 1A (bound; reserved, see §12) |
-| `interact` (pick up, shrine, service) | E | A | 1A (bound) |
+| `interact` (pick up, shrine, service) | E | A | 1A; 2B adds weapon/active pickups, the loot box and the shop |
 | `map` | M | Back/View | 1A (bound; full map in 2E) |
 | `pause` | Esc | Start/Menu | 1A |
 | `restart_seed` / `new_seed` / `debug_level_up` | R / N / F9 | — | 1A. Proposed: R and N only on the summary screen or in debug builds, to avoid accidental restarts |
 | `use_skill_1`, `use_skill_2` (active skills, §11) | Z / X | LT / X | proposed (2F) |
-| `use_consumable_1..6` | 1–6 | left-stick click uses the selected slot; right-stick click cycles slots | proposed (2B) |
+| `use_consumable` (selected belt slot) | C | D-pad down | **2B** |
+| `next_consumable` (cycle the belt) | V | D-pad right | **2B** |
+| `toggle_log` | L | L3 | 2G |
+
+*Implemented (2B), deviation:* one `use_consumable` action plus `next_consumable` instead of six `use_consumable_1..6` actions (number keys stay free for dialogs). The stick clicks were taken (L3 is `toggle_log`), so the belt uses the D-pad, which no longer duplicates the left stick for movement. Free gamepad inputs left: X (proposed `use_skill_2`), LT (proposed `use_skill_1`), R3, D-pad up/left. `tests/inventory_test.gd` fails if two gameplay actions share a key or button.
 
 Gamepad aim keeps the last direction when the stick is released (deadzone 0.25). Aim assist is off; an optional 8° magnetism setting is an open question.
 
@@ -68,7 +72,7 @@ Gamepad aim keeps the last direction when the stick is released (deadzone 0.25).
 **Implemented in Wave 2D** (`player.gd` dodge/dash state and attack phases, `RunState` stamina, `Game.try_dodge`, `Combat.player_move_multiplier`; tunables in `prototype_rules.json` `feel.stamina`, `feel.dodge`, `feel.attack_timing`, `feel.attack_move_multipliers`). Deviations:
 
 - The roll follows an ease-out curve (fast start), covering exactly 48 px in 0.25 s.
-- I-frames are a dedicated `player.dodge_iframes` timer that blocks every damage source, DoT included. The `evasive` status is not applied yet, because actors have no status map until 2B; `Combat.on_player_dodged()` carries a TODO for it.
+- I-frames are a dedicated `player.dodge_iframes` timer that blocks every damage source, DoT included. Since the 2B merge, `Combat.on_player_dodged()` also applies the `evasive` status for the same window and fires `on_dodge`. ItemSystem mirrors any `evasive` status, such as one from an item, into `dodge_iframes`.
 - The prototype melee and ranged attacks still resolve instantly, so they have no wind-up. Melee has 0.10 s active and 0.18 s recovery (arc defaults), and ranged has 0.28 s recovery, so holding `fire` keeps the 85 % speed. 2B's patterns call `player.begin_attack(pattern, windup, active, recovery)`.
 - A dodge press is buffered for 0.12 s, so a press during recovery still fires.
 - WIS scaling is +10 % regen per positive modifier, so the starting WIS 12 regenerates 33/s. The two-chain rule holds: the third dodge is ready 0.75 s after the second.
@@ -107,6 +111,8 @@ The shape numbers (reach, angle, cooldown, dice, knockback, pierce) come from ea
 
 Proposed new optional weapon fields for 2B/2D (to be added to the content schema): `windup`, `active` and `recovery` in seconds. When absent, the defaults above apply. `cooldown` keeps its 1B meaning: the time from one swing start to the next.
 
+*Implemented (2B):* the three hit shapes, targets per swing and knockback directions in the table (`Combat.melee_hits()`; thrust half-width 5 px plus the target radius; arc and spin keep the prototype's resolution order), read from `Loadout.attack_profile("melee")` with passives and statuses applied. The swing outline is drawn as the real shape (sector at `reach` with the weapon's `arc_degrees`, the thrust lane, the spin circle), which fixes the ±40° / ±63° mismatch. After the 2D merge, a swing calls `player.begin_attack(<weapon pattern>, 0, melee_active, melee_recovery)`, so the per-pattern movement penalty applies. The weapon's `knockback` (STR-scaled like 2D's default shove) goes in the damage context, and 2D's finalise step applies it. **Deviations:** hits still resolve on the press. There is no wind-up, the phase lengths come from `feel.attack_timing` rather than per-weapon data, and there is no per-swing LOS. `wpn_crowbar`'s 127° gives a dot threshold of 0.446 instead of 0.45.
+
 ### 4.2 Rules
 
 - **Active frames:** during the active window, the hit shape is tested every physics tick against enemy circles. Each enemy can be hit at most **once per swing** (per-swing hit registry). Each hit fires the content trigger `on_hit` once per enemy.
@@ -128,6 +134,7 @@ Proposed new optional weapon fields for 2B/2D (to be added to the content schema
   - `burst`: `burst_count` shots `burst_interval` apart, with jitter;
   - `beam`: a placeholder. Proposed: hitscan ticks every 0.1 s along `range`, blocked by obstacles.
   Each projectile rolls to hit separately (CONTENT_RULES §5).
+- *Implemented (2B):* all four patterns, from `Loadout.attack_profile("ranged")`. `spread` fans `projectile_count` pellets evenly over `spread_degrees`; `burst` fires the first shot at once and queues the rest `burst_interval` apart (the staple rifle: 3 shots over 0.14 s), each jittered by ±`spread_degrees`/2 with `RunState.rng`; `beam` is one hitscan tick per trigger pull, so it ticks every `cooldown` (0.2 s for the laser pointer, not the proposed 0.1 s) while held, along `range`, stopped by obstacles, hitting 1 + `pierce` enemies nearest first. Pierce uses a per-projectile hit registry (`projectile["hit"]`). Extra projectiles from modifiers on a no-spread weapon fan 8° apart. Projectiles carry `pierce`, `knockback`, `effects`, `weapon_id` and `slot`; a projectile keeps the weapon that fired it for `on_hit`.
 - **Collision:** projectiles are removed on obstacle cells (as implemented). Each projectile hits once, unless `pierce > 0`, in which case it can hit up to `pierce + 1` distinct targets.
 - **Hostile projectile guardrails** (per band, [ENEMY_TIERS.md §4](ENEMY_TIERS.md#4-stat-guardrails-per-band)): maximum speed 140 / 160 / 180 / 200 / 230 px/s. Drawn radius ≥ 2.5 px with a contrasting outline. At most 12 hostile projectiles alive in the room at band I, rising to 24 at band V.
 - **Dodging projectiles:** the crawler's 105 px/s lateral speed must always be enough to sidestep a single aimed shot fired from ≥ 120 px. That is why a projectile's band cap is no more than about 2.2× the crawler's speed.
@@ -150,9 +157,13 @@ Wave 1A made `combat.gd` `apply_damage(target, amount, context)` the **only** pl
 - **AC vs armour:** AC decides **whether** a hit lands, and armour DR decides **how much** gets through. Both exist on purpose.
 - **Status ticks and `damage` effects** (1B: auto-hit, no AC) enter at step 4 with `context.source = "status:<id>"` or `"effect:<id>"`.
 
+*Implemented (2B + 2C):* step 1–2 in `hit_enemy` / `hit_player` with the weapon's numbers from `Loadout.attack_profile()` (step 3's passive damage and attack bonuses are already inside the profile, so they are not added again in `apply_damage`). Enemy side of `apply_damage`: phase-roar invulnerability, `Enemies.mitigate()` (resistances, front guard, DR, 2C), ward and shield pools (2C), then the `shielded` status (2B); after the HP change: `Events.enemy_damaged`, `on_hit` (only for player attacks, `source == "player"`), death, `room_cleared`, then `on_kill` (credited for `player`, `status:` and `effect:` sources). Player side: dodge i-frames (which `evasive` sets) ignore the hit, `damage_taken_mult`, `shielded` absorbs, HP changes (status ticks do not start the 0.8 s hit i-frames), then the context `status` is applied (enemy attacks and hazards such as spore puddles, firebombs and floods) and `on_damage_taken` fires. Context keys added by 2B: `weapon_id`, `knockback` (px; applied by 2D's finalise step), `direction` (`knockback_direction` is kept as an alias), `effects` (the weapon's effect ids), `status`, `triggers` (false suppresses item triggers), plus `effect`/`status`/`applied_by` on effect and DoT damage. **Not yet:** `weakened` / `vulnerable` / `marked` (not in the data), `crit_threshold`, and the `breakdown` array.
+
 ## 7. Status effects
 
-**Implemented as data (Wave 1B, `effects.json`):** see [CONTENT_RULES.md §4](CONTENT_RULES.md#4-statuses) for the full stacking rules. Actors do not carry a status map yet; 2B adds one.
+**Implemented as data (Wave 1B, `effects.json`):** see [CONTENT_RULES.md §4](CONTENT_RULES.md#4-statuses) for the full stacking rules.
+
+*Implemented on actors (2B, [`status_system.gd`](../../game/scripts/status_system.gd)):* the crawler's map is `RunState.statuses` and each enemy's is `enemy["statuses"]`; `ItemSystem` ticks both every frame through `EffectResolver.tick_statuses`. Periodic damage goes through `combat.apply_damage` (`source = "status:<id>"`, damage type from the status tag: fire, toxic, else physical, so enemy resistances and DR apply). `slowed` / `hasted` scale the crawler's speed and each enemy's `speed` for its AI step; `hasted` also shortens both attack cooldowns. `stunned` blocks the crawler's movement and attacks and puts an enemy's AI into its 2C `stunned` state (interrupting a wind-up). `shielded` absorbs before HP on both sides. `evasive` holds the crawler's dodge i-frames, and every dodge applies it for the i-frame window (then `on_dodge` fires). `concealed` places a decoy where it was used: enemies path to it and their strikes land on it (projectiles already fired can still hit). Every rule below is implemented except the proposed statuses themselves. Markers are coloured pips above HP bars (`room_renderer.gd` `draw_status_markers()`), and the HUD lists the crawler's statuses with their time left.
 
 | Status | Behaviour (1B defaults) |
 | --- | --- |
@@ -285,6 +296,19 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 
 - `swap_weapon` (bound in 1A) has no job under this default, because both weapon slots are always equipped. It is reserved for a possible spare-weapon slot (open question 8).
 - Picking up an item never pauses the game. Its tooltip appears at 1.5× scale while the crawler stands on it.
+
+**Implemented (Wave 2B), with deviations:**
+
+- The inventory is the dictionary `RunState.inventory`, managed by `scripts/inventory.gd`: `melee`, `ranged`, `active` plus `active_state`, `passives` and `consumables` as `[{id, count}]` lists, the `selected` belt slot, `credits` and `effect_cooldowns`. Inventory changes emit `Events.inventory_changed`.
+- Weapon and active swaps need `interact`. The old item drops at the crawler's feet as a pickup.
+- Actives recharge in all three units (`seconds`, `rooms_cleared`, `floors`). `charges` is honoured, and the HUD shows a recharge arc.
+- The belt holds 6 slots. `C` (D-pad down) uses the selected slot, and `V` (D-pad right) moves to the next one. When the belt is full, a new id waits on the floor until `interact` swaps it for the selected slot.
+- Passives and consumables are collected on contact. Weapons, actives and loot boxes need `interact`.
+- **Credits** are the run currency: they come from kills (XP × 0.1, minimum 1) and room clears, and are spent at the guild-hall `shop`.
+- The HUD has a loadout panel (weapons, active, belt, credits, statuses) and the 1.5× floor tooltip. The pause menu has an Inventory page.
+- Stamina is Wave 2D's pool (§3). A dodge also applies the `evasive` status for its i-frame window and fires loadout `on_dodge` effects.
+- **Deviation:** `swap_weapon` stays unused.
+- **Deviation:** a passive already at `stack_max` stays on the floor instead of being picked up.
 
 ## 13. Companions — D-10
 

@@ -10,6 +10,7 @@ extends Node
 ## RNG used for combat rolls. Floor, obstacle and encounter generation use
 ## their own seeded RNGs derived from floor_seed().
 const RPG = preload("res://scripts/rpg_rules.gd")
+const Resolver = preload("res://scripts/content/effect_resolver.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const CONFIG_PATH := "res://data/prototype_rules.json"
 const DEFAULT_SEED := 424242
@@ -18,7 +19,8 @@ const DEFAULT_SEED := 424242
 ## in-floor grant (first-entry grants, positive add_ticks).
 const TELEMETRY_KEYS := ["rooms_entered", "shots_fired", "melee_swings", "kills",
     "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds",
-    "floors_cleared", "ticks_granted", "dodges", "failsafe_despawns"]
+    "floors_cleared", "ticks_granted", "dodges", "failsafe_despawns", "items_collected",
+    "loot_boxes_opened", "credits_earned"]
 ## Telemetry keys snapshotted per floor for the intermission recap.
 const FLOOR_KEYS := ["rooms_entered", "kills", "damage_dealt", "damage_taken",
     "ticks_spent", "ticks_granted", "run_time_seconds"]
@@ -69,8 +71,20 @@ var visited: Dictionary = {}
 var room_states: Dictionary = {}
 ## Every CollapsePolicy.evaluate() entry applied on this floor, in order.
 var tick_ledger: Array[Dictionary] = []
-## Reserved for the items team: item_id -> stack/instance data.
+## The crawler's inventory (Wave 2B). Read and change it through
+## scripts/inventory.gd, which documents the shape: melee, ranged, active,
+## active_state, passives [{id, count}], consumables [{id, count}], selected,
+## credits, effect_cooldowns. Empty until Game's ItemSystem fills the starting
+## loadout on run_started.
 var inventory: Dictionary = {}
+## The crawler's active statuses (Wave 2B): status id -> EffectResolver
+## instance. Changed only through scripts/status_system.gd. Cleared per run
+## and per floor.
+var statuses: Dictionary = {}
+## Passive stat modifiers from items and skills (EffectResolver modifier
+## records). sync_progression() applies them to max_hp and ac; set them with
+## set_stat_modifiers().
+var stat_modifiers: Array = []
 ## Reserved for the skills team: learned skill ids.
 var skills: Array = []
 ## Counters for tuning; see TELEMETRY_KEYS. Updated from Events signals.
@@ -100,6 +114,9 @@ func _enter_tree() -> void:
     _connect(Events.room_entered, _on_room_entered)
     _connect(Events.floor_cleared, _on_floor_cleared)
     _connect(Events.dodged, _on_dodged)
+    _connect(Events.item_picked_up, _on_item_picked_up)
+    _connect(Events.loot_box_opened, _on_loot_box_opened)
+    _connect(Events.credits_changed, _on_credits_changed)
 
 
 func load_config(path: String = CONFIG_PATH) -> bool:
@@ -134,6 +151,8 @@ func start_run(new_seed: int) -> void:
     floor_history.clear()
     floor_budget = 0
     inventory = {}
+    statuses = {}
+    stat_modifiers = []
     skills = []
     tick_ledger.clear()
     _reset_telemetry()
@@ -154,6 +173,7 @@ func reset_for_floor(new_depth: int, budget: int = -1) -> void:
     room_states.clear()
     boss_defeated = false
     tick_ledger.clear()
+    statuses = {}
     # Before the budget is set, so its ticks_changed never reads as a stabilise.
     grace = Collapse.grace_initial()
     if budget >= 0:
@@ -245,9 +265,28 @@ func current_room_kind() -> String:
 func sync_progression() -> void:
     var progression: Dictionary = RPG.player_progression(xp, ability_scores)
     level = int(progression["level"])
-    max_hp = int(progression["max_hp"])
-    ac = int(progression["ac"])
     proficiency = int(progression["proficiency"])
+    # Wave 2B: item and skill passives (add, then multiply, then set).
+    var derived: Dictionary = Resolver.apply_stat_modifiers(
+        {"max_hp": int(progression["max_hp"]), "ac": int(progression["ac"])}, stat_modifiers)
+    max_hp = maxi(1, int(derived["max_hp"]))
+    ac = int(derived["ac"])
+
+
+## Replaces the passive stat modifiers (Wave 2B) and re-derives max HP and AC.
+## A max-HP gain heals by the same amount; a loss clamps HP to the new maximum.
+func set_stat_modifiers(modifiers: Array) -> void:
+    var old_max: int = max_hp
+    stat_modifiers = modifiers.duplicate(true)
+    sync_progression()
+    if max_hp > old_max and hp > 0:
+        hp = mini(max_hp, hp + max_hp - old_max)
+    hp = mini(hp, max_hp)
+
+
+## Adds `amount` to a telemetry counter in TELEMETRY_KEYS (for feature nodes).
+func count(key: String, amount: int = 1) -> void:
+    _bump(key, amount)
 
 
 ## Adds XP; emits `xp_gained`, then `level_up` once per award that crosses one or
@@ -473,6 +512,19 @@ func record_failsafe_despawn(count: int) -> void:
 
 func _on_floor_cleared(_depth: int) -> void:
     _bump("floors_cleared")
+
+
+func _on_item_picked_up(_item_id: String) -> void:
+    _bump("items_collected")
+
+
+func _on_loot_box_opened(_room_id: int, _loot_ids: Array) -> void:
+    _bump("loot_boxes_opened")
+
+
+func _on_credits_changed(amount: int, _total: int) -> void:
+    if amount > 0:
+        _bump("credits_earned", amount)
 
 
 func _on_room_entered(_room_id: int, _kind: String, _entry: Dictionary, first_visit: bool) -> void:

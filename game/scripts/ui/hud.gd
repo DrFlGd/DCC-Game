@@ -8,6 +8,8 @@ extends CanvasLayer
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Layout = preload("res://scripts/room_layout.gd")
 const FloorMap = preload("res://scripts/ui/floor_map.gd")
+const Inventory = preload("res://scripts/inventory.gd")
+const StatusSystem = preload("res://scripts/status_system.gd")
 ## Tick counter colour thresholds (COLLAPSE_SYSTEM §8).
 const TICKS_AMBER := 6
 const TICKS_RED := 3
@@ -19,6 +21,9 @@ var message := ""
 var message_category := "info"
 ## Interaction prompt for the feature in reach (set by Game from RoomServices).
 var prompt := ""
+## Pickup under the crawler (ItemSystem.hover, set by Game); its tooltip is
+## drawn at 1.5x above it (COMBAT_AND_RPG §12).
+var hover: Dictionary = {}
 var canvas: Control
 ## Seconds left on the "ROOM CLEAR" flourish (show_room_clear, Wave 2D).
 var room_clear_left := 0.0
@@ -85,9 +90,11 @@ func _draw_hud() -> void:
     _draw_boss_bar(view)
     _draw_clock(view)
     _draw_grace_vignette(view)
+    _draw_loadout(view)
+    _draw_tooltip()
     _draw_prompt(view)
     _draw_room_clear(view)
-    _text("WASD / arrows: move  |  Mouse: aim  |  LMB: shoot  |  Space: melee  |  Shift: dodge  |  E: interact",
+    _text("WASD: move | Mouse: aim | LMB: shoot | Space: melee | Shift: dodge | E: interact | Q: item | C/V: belt",
         Vector2(14, view.y - 46), 14, Color("#dce9f2"))
     _text("Esc: pause / stats | M: map | R: replay | N: new seed | 24x24 room, 16px tiles",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
@@ -154,6 +161,131 @@ func _draw_boss_bar(view: Vector2) -> void:
         "I".repeat(phase + 1) if phase < 3 else str(phase + 1)]
     canvas.draw_string(ThemeDB.fallback_font, origin + Vector2(0, 9), label,
         HORIZONTAL_ALIGNMENT_CENTER, width, 10, Color.WHITE)
+
+
+# --- Loadout panel (Wave 2B) ---------------------------------------------------
+
+## Left-side panel: both weapons, the active item with its recharge arc, the
+## consumable belt (selected slot outlined), credits and the crawler's statuses.
+func _draw_loadout(view: Vector2) -> void:
+    var view_model: Dictionary = Inventory.describe()
+    var width: float = clampf(Vector2(layout["offset"]).x - 24.0, 150.0, 230.0)
+    var origin := Vector2(10, 102)
+    canvas.draw_rect(Rect2(origin, Vector2(width, 214)), Color(0.08, 0.11, 0.16, 0.78))
+    var y: float = origin.y + 16.0
+    _text("LOADOUT", Vector2(origin.x + 8, y), 11, Color("#f2da99"))
+    _text("%d cr" % int(view_model["credits"]), Vector2(origin.x + width - 58, y), 12,
+        Color("#ffd86b"))
+    for slot in ["melee", "ranged"]:
+        y += 18.0
+        var weapon: Dictionary = view_model[slot]
+        _text("M" if slot == "melee" else "R", Vector2(origin.x + 8, y), 11, Color("#8fa3b5"))
+        _fit(String(weapon.get("name", "-")), Vector2(origin.x + 24, y), width - 30.0, 12,
+            weapon.get("color", Color.WHITE))
+    y += 26.0
+    var active: Dictionary = view_model["active"]
+    var center := Vector2(origin.x + 18, y - 4)
+    canvas.draw_arc(center, 9.0, 0.0, TAU, 24, Color("#2c3a4c"), 3.0)
+    if not active.is_empty():
+        var fraction: float = float(active["fraction"])
+        var ring: Color = Color("#7fe6a0") if fraction >= 1.0 else Color("#e0b85a")
+        canvas.draw_arc(center, 9.0, -PI * 0.5, -PI * 0.5 + TAU * fraction, 24, ring, 3.0)
+        _fit("[Q] %s" % active["name"], Vector2(origin.x + 34, y - 6), width - 40.0, 12,
+            active.get("color", Color.WHITE))
+        var detail: String = "%d/%d ready" % [int(active["charges"]), int(active["max_charges"])]
+        if int(active["charges"]) <= 0:
+            detail = _recharge_text(active)
+        _text(detail, Vector2(origin.x + 34, y + 8), 10, Color("#a7b4c2"))
+    else:
+        _text("[Q] no active item", Vector2(origin.x + 34, y - 1), 11, Color("#6f8090"))
+    y += 22.0
+    _text("BELT  [C] use  [V] next", Vector2(origin.x + 8, y), 10, Color("#8fa3b5"))
+    y += 6.0
+    var belt: Array = view_model["consumables"]
+    var box: float = minf(28.0, (width - 16.0 - 5.0 * 4.0) / float(maxi(1, int(view_model["belt_size"]))))
+    for i in range(int(view_model["belt_size"])):
+        var at := Vector2(origin.x + 8 + float(i) * (box + 4.0), y)
+        canvas.draw_rect(Rect2(at, Vector2(box, box)), Color("#1a2330"))
+        if i < belt.size():
+            var entry: Dictionary = belt[i]
+            canvas.draw_rect(Rect2(at + Vector2(2, 2), Vector2(box - 4, box - 4)),
+                Color(entry["color"], 0.35))
+            _text(String(entry["name"]).substr(0, 2).to_upper(), at + Vector2(4, 13), 10, Color.WHITE)
+            _text(str(int(entry["count"])), at + Vector2(box - 10, box - 3), 10, Color("#ffd86b"))
+        if i == int(view_model["selected"]) and i < belt.size():
+            canvas.draw_rect(Rect2(at - Vector2(1, 1), Vector2(box + 2, box + 2)), Color("#fff1a7"),
+                false, 2.0)
+    y += box + 14.0
+    if int(view_model["selected"]) < belt.size():
+        _fit(String(belt[int(view_model["selected"])]["name"]), Vector2(origin.x + 8, y),
+            width - 16.0, 11, Color("#dce9f2"))
+    y += 16.0
+    var parts: PackedStringArray = []
+    var ids: Array = RunState.statuses.keys()
+    ids.sort()
+    for status_id in ids:
+        var instance: Dictionary = RunState.statuses[status_id]
+        var label: String = "%s %.1fs" % [String(status_id).capitalize(), float(instance["remaining"])]
+        if int(instance.get("stacks", 1)) > 1:
+            label += " x%d" % int(instance["stacks"])
+        if status_id == "shielded":
+            label = "Shield %d" % int(instance.get("magnitude", 0))
+        parts.append(label)
+    if not parts.is_empty():
+        _fit(", ".join(parts), Vector2(origin.x + 8, y), width - 16.0, 11, Color("#c9e3ff"))
+
+
+static func _recharge_text(active: Dictionary) -> String:
+    var left: float = maxf(0.0, float(active["cooldown"]) - float(active["progress"]))
+    match String(active["unit"]):
+        "rooms_cleared":
+            return "recharge: %d room%s" % [ceili(left), "" if ceili(left) == 1 else "s"]
+        "floors":
+            return "recharge: %d floor%s" % [ceili(left), "" if ceili(left) == 1 else "s"]
+    return "recharge: %.1fs" % left
+
+
+## Hover tooltip for the pickup under the crawler: name in rarity colour, kind,
+## description, at 1.5x the HUD's small text.
+func _draw_tooltip() -> void:
+    if hover.is_empty():
+        return
+    var id: String = String(hover["id"])
+    var info: Dictionary = {"name": "Sponsor Loot Box", "rarity": "epic", "kind": "crate",
+        "description": "Two rewards inside, never common. Opening it is mandatory for the ratings.",
+        "color": Inventory.RARITY_COLORS["epic"]} if id == "loot_box" else Inventory.label(id)
+    var font: Font = ThemeDB.fallback_font
+    var width := 300.0
+    var anchor: Vector2 = Layout.world_to_screen(Vector2(hover["pos"]), layout)
+    var description: String = String(info["description"])
+    var text_height: float = font.get_multiline_string_size(description,
+        HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 15).y
+    var height: float = 48.0 + text_height
+    var view: Vector2 = layout["viewport"]
+    var at := Vector2(clampf(anchor.x - width * 0.5, 6.0, view.x - width - 6.0),
+        maxf(96.0, anchor.y - height - 18.0))
+    canvas.draw_rect(Rect2(at, Vector2(width, height)), Color(0.05, 0.07, 0.1, 0.92))
+    canvas.draw_rect(Rect2(at, Vector2(width, height)), info["color"], false, 1.5)
+    canvas.draw_string(font, at + Vector2(8, 21), String(info["name"]), HORIZONTAL_ALIGNMENT_LEFT,
+        width - 16.0, 18, info["color"])
+    var count: int = int(hover.get("count", 1))
+    canvas.draw_string(font, at + Vector2(8, 38), "%s %s%s" % [String(info["rarity"]).to_upper(),
+        String(info["kind"]), " x%d" % count if count > 1 else ""], HORIZONTAL_ALIGNMENT_LEFT,
+        -1.0, 14, Color("#a7b4c2"))
+    canvas.draw_multiline_string(font, at + Vector2(8, 56), description, HORIZONTAL_ALIGNMENT_LEFT,
+        width - 16.0, 15, -1, Color("#e5eafa"))
+
+
+## Draws `value` clipped to `max_width` (an ellipsis when it does not fit).
+func _fit(value: String, position: Vector2, max_width: float, font_size: int, color: Color) -> void:
+    var font: Font = ThemeDB.fallback_font
+    var text: String = value
+    while text.length() > 3 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
+            font_size).x > max_width:
+        text = text.substr(0, text.length() - 2)
+    if text != value:
+        text = text.substr(0, text.length() - 1) + "…"
+    _text(text, position, font_size, color)
 
 
 # --- Collapse clock widget (Wave 2E) -------------------------------------------

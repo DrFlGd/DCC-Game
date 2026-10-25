@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "example_item_shape_only",
+      "name": "EXAMPLE RECORD - not a canon entry",
+      "category": "item",
+      "source_book": 1,
+      "source_chapter_or_scene": "C0: placeholder citation, not a real location",
+      "spoiler_level": "none",
+      "source_confidence": "low",
+      "participants": ["PLACEHOLDER"],
+      "context": "Placeholder showing where the circumstances of an observation go.",
+      "observed_behavior": "Placeholder. A real record summarises, in the researcher's own words, what the cited chapter establishes.",
+      "gameplay_candidate": "Placeholder. A real record proposes how the observation could become a mechanic, or uses null.",
+      "adaptation_type": "adapted",
+      "floor_or_depth": null,
+      "combat_role": null,
+      "status_effects": [],
+      "gameplay_suitability": "low",
+      "related_ids": [],
+      "tags": ["example"],
+      "notes": "Tools must skip every id that starts with example_. Delete this record once the first real record is reviewed.",
+      "review_status": "example"
+    }
+  ]
+}

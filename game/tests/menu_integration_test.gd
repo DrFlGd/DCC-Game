@@ -32,7 +32,9 @@ func _run() -> void:
     for child in ["Player", "Combat", "RoomRenderer", "Hud", "CharacterMenu"]:
         check(game.has_node(child), "Game composes " + child)
     check(ui != null and not ui.is_open(), "game starts with no modal menu")
-    check(game.state == game.State.RUNNING, "game starts in RUNNING state")
+    check(game.state == game.State.TITLE, "game boots to the TITLE state")
+    game.start_run(424242)
+    check(game.state == game.State.RUNNING, "start_run enters RUNNING state")
 
     # A kill granting enough XP should freeze gameplay and open the allocation UI.
     run_state.award_xp(300)

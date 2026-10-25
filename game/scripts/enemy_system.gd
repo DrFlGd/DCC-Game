@@ -881,7 +881,7 @@ static func volley_directions(foe: Dictionary, definition: Dictionary, attack: D
     var directions: Array[Vector2] = []
     var count: int = maxi(1, int(attack.get("count", 1)))
     if count == 1 and "twin_shot" in definition.get("abilities", []):
-        var lateral: float = player_velocity.dot(aim.orthogonal())
+        var lateral: float = player_velocity.dot(aim.rotated(PI * 0.5))
         var side: float = signf(lateral)
         if absf(lateral) < 5.0:
             side = 1.0 if int(foe.get("volley", 0)) % 2 == 0 else -1.0
@@ -1152,13 +1152,14 @@ static func has_line_of_sight(from_pos: Vector2, to_pos: Vector2, blocked: Dicti
 
 ## Hazard entry (shared shape with the 2E ground-hazard system):
 ## {pos, radius, telegraph_remaining, damage, duration, source} plus optional
-## tick (s between pulses; 0 = one pulse), tick_timer, status, damage_type,
-## hits_enemies, hits_player, owner.
+## tick (s between pulses; 0 = one pulse), tick_timer, pulses (count so far),
+## status (status id for the 2B status system; not applied yet), damage_type,
+## hits_enemies, hits_player, owner. `duration` is the remaining active time.
 static func make_hazard(pos: Vector2, radius: float, telegraph: float, damage: int,
         duration: float, source: String, extra: Dictionary = {}) -> Dictionary:
     var entry := {"pos": pos, "radius": radius, "telegraph_remaining": telegraph,
         "damage": damage, "duration": duration, "source": source, "tick": 0.0,
-        "tick_timer": 0.0, "status": "", "damage_type": "physical",
+        "tick_timer": 0.0, "pulses": 0, "status": "", "damage_type": "physical",
         "hits_enemies": false, "hits_player": true, "owner": "enemy"}
     entry.merge(extra, true)
     return entry

@@ -435,7 +435,8 @@ func _support(foe: Dictionary, attack: Dictionary) -> void:
 
 
 ## Ticks hazards: the telegraph counts down (no damage), then the hazard pulses
-## once on activation and every `tick` seconds until `duration` runs out.
+## once on activation and every `tick` seconds while `duration` (remaining
+## active seconds) lasts; a hazard with tick 0 pulses exactly once.
 func update_hazards(delta: float) -> void:
     for i in range(hazards.size() - 1, -1, -1):
         if i >= hazards.size():
@@ -445,15 +446,23 @@ func update_hazards(delta: float) -> void:
             hazard["telegraph_remaining"] = float(hazard["telegraph_remaining"]) - delta
             if float(hazard["telegraph_remaining"]) > 0.0:
                 continue
-            hazard["tick_timer"] = 0.0
-        hazard["tick_timer"] = float(hazard.get("tick_timer", 0.0)) - delta
-        if float(hazard["tick_timer"]) <= 0.0:
-            var tick: float = float(hazard.get("tick", 0.0))
-            hazard["tick_timer"] = tick if tick > 0.0 else INF
-            _hazard_pulse(hazard)
+        var tick: float = float(hazard.get("tick", 0.0))
+        if int(hazard.get("pulses", 0)) == 0:
+            hazard["tick_timer"] = tick
+            _pulse(hazard)
+        elif tick > 0.0:
+            hazard["tick_timer"] = float(hazard["tick_timer"]) - delta
+            if float(hazard["tick_timer"]) <= 0.0001 and float(hazard["duration"]) > 0.0001:
+                hazard["tick_timer"] = float(hazard["tick_timer"]) + tick
+                _pulse(hazard)
         hazard["duration"] = float(hazard["duration"]) - delta
-        if float(hazard["duration"]) <= 0.0 and i < hazards.size() and is_same(hazards[i], hazard):
+        if float(hazard["duration"]) <= 0.0001 and i < hazards.size() and is_same(hazards[i], hazard):
             hazards.remove_at(i)
+
+
+func _pulse(hazard: Dictionary) -> void:
+    hazard["pulses"] = int(hazard.get("pulses", 0)) + 1
+    _hazard_pulse(hazard)
 
 
 func _hazard_pulse(hazard: Dictionary) -> void:

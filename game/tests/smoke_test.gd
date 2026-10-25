@@ -1,12 +1,14 @@
 extends SceneTree
 ## Run: godot --headless --path game --script res://tests/smoke_test.gd
+## Pure-logic checks. Only preload scripts that never reference the Events /
+## RunState autoload identifiers (see tests/run_all.sh for why).
 const Generator = preload("res://scripts/floor_generator.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const Layout = preload("res://scripts/room_layout.gd")
 const Contents = preload("res://scripts/room_contents.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
-const Main = preload("res://scripts/main.gd")
+const Player = preload("res://scripts/player.gd")
 const CharacterMenu = preload("res://scripts/character_menu.gd")
 var failures := 0
 
@@ -68,12 +70,26 @@ func run_tests() -> void:
         if sheet != null:
             check(sheet.get_size() == Vector2(int(entry["frame"])*8, int(entry["frame"])),
                 "facing sheet regions valid")
-    var scene = Main.new()
     for i in range(8):
         var angle: float = float(i) * PI / 4.0
-        check(scene._facing_from_vector(Vector2.RIGHT.rotated(angle)) == i,
+        check(Player.facing_from_vector(Vector2.RIGHT.rotated(angle)) == i,
             "eight-way direction %d" % i)
-    scene.free()
+    check(Player.door_crossed(Vector2(192, 2)) == "N" and Player.door_crossed(Vector2(382, 192)) == "E"
+        and Player.door_crossed(Vector2(192, 382)) == "S" and Player.door_crossed(Vector2(2, 192)) == "W",
+        "door openings detected on all four sides")
+    check(Player.door_crossed(Vector2(40, 2)) == "" and Player.door_crossed(Vector2(192, 192)) == "",
+        "walls and interior are not doorways")
+
+    # Every gameplay action used by Player/Game exists in the Input Map.
+    for action in ["move_up", "move_down", "move_left", "move_right", "fire", "melee",
+            "pause", "restart_seed", "new_seed", "debug_level_up", "dodge", "use_item",
+            "swap_weapon", "interact", "map"]:
+        check(InputMap.has_action(action), "input action defined: " + action)
+        check(not InputMap.action_get_events(action).is_empty(), "input action bound: " + action)
+    var has_pad := false
+    for event in InputMap.action_get_events("fire"):
+        has_pad = has_pad or event is InputEventJoypadMotion
+    check(has_pad, "fire has a gamepad trigger binding")
 
     # Six stats, ability modifiers (including negative odd scores), XP thresholds.
     check(RPG.modifier(8) == -1 and RPG.modifier(9) == -1, "negative modifiers floor")

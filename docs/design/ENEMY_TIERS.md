@@ -1,13 +1,43 @@
 # Enemy Tiers — roles, bands and starter roster
 
-- **Status:** Proposed. The four enemies in §1 are **implemented** in [`enemies.json`](../../game/data/enemies.json). The roles, bands, guardrails and the new archetypes are the target for Wave 2C.
+- **Status:** **Implemented** (Wave 2C) in [`enemies.json`](../../game/data/enemies.json) schema v2 and [`enemy_system.gd`](../../game/scripts/enemy_system.gd), with the deviations listed in [§0](#0-implementation-status-wave-2c). The guardrails in §4 are enforced by `validate_catalogue()` at startup and in CI.
 - **Last updated:** 2026-10-25
 - **Roadmap:** Phase 4 (taxonomy, tiers, roster)
 - **Related:** [Content rules (statuses)](CONTENT_RULES.md#4-statuses) · [Encounter rules](ENCOUNTER_RULES.md) · [Combat and RPG](COMBAT_AND_RPG.md) · [Biomes](BIOMES_AND_TILESETS.md) · [Prototype spec](ROOM_ENEMY_RPG_PROTOTYPE.md)
 
 Every enemy below is an **original design** (`adaptation_type: original`). The rat family already exists in the prototype. Names are working titles and do not refer to anything in the books. Units: px, s; the crawler moves at 105 px/s.
 
-## 1. Current roster (implemented)
+## 0. Implementation status (Wave 2C)
+
+**Shipped roster** (base stats at the archetype's band; veteran scaling per §3 is applied at spawn):
+
+| Id | Role | Band | Depths | Threat | HP / AC | Signature attack | Telegraph | XP |
+| --- | --- | :---: | :---: | ---: | --- | --- | --- | ---: |
+| `rat_scavenger` | chaser | I | 1–6 | 2 | 7 / 12 | bite d4, wind-up 0.35 | arc 100° | 25 |
+| `spitting_rat` | ranged | I | 1–6 | 3 | 5 / 12 | twin spit d4 + 2 (toxic), 117.5 px/s, wind-up 0.45 | line | 50 |
+| `hulking_rat` | tank (light) | I | 1–6 | 4 | 17 / 13 | hop-lunge 48 px dash (0.5) and claw d4 + 3 (0.40) | dash / arc 120° | 100 |
+| `shellback_charger` | charger | II | 3–6 | 4 | 14 / 15 | ram: 120 px at 210 px/s, d8 + 2, 40 px knockback, wall stun 1.2 s (0.6) | dash | 90 |
+| `spore_puffer` | zoner | II | 3–6 | 3 | 12 / 10 | spore burst: 32 px puddle, 2 dmg/s for 3 s, `poisoned` tag (0.6) | circle | 60 |
+| `nest_mother` | summoner | II | 3–6 | 5 | 16 / 12 | squeal: 2 `rat_pup`, cap 4 alive (0.8) | circle | 120 |
+| `bell_acolyte` | support | III | 5–6 | 4 | 10 / 13 | ward peal (ward 6 for 6 s) and mending toll (heal 4) in 80 px (0.6) | circle | 90 |
+| `rubble_golem` | tank | III | 5–6 | 6 | 40 / 14, DR 2 | slam d10 + 3, radius 28, 40 px knockback (0.7) | circle | 150 |
+| `lobber` (Cinder Lobber) | ranged (artillery) | III | 5–6 | 4 | 12 / 12 | firebomb d8 + 2 fire at the crawler's position, lands after 0.9 s (0.5) | circle | 100 |
+| `rat_pup` | summon (chaser) | — | — | 0 | 3 / 10 | nip d3 (0.35) | arc 90° | 0 |
+| `armored_brute` | boss | I | 1–2 (5–6 as Bulwark) | — | 42 / 15 (band III: 120) | maul d8 + 2 (0.5); phase 2 adds shoulder charge (0.7) | arc / dash | 250 |
+| `sump_warden` | boss | II | 3–6 | — | 90 / 14 (band III: 140) | tide spray fan, flood pulse, drain call, undertow → slam | line / circle / arc | 450 |
+
+**Elite modifiers:** `bulwark` (HP ×1.5 on top of elite HP, shield 8 that refills after 4 s without damage, knockback resist +0.25, AC +1, blue ring) and `volatile` (speed ×1.1; on death a 0.8 s telegraphed 32 px blast for 2d6 fire that also hits enemies, orange ring). Both add the elite base (HP ×1.75, damage ×1.15, XP ×2.5, threat ×2, name prefix).
+
+**Deviations from the proposal below:**
+
+- **Schema names** follow the Wave 2C brief: `boss: bool` instead of `rank`; `band` plus `min_depth`/`max_depth` instead of `min_band`/`max_band`; `wind_up`/`recovery` instead of `windup_s`/`recovery_s`; `resistances` instead of `resist`; telegraph shapes are `arc | line | circle | dash`. `biome_affinity` and `required_for_clear` are not implemented yet. See §8 for the shipped schema.
+- **Not built in 2C:** the `dart_idol` trap actor, the band III spore lob, the `swift` and `splitting` modifiers, the shellback's frontal damage reduction while charging, and the `vulnerable` status after a wall hit (the charger is stunned; statuses on actors arrive with 2B). Status tags on attacks and hazards (`poisoned`, `burning`, `slowed`) are recorded but not applied until 2B adds actor statuses; hazards deal their flat damage now.
+- **Sump Warden simplifications:** Flood Pulse is a 56 px puddle centred on the crawler (1 damage per second for 6 s, tagged `slowed`) instead of a 12×12 quadrant; Drain Call summons at the four corner "drains"; Undertow pulls 32 px and chains into Slam; phase 3 swaps in a 7-shot spray and the `enrage` ability gives cooldowns ×0.8 and speed ×1.2 below 25 %.
+- **Boss elites** (the depth 5–6 Bulwark brute) get the modifier's shield and resistances but not the elite HP/XP multipliers; their band HP comes from `hp_by_band`.
+- **Guardrails** are validated at each archetype's base band. Veterans can fall slightly outside the XP-per-threat band (a band III rat scavenger earns 14 XP per point against a floor of 15).
+- **Interrupts:** `Enemies.apply_knockback()` interrupts a wind-up whose attack is `interruptible` (the acolyte's casts); player weapons do not cause knockback yet.
+
+## 1. Pre-2C roster (historical)
 
 | Id | Role (v1) | Lvl | HP | AC | Speed | Attack | Cooldown | XP | Notes |
 | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- |
@@ -16,11 +46,11 @@ Every enemy below is an **original design** (`adaptation_type: original`). The r
 | `hulking_rat` | tank (light) | 2 | 17 | 13 | 28 | claw, melee, range 23, d6 + STR (+3) | 1.6 | 100 | `lunge`: speed ×1.35 within 72 px |
 | `armored_brute` | boss | 3 | 42 | 15 | 31 | maul, melee, range 30, d8 + STR (+4) + 1 | 1.85 | 250 | the boss table adds 1 scavenger + 1 spitter |
 
-**Observed issues the v1 rules fix:**
+**Observed issues the v1 rules fix (all fixed in Wave 2C):**
 
 - No attack has a wind-up (see the telegraph rule in [COMBAT_AND_RPG.md §10](COMBAT_AND_RPG.md#10-enemy-telegraph-rule)).
 - `twin_shot` aims at ±0.15 rad around the crawler. At the spitting rat's 105 px preferred range each shot passes about 16 px to the side, while the crawler's hit radius is 8.5 px. **A stationary crawler is never hit at that range.** v1 aims one shot directly at the crawler and leads the other by 0.25 rad in the crawler's direction of motion.
-- Boss detection is hard-coded to the id `armored_brute` (`game.gd` `BOSS_DEFINITION` after Wave 1A). v1 adds a `rank` field.
+- Boss detection is hard-coded to the id `armored_brute` (`game.gd` `BOSS_DEFINITION` after Wave 1A). v1 adds a `rank` field (shipped as `boss: true`).
 - The hulking rat's claw (max 9) and the brute's maul (max 13) exceed the band I damage guardrail (§4). Proposed retune: hulking claw d4 (max 7), brute `damage_bonus` −2 (max 10).
 
 ## 2. Role taxonomy
@@ -156,7 +186,7 @@ Base elite rules: HP ×1.75, damage ×1.15, XP ×2.5, threat ×2, a coloured out
 
 ## 7. Bosses
 
-Both bosses are flagged `rank: "boss"`. Killing the boss is what unseals the exit, replacing the id check. A phase change gives 1.0 s of invulnerability with a roar, plays the announcer line and clears hostile projectiles.
+Both bosses are flagged `"boss": true` (implemented). Killing any boss-flagged enemy unseals the exit, replacing the id check. A phase change gives 1.0 s of invulnerability with a roar, plays the announcer line and clears hostile projectiles.
 
 ### 7.1 `armored_brute` (exists), band I, floors 1–2
 
@@ -188,25 +218,31 @@ Both bosses are flagged `rank: "boss"`. Killing the boss is what unseals the exi
 
 A third boss for floors 5–6 is an open question.
 
-## 8. Data schema additions (`enemies.json`, schema_version 2)
+## 8. Data schema (`enemies.json`, schema_version 2, implemented)
 
-New top-level fields per enemy:
+Top level: `schema_version` (2), `sprite_sheets` (`id → {path, frame: [w, h], render: [w, h]}`), `bands` (`"1"…"5"` → the §4 guardrails), `encounters` (budgets, composition and spawn settings, see [ENCOUNTER_RULES.md](ENCOUNTER_RULES.md)), `elites` (`base` multipliers and `modifiers`) and `enemies`.
 
-- `role` (enum §2)
-- `rank` (`normal` | `elite` | `miniboss` | `boss` | `summon` | `trap`)
-- `min_band`, `max_band`
-- `threat`
-- `knockback_resist` (0–1)
-- `dr`
-- `resist` (`{type: multiplier}`)
-- `biome_affinity` (`{biome_id: weight}`)
-- `required_for_clear` (default true; false for traps)
-- `summon` (`{id, count, cap, interval_s}`)
-- `phases[]` (bosses: `{hp_below, attacks[], modifiers}`)
+Per enemy:
 
-New fields per attack: `windup_s`, `recovery_s`, `telegraph`, `pattern` (`single` | `fan` | `lane` | `area` | `lob`), `status_on_hit`.
+| Field | Meaning |
+| --- | --- |
+| `name`, `level`, `hp`, `ac`, `xp`, `speed`, `collision_radius`, `scores` | as before |
+| `role` | `chaser`, `ranged`, `charger`, `zoner`, `summoner`, `tank`, `support`, `elite`, `miniboss`, `boss` |
+| `band`, `min_depth`, `max_depth` | base band (veteran scaling counts from it) and pool eligibility |
+| `threat`, `weight` | budget cost and pick weight; `summon_only: true` keeps an enemy out of the pool |
+| `tags` | strings for content `target_tag` conditions (`beast`, `vermin`, `armored`, `construct`, `fungus`, `humanoid`, …); elites add `elite` and the modifier's tags |
+| `boss` | data-driven boss flag: the exit unlocks when any `boss: true` enemy dies |
+| `resistances` | multipliers by damage type (`physical`, `fire`, `toxic`, `arcane`) or status id (for 2B); 0 = immune |
+| `knockback_resist` (0–1), `dr`, `front_guard {arc, multiplier, slot}` | defence |
+| `hp_by_band`, `enrage_below` | boss HP per band; HP fraction where `enrage` applies |
+| `sprite` | a `sprite_sheets` id or a `res://` path |
+| `abilities[]` | `lunge`, `twin_shot`, `summon`, `dash`, `puddle`, `shield_allies`, `heal_allies`, `enrage` |
+| `behavior` | `mode` (`chase`, `kite`, `guard`, `charge`, `zone`, `summon`, `support`), `pathfinding` (`grid_bfs`, `direct`, `stationary`), `preferred_distance`, `repath_seconds`, `detection_range`, `ally_radius` |
+| `phases[]` (bosses only) | `{below, attacks[], announce}`; phase *i* applies below `below` × max HP |
 
-The existing `xp` stays explicit. The validator checks it against the XP-per-threat-point range for the band (§4).
+Per attack: `id`, `type` (`melee`, `ranged`, `dash`, `area`, `puddle`, `summon`, `support`), `telegraph` (must match the type), `wind_up`, `recovery` (≥ 0.25 unless `then` chains a follow-up), `cooldown`, `range`, `min_range`, `ability`, `proficient`, `damage_die`, `damage_bonus`, `damage_type`, `knockback`, `requires_los` (default true), and type fields: `arc` (melee), `projectile_speed`/`count`/`spread` (ranged), `dash_distance`/`dash_speed`/`stun_on_wall` (dash), `aoe_radius`/`target` (`self` or `player`)/`pull` (area), `hazard {telegraph, duration, tick, damage, status}` (puddle), `summon {id, count, cap, at_edges}`, `effect`/`amount`/`duration`/`interruptible` (support), `then` and `follow_up_only`.
+
+The validator rejects unknown roles, modes, pathfinding, abilities, attack types, telegraphs and resistance tags by name, and checks the §4 guardrails (wind-up minimum, ≥ 0.5 s for area and boss attacks, projectile speed, charge speed ≤ 2.5× the crawler, max non-crit hit, attack bonus, HP, AC, speed, threat and XP per threat point at the base band; boss HP and max hit ≤ 50 % of the reference HP).
 
 ## 9. Open questions
 

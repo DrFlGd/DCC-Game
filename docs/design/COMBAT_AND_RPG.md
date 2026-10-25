@@ -201,6 +201,8 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 
 ## 10. Enemy telegraph rule
 
+**Implemented in Wave 2C** for every enemy attack (data fields `wind_up`, `recovery` and `telegraph` ∈ `arc | line | circle | dash`; see [ENEMY_TIERS.md §8](ENEMY_TIERS.md#8-data-schema-enemiesjson-schema_version-2-implemented)). Room-entry dormancy (§9) is implemented too; the door lock is not.
+
 **Rule:** every enemy attack has a visible wind-up of at least **0.35 s at band I**. Validation tests enforce the per-band minimum ([ENEMY_TIERS.md §4](ENEMY_TIERS.md#4-stat-guardrails-per-band)): 0.35 / 0.30 / 0.28 / 0.25 / 0.22 s for bands I–V. Boss heavy attacks and any area attack need **≥ 0.5 s** at every band.
 
 - **Visible means two cues:** (1) the sprite tints or pulses (50 % blend to the attack colour), **and** (2) a shape cue that matches the hitbox:

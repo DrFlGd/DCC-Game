@@ -42,6 +42,7 @@ const TitleScreen = preload("res://scripts/ui/title_screen.gd")
 const IntermissionScreen = preload("res://scripts/ui/intermission_screen.gd")
 const SummaryScreen = preload("res://scripts/ui/summary_screen.gd")
 const SettingsScreen = preload("res://scripts/ui/settings_screen.gd")
+const Announcer = preload("res://scripts/ui/announcer.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -65,6 +66,8 @@ var summary_screen: SummaryScreen
 var settings_screen: SettingsScreen
 ## Shared player settings (Settings.shared()), loaded and applied in _ready.
 var settings
+## Dungeon-system announcer, achievements, profile and telemetry (Wave 2G).
+var announcer: Announcer
 
 
 func _ready() -> void:
@@ -89,6 +92,7 @@ func _ready() -> void:
     settings_screen = _ensure_child("SettingsScreen", SettingsScreen) as SettingsScreen
     settings = Settings.shared()
     settings.apply_window(get_window())
+    announcer = _ensure_child("Announcer", Announcer) as Announcer
     combat.setup(player, catalogue)
     renderer.setup(player, combat, null, catalogue)
     _relayout()

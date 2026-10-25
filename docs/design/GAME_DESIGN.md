@@ -183,6 +183,16 @@ The pause menu keeps the current pages (overview, character, resolution). 2B add
 
 ## 8. The dungeon system announcer (presentation layer)
 
+**Status: Implemented with deviations (Wave 2G).** Code: `game/scripts/ui/announcer.gd` (toasts and log), `scripts/core/announcer_brain.gd` (selection and scheduling), `scripts/core/announcer_lines.gd` (validator), `scripts/core/achievements.gd`, `scripts/core/profile.gd`, `scripts/core/telemetry.gd`; data in `game/data/announcer.json` (191 lines, 38 triggers) and `game/data/achievements.json` (23 achievements). See "The System" in [game/README.md](../../game/README.md). Deviations from the text below:
+
+- **Own layer, not `Events.message`.** Toasts are drawn by the Announcer on canvas layer 25 (above the run-loop screens), so the HUD `message` line keeps terse gameplay status and the two never overwrite each other. Other systems request lines with the new `Events.announcement_requested(trigger, context)`.
+- **Rate limit 2.5 s, not 4 s,** with up to two toasts visible. Priority ≥ 4 (boss intro, grace, level-up, achievements, death and outcome) bypasses the rate limit, preempts lower-priority toasts after 1 s on screen, and is queued, not dropped, while the pause or level-up modal is open. Lower-priority toasts are dropped while a modal is open and go stale after 4 s in the queue. All of this is tunable in `announcer.json` `settings`.
+- **Log on demand.** The system log (last 50 lines) is toggled with the `toggle_log` action (L / gamepad L3) during play and over the pause screen. Tab / Y were the requested binding, but they already belong to `swap_weapon`.
+- **Line keys** follow the signals: `first_blood` (for `first_kill`), `boss_room_entered` (for `boss_intro`), `boss_defeated` (for `boss_killed`), `run_ended.defeated|collapsed|victory|abandoned` (for `death`, `collapse`, `victory`), plus `room_entered.<kind>`, `kill_streak.<n>`, `enemy_killed.<id>`, `low_hp`, `player_damaged_big`, `ticks_low`, `grace_stabilised`, `idle`, `chest_opened`, `shrine_used`, `guild_rested`, `hazard_spawned` and `achievement_unlocked`. A flawless room is an achievement (`not_a_scratch`) rather than a line key. `elite_spotted`, `boss_phase_changed` and `loot_box_opened` are not wired yet; the room-kind lines (`room_entered.elite`, `.treasure`) and `chest_opened` cover them until those signals exist.
+- **Achievements:** 23, each with `id`, `title`, `description`, `quip`, `event`, `requires` (comparisons over run counters, live values, lifetime stats and event fields) and `secret`. The slice asked for 12.
+- **Telemetry file name** is `user://telemetry/run-<unix>-<seed>.json` (newest 50 kept), not `run_<seed>_<timestamp>.json`.
+
+
 The fiction is that the dungeon is run by an indifferent, game-show-like **system**. It narrates the crawl, hands out achievements and loot boxes, and comments on the crawler's choices with dry, sardonic humour. **It is a presentation layer only**: it reacts to `Events` signals and never changes game state.
 
 - **Original content only.** No characters, catchphrases, dialogue or passages from the books. Lines are written for this project and live in JSON (2G owns the file, for example `data/content/announcer.json`), keyed by event.

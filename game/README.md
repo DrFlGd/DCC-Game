@@ -27,6 +27,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Mouse in level-up menu | — | — | Assign and refund points with + / −, then confirm |
 | R | — | `restart_seed` | Restart using same seed (during a run or on the run summary) |
 | N | — | `new_seed` | Restart using a new seed (during a run or on the run summary) |
+| L | L3 (left stick press) | `toggle_log` | Show / hide the system log (see [The System](#the-system)) |
 
 Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). Reserved actions with default bindings for Wave 2 features: `dodge` (Shift / B), `use_item` (Q / LB), `swap_weapon` (Tab / Y), `interact` (E / A), `map` (M / Back) and `aim_up/down/left/right` (right stick). Aiming is still mouse-only.
 
@@ -102,6 +103,28 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 
 **No collapse values are final.** This prototype interprets zero remaining ticks as immediate defeat *after a transition*, and denies any transition whose entry cost exceeds remaining ticks. The exception is the unsealed exit: it resolves *before* the collapse check, so leaving with exactly the last tick clears the floor. This is a test behavior, not final game design. Some seeds may be unusually generous/tight until the balancing work is completed. Each floor's room count, route cost and budget are printed to the console when it starts.
 
+## The System
+
+The dungeon is narrated by an indifferent, game-show-flavoured **system** (design: [GAME_DESIGN.md §8](../docs/design/GAME_DESIGN.md#8-the-dungeon-system-announcer-presentation-layer)). It is presentation only: it listens to `Events`, never changes the run, and never writes the HUD message line, which stays terse gameplay status.
+
+- **Toasts.** Up to two at the top centre, above the room. Each line has a priority from 1 to 5. Toasts are spaced at least 2.5 s apart, except priority ≥ 4 (boss room, grace, level-up, achievements, outcome), which also replaces a weaker toast after it has been up for 1 s. While the pause or level-up menu is open, toasts wait: low-priority ones are dropped and priority ≥ 4 shows when the menu closes.
+- **System log.** Press **L** (gamepad **L3**, action `toggle_log`) for the last 50 lines, during play or over the pause menu. Tab / Y were taken by `swap_weapon`.
+- **Achievements.** 23 in [`data/achievements.json`](data/achievements.json). When one unlocks, a toast appears and the profile is saved. **Esc → Achievements** lists them all (secret ones show as ??? until earned).
+- **Profile.** `user://profile.json` keeps unlocks (with timestamp and seed) and lifetime stats: runs, best depth, total kills and floors, victories, collapses, deaths by cause, last seed. It is saved on every unlock and at the end of every run. A missing file starts blank; an unreadable one is renamed to `profile.json.corrupt`. Read it anywhere with `const Profile = preload("res://scripts/core/profile.gd")` and `Profile.best_depth()`, `total_runs()`, `total_kills()`, `total_floors()`, `victories()`, `deaths_by_cause()`, `last_seed()`, `is_unlocked(id)`, `unlocked()` or `stats()`.
+- **Telemetry.** Each finished run writes `user://telemetry/run-<unix>-<seed>.json`, and the newest 50 are kept. A report holds `RunState.summary()`, the tick ledger, seconds per room (`"<depth>:<room>"`), a count of every bus signal, the run's unlocks and every announcer line with its fate (`shown`, `preempted`, `dropped_modal`, `dropped_stale`, ...), for tuning.
+- **Where `user://` is:** Linux `~/.local/share/godot/app_userdata/DCC Game — Technical Prototype/`, Windows `%APPDATA%\Godot\app_userdata\DCC Game — Technical Prototype\`, macOS `~/Library/Application Support/Godot/app_userdata/DCC Game — Technical Prototype/`. Headless test runs (`--script`) use the `test/` subfolder so they never touch your profile.
+
+**Adding lines.** Edit [`data/announcer.json`](data/announcer.json): `lines` maps a trigger key to an array of `{"text", "weight", "priority", "cooldown_seconds", "once_per_run", "category"}`. Text is at most two lines (`\n`) of 90 characters. Placeholders are `{depth}`, `{kills}`, `{ticks}`, `{seed}`, `{level}`, `{hp}`, `{max_hp}`, `{xp}` and `{room}`, plus some that only certain triggers can use: `{enemy}` (kills, big hits, the defeat obituary), `{damage}`, `{streak}`, `{achievement}` / `{quip}` and `{idle}`. Categories are `flavour`, `warning`, `celebration`, `sponsor`, `taunt`, `obituary`, `achievement` and `system`. Selection is weighted and seeded (`run seed ^ request counter`), so a replayed seed replays its lines. A shown line puts its trigger on cooldown, and a `once_per_run` line is not repeated until the next run. `tests/announcer_test.gd` validates the file: known triggers, unique texts, placeholders allowed for the trigger, numeric ranges, and at least 5 lines per common trigger. Everything is original writing. Keep the tone corporate, cheerful and indifferent, aim the joke at the situation, never at people, and keep it PG-13.
+
+**New triggers and custom announcements.** Room kinds get `room_entered.<kind>` (add the kind to `ROOM_KINDS` in `scripts/core/announcer_lines.gd`), each enemy may get `enemy_killed.<definition_id>`, and fixed keys live in `FIXED_TRIGGERS`. From any system:
+
+```gdscript
+Events.announcement_requested.emit("chest_opened", {})                  # a line from the data
+Events.announcement_requested.emit("mimic_bit_you", {"text": "That chest had teeth.", "priority": 3})
+```
+
+Unknown triggers with a `text` show that text verbatim (priority defaults to 2, category to `system`). **New achievements** are a JSON record whose `event` is a signal name and whose `requires` maps keys (`run.kills`, `room.damage_taken`, `floor.revisits`, `floor.seconds`, `hp_fraction`, `ticks`, `depth`, `life.kills`, `event.<field>`, ...; see `TRACKER_KEYS` and `LIVE_KEYS` in `scripts/core/achievements.gd`) to `{"<op>": value}` with `>=`, `<=`, `>`, `<`, `==`, `!=`, `in` or `contains`. Achievements can also be granted directly with `Events.achievement_unlocked.emit(id)`.
+
 ## Run tests
 
 From the repository root, with `godot` pointing to Godot 4.7.2 (or `GODOT=/path/to/godot`):
@@ -121,6 +144,8 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `menu_integration_test.gd` | Live `Main.tscn`: level-up/pause modals, state machine, resolution, F9/R, Input-Map-driven physics loop |
 | `run_loop_test.gd` | Title → `start_run`, room counts and budgets by depth (26 on floor 1 for 424242), exit → intermission → fresh floor with carried XP/HP, last-tick exit, victory on floor 6, summary after death/abandon with Retry/New/Title, run-time freeze, pause → settings, `user://` settings roundtrip |
 | `scripts_parse_test.gd` | Every script under `scripts/` and `tests/` compiles |
+| `announcer_test.gd` | Announcer data validator, placeholders, seeded selection, cooldowns, once-per-run, preemption, rate limit, modal suppression; live toasts, log, achievements page and telemetry in `Main.tscn` |
+| `achievements_test.gd` | Achievements on scripted event sequences (never twice), profile save/load and corrupt-file recovery, telemetry report keys and 50-file retention |
 
 **Writing tests that touch autoloads.** In `--script` mode (Godot 4.7.2) the `Events` and `RunState` autoload nodes already exist under `/root` when `_initialize()` runs (their `_ready()` runs a frame later), but their global identifiers are **not** visible to the test script or anything it `preload`s, because those compile before autoloads are registered. A compile error there makes Godot hang instead of exiting. So: fetch autoloads with `get_root().get_node("RunState")`, and `load()` game scripts or `res://scenes/Main.tscn` at runtime instead of `preload`ing them. Pure-logic modules that never mention an autoload can still be preloaded.
 
@@ -139,13 +164,19 @@ game/
 │   │   ├── events.gd           # autoload Events: the signal bus (documented per signal)
 │   │   ├── run_state.gd        # autoload RunState: run data, progression math, telemetry
 │   │   ├── run_rules.gd        # rooms by depth, floor budget (route + slack), target depth
-│   │   └── settings.gd         # player settings <-> user://settings.cfg (Settings.shared())
+│   │   ├── settings.gd         # player settings <-> user://settings.cfg (Settings.shared())
+│   │   ├── announcer_lines.gd  # announcer.json validator + {placeholder} resolver
+│   │   ├── announcer_brain.gd  # seeded line picking, cooldowns, toast queue rules (pure)
+│   │   ├── achievements.gd     # achievement tracker and rules (pure)
+│   │   ├── profile.gd          # user://profile.json: unlocks, lifetime stats (static accessors)
+│   │   └── telemetry.gd        # per-run report to user://telemetry/
 │   ├── game.gd                 # orchestrator + State {RUNNING, LEVEL_UP, PAUSED, ENDED(unused),
 │   │                           #   TITLE, SUMMARY, INTERMISSION}: floors, doors/collapse, screens
 │   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames (Input Map)
 │   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage()
 │   ├── room_renderer.gd        # immediate-mode drawing of the room, doors (tick previews), actors
 │   ├── ui/hud.gd               # status lines (FLOOR d/target), message line, minimap, hints
+│   ├── ui/announcer.gd         # "The System": toasts, system log, achievements, profile, telemetry
 │   ├── ui/title_screen.gd      # New run / Seeded run / Settings / Quit
 │   ├── ui/intermission_screen.gd # floor recap + Descend
 │   ├── ui/summary_screen.gd    # run summary + Retry seed / New run / Title
@@ -160,7 +191,9 @@ game/
 │   └── collapse_policy.gd      # room-specific timing policy and ledger
 ├── data/
 │   ├── prototype_rules.json    # run (depths, rooms), collapse + budget, obstacles, abilities
-│   └── enemies.json            # enemy behavior, stats, attacks, encounter tables
+│   ├── enemies.json            # enemy behavior, stats, attacks, encounter tables
+│   ├── announcer.json          # system lines by trigger, toast/rate-limit settings
+│   └── achievements.json       # achievement definitions
 └── tests/
     ├── run_all.sh              # runs everything below; used by CI
     └── *_test.gd               # see "Run tests"

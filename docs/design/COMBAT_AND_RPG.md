@@ -41,14 +41,14 @@ Single-target DPS before hit chance: ranged ≈ 19.6 (5.5 / 0.28), melee ≈ 11 
 
 ## 2. Input — D-02
 
-**Proposed default (D-02):** mouse aim on desktop, plus right-stick aim on gamepad. The Wave 1A Input Map already provides this: the `aim_*` actions use the right-stick axes. All gameplay input goes through Input Map actions, and no code reads raw keycodes.
+**Implemented (D-02, Wave 3C):** mouse aim on desktop, plus right-stick aim on gamepad, through the `aim_*` actions (right-stick axes). All gameplay input goes through Input Map actions, and no code reads raw keycodes. Bindings are remappable in game (below), so the table lists defaults.
 
 Rows marked *1A* are bound in `project.godot` today. Rows marked *proposed* are added by the feature PR that needs them.
 
 | Action | Keyboard / mouse | Gamepad | Status |
 | --- | --- | --- | --- |
 | `move_up/down/left/right` | WASD / arrows | Left stick | 1A (the D-pad was removed in 2B and now drives the belt) |
-| `aim_up/down/left/right` | (mouse position) | Right stick | 1A |
+| `aim_up/down/left/right` | (mouse position) | Right stick | **3C** (live; see the aim rules below) |
 | `fire` | LMB (hold repeats) | RT | 1A |
 | `melee` | Space (hold repeats) | RB | 1A |
 | `dodge` | Shift | B | 1A (bound; action implemented in 2D) |
@@ -65,7 +65,19 @@ Rows marked *1A* are bound in `project.godot` today. Rows marked *proposed* are 
 
 *Implemented (2B), deviation:* one `use_consumable` action plus `next_consumable` instead of six `use_consumable_1..6` actions (number keys stay free for dialogs). The stick clicks were taken (L3 is `toggle_log`), so the belt uses the D-pad, which no longer duplicates the left stick for movement. *Implemented (2F):* `use_skill_1` is Z / LT (axis 4) and `use_skill_2` is X / gamepad X (button 2). Game polls both with a press-edge latch, so a held LT fires once per pull. Free gamepad inputs left: R3, D-pad up/left. `tests/inventory_test.gd` fails if two gameplay actions share a key or button; `tests/skills_test.gd` also checks axis directions.
 
-Gamepad aim keeps the last direction when the stick is released (deadzone 0.25). Aim assist is off; an optional 8° magnetism setting is an open question.
+*Implemented (3C), aim rules* (`Player.resolve_aim`, every simulated frame; tunables in `prototype_rules.json` `input`):
+
+1. Right stick (raw `aim_*` strength) past a radial deadzone of 0.25 (`aim_deadzone`): aim along the stick; the gamepad becomes the current device.
+2. Otherwise, if the mouse moved (2 px or more) or keyboard/mouse is the current device: aim at the mouse.
+3. Otherwise (gamepad, stick centred): aim along the movement when `aim_fallback_to_move` (default true) and the crawler moves; else keep the last direction.
+
+The current device is the last one with a meaningful input (any key, click or mouse movement; any pad button or a stick / trigger past half-way); `Events.input_device_changed` switches hint wording (HUD, menus, prompts) and a gamepad reticle is drawn at 34 px along the aim.
+
+*Aim assist, deviation:* the open question is settled as **on by default for gamepad aim only** (setting `aim_assist`; never applied to the mouse): an 8° cone either side (`aim_assist_degrees`, 0 disables) within 200 px (`aim_assist_range`); the target with the smallest angle wins, ties go to the nearer, then the earlier enemy; dormant and dead enemies are ignored. No RNG is drawn, so seeded runs are unchanged. The unassisted stick aim is kept separately, so a held aim does not creep onto enemies.
+
+*Implemented (3C), remapping:* Settings → Remap controls lists every action in the table except the developer ones (`restart_seed`, `new_seed`, `debug_level_up`, `debug_toggle_companion`), with a keyboard/mouse and a gamepad column. Rebinding captures the next key, mouse button, pad button or axis direction; an input another gameplay action uses is swapped with this action's old binding (a `refuse` mode exists for callers), and the developer keys and pause's Esc / Start are refused, so the no-shared-input rule holds at runtime. `pause` always keeps Esc and Start; the aim actions' keyboard column is the mouse. Overrides persist in `user://settings.cfg` `[input]` as event strings (`key:<physical>`, `keycode:<n>`, `mouse:<n>`, `joy_button:<n>`, `joy_axis:<n>:+|-`) and are applied at boot before the title screen; a conflicting file falls back to the defaults. *Deviation:* `ui_accept` / `ui_cancel` are redeclared in `project.godot` with gamepad A / B added, because Godot 4.7 binds no pad buttons to them; every screen is operable with a gamepad alone (A confirms, B backs out).
+
+*Implemented (3C), accessibility:* `text_scale` (1.0 / 1.25 / 1.5), `high_contrast` (opaque panels, outlined text, saturated telegraph palette), `reduced_flash` (subtle short hit tint, hit-stop ≤ 0.03 s, shake ≤ 25 % of the slider, no strobing blink or pulses) and `colorblind_telegraphs` (pattern plus type letter on wind-ups). See `game/README.md` "Input and accessibility".
 
 ## 3. Movement, dodge and stamina
 

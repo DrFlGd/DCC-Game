@@ -1,7 +1,7 @@
 # Combat and RPG — rules v1
 
-- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2D implemented §3 (dodge, stamina, movement penalties), the knockback step of §6, §8 (hit feedback) and §9 (D-07 door lock). Wave 2B implemented the weapon patterns (§4.1, §5), statuses on actors (§7), the item side of the damage pipeline (§6) and the D-09 inventory (§12). Each section lists its deviations. Everything else labelled *Proposed default* is the target for 2F (skills).
-- **Last updated:** 2026-10-25
+- **Status:** Proposed. The d20 core, six stats, XP/levels, level-up allocation and the basic melee and ranged attacks are **implemented**. Wave 2D implemented §3 (dodge, stamina, movement penalties), the knockback step of §6, §8 (hit feedback) and §9 (D-07 door lock). Wave 2B implemented the weapon patterns (§4.1, §5), statuses on actors (§7), the item side of the damage pipeline (§6) and the D-09 inventory (§12). Wave 2F implemented §11 (skill points, learning rules, active skills, the `use_skill_*` actions and INT scaling). Each section lists its deviations.
+- **Last updated:** 2026-10-26
 - **Roadmap:** Phase 1C and 1D
 - **Decisions covered:** D-02 (aim input), D-07 (door lock), D-09 (inventory and resources), D-10 (companions), D-14 (melee ruleset)
 - **Related:** [Content rules (weapons, items, skills, effects, statuses)](CONTENT_RULES.md) · [Game design](GAME_DESIGN.md) · [Enemy tiers](ENEMY_TIERS.md) · [Encounter rules](ENCOUNTER_RULES.md) · [Prototype spec](ROOM_ENEMY_RPG_PROTOTYPE.md) · [`rpg_rules.gd`](../../game/scripts/rpg_rules.gd)
@@ -58,12 +58,12 @@ Rows marked *1A* are bound in `project.godot` today. Rows marked *proposed* are 
 | `map` | M | Back/View | 1A (bound; full map in 2E) |
 | `pause` | Esc | Start/Menu | 1A |
 | `restart_seed` / `new_seed` / `debug_level_up` | R / N / F9 | — | 1A. Proposed: R and N only on the summary screen or in debug builds, to avoid accidental restarts |
-| `use_skill_1`, `use_skill_2` (active skills, §11) | Z / X | LT / X | proposed (2F) |
+| `use_skill_1`, `use_skill_2` (active skills, §11) | Z / X | LT / X | **2F** (live) |
 | `use_consumable` (selected belt slot) | C | D-pad down | **2B** |
 | `next_consumable` (cycle the belt) | V | D-pad right | **2B** |
 | `toggle_log` | L | L3 | 2G |
 
-*Implemented (2B), deviation:* one `use_consumable` action plus `next_consumable` instead of six `use_consumable_1..6` actions (number keys stay free for dialogs). The stick clicks were taken (L3 is `toggle_log`), so the belt uses the D-pad, which no longer duplicates the left stick for movement. Free gamepad inputs left: X (proposed `use_skill_2`), LT (proposed `use_skill_1`), R3, D-pad up/left. `tests/inventory_test.gd` fails if two gameplay actions share a key or button.
+*Implemented (2B), deviation:* one `use_consumable` action plus `next_consumable` instead of six `use_consumable_1..6` actions (number keys stay free for dialogs). The stick clicks were taken (L3 is `toggle_log`), so the belt uses the D-pad, which no longer duplicates the left stick for movement. *Implemented (2F):* `use_skill_1` is Z / LT (axis 4) and `use_skill_2` is X / gamepad X (button 2). Game polls both with a press-edge latch, so a held LT fires once per pull. Free gamepad inputs left: R3, D-pad up/left. `tests/inventory_test.gd` fails if two gameplay actions share a key or button; `tests/skills_test.gd` also checks axis directions.
 
 Gamepad aim keeps the last direction when the stick is released (deadzone 0.25). Aim assist is off; an optional 8° magnetism setting is an open question.
 
@@ -255,11 +255,12 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 ## 11. RPG progression and skills
 
 - **Keep the d20 core:** six abilities, modifier = floor((score − 10) / 2), proficiency +2 rising every 4 levels, 5e-style cumulative XP thresholds, HP 10 + CON mod plus max(1, 6 + CON mod) per level. All of this is implemented in `rpg_rules.gd`, and the state is held in `RunState`.
-- **Level-up (Proposed default):** **2 free stat points** (implemented, cap 20) **and 1 skill point**, in the same overlay (2F).
-  - After the stats are confirmed, the overlay offers up to **3 eligible rank-ups** drawn with `RunState.rng`. A rank-up is eligible when `unlock_level ≤ level`, its prerequisites are met, its rank is below `max_rank`, and its `cost` ≤ banked points.
-  - The player takes one, or banks the point. There is no reroll in the slice.
-  - Skills follow the [CONTENT_RULES.md §6](CONTENT_RULES.md#6-items-itemsjson-and-skills-skillsjson) model: `cost`, `unlock_level`, `max_rank`, `prerequisites`, and ranks that replace each other.
-  - A pick emits `Events.skill_learned`.
+- **Level-up (implemented, Wave 2F):** **2 free stat points** (cap 20) **and 1 skill point** (`skills.points_per_level`), in the same overlay (`character_menu.gd` mode `level_up`, `skill_system.gd`).
+  - The overlay lists **every** skill with its rank X/Y, kind, cost, description and the next rank's effects; a rank-up is enabled when `unlock_level ≤ level`, its prerequisites (skill *and* rank) are met, its rank is below `max_rank`, and its `cost` ≤ banked points. Everything else is greyed out with the reason (`SkillSystem.can_learn`).
+  - **Confirm** needs every stat point staged and every skill point spent; **Save for later** banks the skill points instead (they are spent on the pause menu's **Skills** page). A player with nothing learnable can always confirm.
+  - Skills follow the [CONTENT_RULES.md §6](CONTENT_RULES.md#6-items-itemsjson-and-skills-skillsjson) model: `cost`, `unlock_level`, `max_rank`, `prerequisites`, and ranks that replace each other (`RunState.skills` holds `{"id", "rank"}`; `Loadout.current()` carries only the current rank's effects).
+  - A pick emits `Events.skill_learned(id, rank)`; ItemSystem recomputes passive stats in response. A use emits `Events.skill_used(id, rank)`. Telemetry counts `skills_learned` and `skills_used`.
+  - **Deviation:** the overlay shows the whole tree instead of 3 rank-ups drawn with `RunState.rng` (the starter tree has 8 skills, so a draw would hide most of it, and keeping the RNG out of the menu leaves the combat dice untouched). Skill points persist across floors and reset per run. F9 (`debug_level_up`) grants the skill point too.
 - **What each ability does** (INT, WIS and CHA are "reserved" in the prototype UI and are activated here):
 
   | Ability | Effect |
@@ -271,7 +272,8 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
   | WIS | Stamina regen +10 % per positive mod; shorter harmful statuses (§7) |
   | CHA | Guild-hall prices −10 % per positive mod; +1 roll on the boss loot box at mod ≥ +3 |
 
-- **Active skills** (`kind: active`, with `cooldown` and `stamina_cost`) are bound to 2 slots (`use_skill_1`, `use_skill_2`). Passive skills are always on.
+- **Active skills** (`kind: active`, with `cooldown` and `stamina_cost`) are bound to 2 slots (`use_skill_1` Z / LT, `use_skill_2` X / gamepad X; `skills.slots`). Passive skills are always on. *Implemented (2F):* a newly learned active takes the first free slot; the Skills page rebinds them. Using one checks `blocks_actions` (stunned), the slot's cooldown and `RunState.spend_stamina(stamina_cost)`, then runs the current rank's `on_use` effects through `EffectRunner.fire_skill()`, starts the rank's `cooldown` (a rank may override it) and counts `skills_used`. Cooldowns tick only while RUNNING and clear at every floor start. `cooldown_reduction` with `stat: skills` shortens them (Panic Mode's kill refund) and `stat: dodge` shortens the dodge gap. `skl_sidestep` is also a 40 px / 0.18 s dash (`skills.dashes`), through `player.start_dash()` + `combat.on_player_dodged()`, so `on_dodge` fires and its `evasive` status doubles as the dash's i-frames. `skl_mandatory_hype` slows enemies within 80 px, hastes the crawler and (rank 2) shields for 5. The HUD shows both slots with a cooldown sweep and greys a slot whose stamina cost is not affordable.
+- **INT scaling (implemented, 2F):** every skill effect carries `magnitude_mult` = 1 + `skills.int_magnitude_per_mod` (0.1) per positive INT modifier (`Loadout.skill_magnitude_mult`, applied by `EffectResolver.scale_magnitude` in `collect_modifiers`). `add`, `heal`, `damage`, `cooldown_reduction` and positive status magnitudes multiply; `multiply` operations scale their distance from 1 (×0.9 → ×0.88 at INT 14); `set` and `grant_ticks` never scale. Item effects are not scaled.
 - **Expected progression (guardrail):**
 
   | End of floor | 1 | 2 | 3 | 4 | 5 | 6 |

@@ -314,15 +314,48 @@ Accessibility (3C): *Reduced flash* turns flashes into outlines, and *Screen sha
 
 ## 13. Companions — D-10
 
-**Proposed default (D-10):** no companions in the vertical slice. A single follower prototype goes behind a flag in Wave 3E. Foundations to keep now:
+**Status: prototype implemented behind `companion.enabled` (Wave 3E).** The flag in `game/data/prototype_rules.json` is `false` by default, so the vertical slice ships with no companion, as D-10 proposed. Developers turn it on with the flag or the F8 key (`debug_toggle_companion`, keyboard only, for the session). Code: `game/scripts/companion.gd` (node), `companion_ai.gd` (pure AI), `companions.gd` (loader and validator), `game/data/companions.json` (schema v1). Tests: `game/tests/companion_test.gd`.
 
-- Companions are actors that use the enemy AI module with `faction: "ally"`.
-- Targeting picks the nearest hostile within 160 px of the crawler.
-- They follow within 48 px.
-- They never block doors.
-- They are immune to knockback from the crawler.
-- They do not consume collapse ticks.
-- They despawn with no penalty if they cannot path for 5 s, and respawn at the next room entry.
+The one companion is the **Scrap Hound** (`cmp_scrap_hound`), an original, scrappy dungeon-bred hound. It has 16 HP (+3 per crawler level above 1), AC 13 and a speed of 118 px/s, against the crawler's 105.
+
+Rules as built:
+
+- **Follow.** It stays within `follow_distance` (28 px) of the crawler. Beyond 1.8 × that, or after a fight, it returns at 1.35 × speed. It uses the obstacle collision the crawler uses (axis sliding), with a grid path when it has no line of sight.
+- **Leash.** It teleports beside the crawler (behind the crawler's aim, on a free cell in line of sight) in three cases: on every room entry, when it is more than `leash_distance` (170 px) away, or when it has made no progress for `stuck_seconds` (1.5 s).
+- **Target selection.** It considers living enemies within `engage_radius` (160 px) **of the crawler**, in this order:
+  1. the crawler's last target (`Combat.last_player_target`, set by damage with source `"player"`);
+  2. else its current target, kept until 32 px beyond the radius;
+  3. else the enemy nearest the companion.
+- **Independent attacks.** The bite uses the enemies.json v2 attack schema: melee, 14 px reach, 0.15 s wind-up, 0.9 s cooldown, 0.2 s recovery, d4 + DEX, proficiency from the crawler's level, 6 px knockback.
+  - It rolls d20 against the enemy's AC and deals damage with the companion's **own RNG**, seeded `RunState.seed ^ depth` at each floor start. `RunState.rng` is never consumed.
+  - Damage goes through `Combat.apply_damage(foe, n, {source: "companion"})`. XP, per-kill credits and the kill counters go to the crawler, and `companion_kills` telemetry counts the kill.
+  - Item `on_hit` and `on_kill` triggers do **not** fire, and companion hits cause no hit-stop.
+- **Survivability.**
+  - **Retargeting** (`EnemySystem.update_companion_target`). Every non-boss enemy with a melee, dash or area attack may switch to the companion; `targets_companion` in a definition overrides this. The check runs while the enemy is idle, every `retarget_interval` (1 s). It switches when the companion is within `retarget_radius` (64 px), is nearer than the crawler, and a hash roll of (instance id, evaluation count, `seed ^ depth`) comes in under `retarget_chance` (0.3). The roll uses no RNG stream.
+  - **Hits.** Enemy strikes on the companion and enemy bullets that touch it go through `Combat.hit_companion()` (d20 against its AC, companion RNG), then 0.4 s of i-frames.
+  - **Downed.** At 0 HP it is downed: enemies return to the crawler, and the downed hound is carried along on room changes. It revives at 50 % HP after the crawler stands within 24 px for 2 s, or by itself after 25 s. Every floor start revives it at full HP.
+- **Commands.** Hold `interact` for 0.4 s with no interaction prompt showing to toggle between **stay** and **follow**.
+  - In **stay** it holds its position and only bites enemies already in reach.
+  - A room entry resets it to follow.
+- **Buffs.** While it is up, the crawler gets +1 to `pickup_radius` through `Loadout.player_stats()`.
+- **Presentation.**
+  - **Sprite:** a generated 24×24 placeholder with four facings and a downed frame, plus an HP bar, a wind-up arc and the revive ring.
+  - **HUD:** an HP pip (PAL, STAY or DOWN).
+  - **Events:** `companion_spawned`, `companion_downed`, `companion_revived` and `companion_killed_enemy`.
+  - **Announcer:** original lines through `announcement_requested` with literal text, so `announcer.json` is unchanged.
+
+Deviations from the earlier foundation notes:
+
+- It is its own pure module (`companion_ai.gd`), not the enemy AI with `faction: "ally"`. It reuses that module's pathing, line of sight and attack schema, but follower behaviour shares little with the enemy state machine.
+- When stuck it **teleports** beside the crawler after 1.5 s. The earlier note had it despawn after 5 s and respawn at the next room entry.
+- It never blocks doors, the crawler's attacks never touch it (so there is no knockback from the crawler), and it costs no collapse ticks. All three hold.
+- **Not built:**
+  - statuses on the companion (`StatusSystem` targets stay `"player"` or an enemy);
+  - ground hazards, puddles, death bursts and pulls hitting it;
+  - enemy strikes cleaving both the crawler and the companion (a strike hits only its chosen target);
+  - more than one companion;
+  - equipment and skill interactions;
+  - a settings or title-screen toggle (Wave 3C owns settings).
 
 ## 14. Open questions
 

@@ -149,7 +149,8 @@ signal skill_used(skill_id: String, rank: int)
 # --- Presentation ------------------------------------------------------------
 
 ## Player settings changed and were saved. `settings` is Settings.to_dict()
-## (resolution, fullscreen, master_volume, show_damage_numbers, screen_shake).
+## (resolution, fullscreen, master_volume, music_volume, sfx_volume,
+## show_damage_numbers, screen_shake). scripts/audio.gd applies the volumes.
 signal settings_changed(settings: Dictionary)
 
 ## Asks the dungeon-system announcer for a line. `trigger` is a key in

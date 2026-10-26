@@ -64,6 +64,7 @@ const Inventory = preload("res://scripts/inventory.gd")
 const ContentDB = preload("res://scripts/content/content_db.gd")
 const DoorLock = preload("res://scripts/door_lock.gd")
 const SkillSystem = preload("res://scripts/skill_system.gd")
+const Audio = preload("res://scripts/audio.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -98,6 +99,8 @@ var door_lock: DoorLock
 var skills: SkillSystem
 ## use_skill_N held last frame (press-edge latch for the slot actions).
 var _skill_held: Array = [false, false]
+## Sound effects, ambience and music on the Events bus (Wave 3A, audio.gd).
+var audio: Audio
 
 
 func _ready() -> void:
@@ -131,6 +134,7 @@ func _ready() -> void:
     settings = Settings.shared()
     settings.apply_window(get_window())
     announcer = _ensure_child("Announcer", Announcer) as Announcer
+    audio = _ensure_child("Audio", Audio) as Audio
     combat.setup(player, catalogue)
     # After services (the shop registers there), before Game's own Events hooks.
     items.setup(self)

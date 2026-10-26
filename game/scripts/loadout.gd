@@ -99,6 +99,9 @@ static func attack_profile(slot: String, weapon_id: String = "") -> Dictionary:
 ## heal_mult, pickup_radius, xp_mult (passives and statuses applied).
 static func player_stats() -> Dictionary:
     var rs: Node = Inventory.run_state()
+    # Wave 3E: the companion's pickup_radius buff while it is up (0 otherwise).
+    var companion_bonus = rs.get("companion_pickup_bonus")
     var base := {"move_speed": float(rs.config.get("player_speed", DEFAULT_SPEED)),
-        "damage_taken_mult": 1.0, "heal_mult": 1.0, "pickup_radius": 0.0, "xp_mult": 1.0}
+        "damage_taken_mult": 1.0, "heal_mult": 1.0,
+        "pickup_radius": float(companion_bonus) if companion_bonus != null else 0.0, "xp_mult": 1.0}
     return Resolver.apply_stat_modifiers(base, combat_modifiers())

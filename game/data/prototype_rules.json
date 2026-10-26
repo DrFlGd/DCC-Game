@@ -269,5 +269,13 @@
         "recovery": 0.05
       }
     }
+  },
+  "companion": {
+    "enabled": false,
+    "id": "cmp_scrap_hound",
+    "retarget_chance": 0.3,
+    "retarget_radius": 64,
+    "retarget_interval": 1.0,
+    "command_hold_seconds": 0.4
   }
 }

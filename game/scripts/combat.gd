@@ -74,6 +74,14 @@ var beams: Array[Dictionary] = []
 ## Wave 2B: the last player swing for the renderer {pattern, origin, direction,
 ## reach, arc_degrees, width}; drawn while player.melee_flash > 0.
 var last_swing: Dictionary = {}
+## Wave 3E: the Companion node while the companion prototype is on, else null.
+## Enemy strikes tagged `target: "companion"` and enemy bullets reach it
+## through hit_companion(); apply_damage(companion, ...) forwards to
+## Companion.take_damage().
+var companion = null
+## instance_id of the enemy the crawler damaged last (source "player"); the
+## companion prefers it as a target.
+var last_player_target := ""
 ## Hit feedback state (fx.gd); RoomRenderer draws it, Game honours its hit-stop.
 var fx = Fx.new()
 ## Seconds of hit-stop left (the simulation freezes while > 0). Alias of fx.hitstop.
@@ -411,6 +419,25 @@ func hit_player(to_hit: int, die: int, damage_bonus: int, source: String = "enem
     return true
 
 
+## Wave 3E: enemy attack roll against the companion: d20 + `to_hit` against
+## its AC, rolled with the companion's own RNG (never RunState.rng), damage
+## through apply_damage(). Ignored while it is downed or in hit i-frames.
+## Returns true when the attack landed.
+func hit_companion(to_hit: int, die: int, damage_bonus: int, source: String = "enemy",
+        damage_mult: float = 1.0) -> bool:
+    if companion == null or not companion.is_hittable():
+        return false
+    var attack: Dictionary = RPG.roll_to_hit(companion.rng, to_hit, companion.armor_class())
+    if not bool(attack["hit"]):
+        fx.number("companion", companion.position(), "MISS", "miss")
+        return false
+    var damage: int = RPG.roll_damage(companion.rng, die, damage_bonus, bool(attack["critical"]))
+    if damage_mult != 1.0:
+        damage = maxi(1, int(floorf(float(damage) * damage_mult)))
+    apply_damage(companion, damage, {"critical": bool(attack["critical"]), "source": source})
+    return true
+
+
 ## The damage pipeline. `target` is the Player node or an enemy dictionary from
 ## the current room. `context` keys: critical (bool), source (String), index
 ## (int, optional enemy index hint), damage_type ("physical" default), slot
@@ -439,6 +466,8 @@ func apply_damage(target, amount: int, context: Dictionary = {}) -> int:
         return _damage_enemy(target, amount, context)
     if target == player:
         return _damage_player(amount, context)
+    if companion != null and target == companion:
+        return companion.take_damage(amount, context)
     push_warning("apply_damage: unsupported target %s" % [target])
     return 0
 
@@ -468,6 +497,8 @@ func _damage_enemy(foe: Dictionary, amount: int, context: Dictionary) -> int:
     Events.enemy_damaged.emit(String(foe["instance_id"]), amount,
         bool(context.get("critical", false)))
     Events.say("Hit %s for %d damage" % [label, amount], "combat")
+    if String(context.get("source", "")) == "player":
+        last_player_target = String(foe["instance_id"])
     var triggers: bool = bool(context.get("triggers", true))
     if triggers and String(context.get("source", "")) == "player":
         EffectRunner.fire(self, "on_hit", {"target": foe, "slot": String(context.get("slot", "")),
@@ -630,6 +661,11 @@ func update_projectiles(delta: float) -> void:
                 {"status": String(bullet.get("status", "")),
                     "direction": Vector2(bullet["velocity"]).normalized()})
             collided = true
+        elif companion != null and companion.is_hittable() and position.distance_to(
+                companion.position()) < companion.radius() + HIT_SLOP:
+            hit_companion(int(bullet["attack_bonus"]), int(bullet["die"]), int(bullet["bonus"]),
+                String(bullet.get("source", "enemy")), float(bullet.get("mult", 1.0)))
+            collided = true
         if collided and i < projectiles.size() and is_same(projectiles[i], bullet):
             projectiles.remove_at(i)
 
@@ -664,6 +700,8 @@ func update_enemies(delta: float) -> void:
     var world := {"player_pos": player.world_position if decoy == Vector2.INF else decoy,
         "player_velocity": player_velocity if decoy == Vector2.INF else Vector2.ZERO,
         "blocked": blocked(), "allies": foes}
+    if companion != null:
+        companion.add_to_world(world)
     for foe in foes.duplicate():
         if int(foe["hp"]) <= 0:
             continue
@@ -691,6 +729,13 @@ func _resolve_enemy_action(foe: Dictionary, definition: Dictionary, action: Dict
     var source: String = String(foe["definition"])
     match String(action["type"]):
         "strike":
+            # Wave 3E: an enemy retargeted to the companion strikes it instead.
+            if String(action.get("target", "")) == "companion":
+                if bool(action["hit"]) and attack.has("damage_die"):
+                    var against: Dictionary = Enemies.attack_numbers(foe, definition, attack)
+                    hit_companion(int(against["to_hit"]), int(against["die"]),
+                        int(against["bonus"]), source, float(against["mult"]))
+                return
             # Wave 2B: while concealed, strikes land on the decoy.
             if not bool(action["hit"]) or StatusSystem.has_flag("player", "untargetable"):
                 return

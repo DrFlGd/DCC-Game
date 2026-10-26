@@ -7,8 +7,15 @@ supplied rat sheet; every other archetype gets a simple silhouette whose shape
 reads its role (charger wedge, zoner puffball, support bell-bearer, tank boulder,
 artillery bomb-carrier, boss warden). These are placeholders, not final art.
 
+It also writes the Wave 3E companion sheet
+game/assets/characters/companion/facing_4.png: one row of 5 frames of 24x24
+in the order E, S, W, N, downed (the Scrap Hound, an original placeholder:
+a scruffy hound with a riveted plate on its back).
+
 Usage (from the repository root):
     python3 tools/gen_placeholder_sprites.py [--out game/assets/enemies]
+        [--companion-out game/assets/characters/companion]
+        [--only all|enemies|companion]
 Requires Pillow. Output is deterministic.
 """
 import argparse
@@ -151,6 +158,62 @@ SILHOUETTES = {
 }
 
 
+# --- Companion (Wave 3E) -----------------------------------------------------------
+
+HOUND_FUR = (166, 118, 72, 255)
+HOUND_DARK = (112, 76, 44, 255)
+HOUND_PLATE = (150, 160, 170, 255)
+HOUND_RIVET = (226, 210, 120, 255)
+HOUND_HEAD = (196, 146, 92, 255)
+
+
+def hound(draw, size, a):
+    """Top-down Scrap Hound facing angle `a`: tail, legs, body, riveted plate, head."""
+    c = size / 2
+    poly(draw, rotate([(-8, -1), (-12, -3), (-11, 1)], a, c, c), HOUND_DARK)  # tail
+    for side in (-1, 1):  # legs
+        for fx in (-5, 3):
+            poly(draw, rotate([(fx - 1, side * 3), (fx, side * 6), (fx + 2, side * 6),
+                               (fx + 2, side * 3)], a, c, c), HOUND_DARK)
+    poly(draw, ellipse(c, c, 7, 4, a, (-1, 0)), HOUND_FUR)  # body
+    poly(draw, rotate([(-4, -2), (1, -2), (1, 2), (-4, 2)], a, c, c), HOUND_PLATE)  # plate
+    for x, y in rotate([(-3, 0), (0, 0)], a, c, c):
+        draw.point((round(x), round(y)), fill=HOUND_RIVET)
+    for side in (-1, 1):  # ears
+        poly(draw, rotate([(6, side * 2), (4, side * 6), (8, side * 3)], a, c, c), HOUND_DARK)
+    poly(draw, ellipse(c, c, 4, 3.5, a, (8, 0), n=16), HOUND_HEAD)  # head
+    for x, y in rotate([(9, -1.5), (9, 1.5)], a, c, c):  # eyes
+        draw.point((round(x), round(y)), fill=OUTLINE)
+    nose = rotate([(10.5, 0)], a, c, c)[0]
+    draw.point((round(nose[0]), round(nose[1])), fill=OUTLINE)
+
+
+def hound_downed(draw, size):
+    """Downed pose: flopped on its side, legs out, X eyes."""
+    c = size / 2
+    for fx in (-5, -1, 3, 6):
+        draw.line([(c + fx, c + 2), (c + fx + 1, c + 7)], fill=HOUND_DARK, width=1)
+    poly(draw, ellipse(c, c, 8, 3.5, 0.0, (0, 1)), HOUND_FUR)
+    poly(draw, [(c - 4, c - 2), (c + 1, c - 2), (c + 1, c + 1), (c - 4, c + 1)], HOUND_PLATE)
+    poly(draw, ellipse(c, c, 4, 3.5, 0.0, (8, 0), n=16), HOUND_HEAD)
+    ex, ey = c + 8, c
+    draw.line([(ex - 1, ey - 1), (ex + 1, ey + 1)], fill=OUTLINE)
+    draw.line([(ex - 1, ey + 1), (ex + 1, ey - 1)], fill=OUTLINE)
+    draw.line([(c - 8, c + 1), (c - 12, c + 3)], fill=HOUND_DARK)  # limp tail
+
+
+def companion_sheet(frame=24):
+    img = Image.new("RGBA", (frame * 5, frame), (0, 0, 0, 0))
+    for index in range(5):
+        tile = Image.new("RGBA", (frame, frame), (0, 0, 0, 0))
+        if index < 4:
+            hound(ImageDraw.Draw(tile), frame, index * math.pi / 2.0)
+        else:
+            hound_downed(ImageDraw.Draw(tile), frame)
+        img.paste(tile, (index * frame, 0), tile)
+    return img
+
+
 # --- Rat palette swaps -------------------------------------------------------------
 
 def recolor_rat(source, variant):
@@ -177,12 +240,21 @@ def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", default=os.path.join(root, "game", "assets", "enemies"))
+    parser.add_argument("--companion-out",
+                        default=os.path.join(root, "game", "assets", "characters", "companion"))
+    parser.add_argument("--only", choices=["all", "enemies", "companion"], default="all")
     args = parser.parse_args()
-    rat = Image.open(os.path.join(args.out, "rat", "facing_8.png")).convert("RGBA")
-    for enemy_id, variant in RAT_VARIANTS.items():
-        _save(recolor_rat(rat, variant), args.out, enemy_id)
-    for enemy_id, (frame, painter) in SILHOUETTES.items():
-        _save(sheet(frame, painter), args.out, enemy_id)
+    if args.only in ("all", "enemies"):
+        rat = Image.open(os.path.join(args.out, "rat", "facing_8.png")).convert("RGBA")
+        for enemy_id, variant in RAT_VARIANTS.items():
+            _save(recolor_rat(rat, variant), args.out, enemy_id)
+        for enemy_id, (frame, painter) in SILHOUETTES.items():
+            _save(sheet(frame, painter), args.out, enemy_id)
+    if args.only in ("all", "companion"):
+        os.makedirs(args.companion_out, exist_ok=True)
+        path = os.path.join(args.companion_out, "facing_4.png")
+        companion_sheet().save(path, optimize=True)
+        print("wrote %s (%dx%d)" % (os.path.relpath(path), 24 * 5, 24))
 
 
 def _save(image, out_dir, enemy_id):

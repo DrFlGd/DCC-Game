@@ -85,7 +85,8 @@ static func evaluate_condition(condition, context: Dictionary,
 
 ## Gathers the effects from equipped records that fire on `trigger`.
 ## Each entry is {"id": source_id, "effects": [effect ids or inline effect dictionaries],
-## "stacks": optional copies}; ContentDB.loadout() builds these. Context keys used:
+## "stacks": optional copies, "magnitude_mult": optional scale}; ContentDB.loadout()
+## builds these. Context keys used:
 ## "effect_defs" (id -> effect) or "db" (a ContentDB.load_all() result), "rng", "now",
 ## "cooldowns" (cooldown_key -> ready time), plus any condition inputs.
 ## The effect's `stacking` caps how many copies of one effect id contribute
@@ -124,11 +125,39 @@ static func collect_modifiers(equipped: Array[Dictionary], trigger: String,
                     continue
                 counts[effect_id] = int(counts.get(effect_id, 0)) + 1
                 var modifier: Dictionary = effect.duplicate(true)
+                if entry.has("magnitude_mult"):
+                    scale_magnitude(modifier, float(entry["magnitude_mult"]))
                 modifier["effect_id"] = effect_id
                 modifier["source"] = source
                 modifier["cooldown_key"] = key
                 result.append(modifier)
     return result
+
+## Wave 2F `magnitude_mult` hook (INT scaling of skill effects): scales
+## `effect` in place. add, heal, damage, cooldown_reduction and additive
+## projectile modifiers multiply their magnitude; multiply operations scale
+## their distance from 1 (x0.9 becomes x0.89 at 1.1); apply_status scales a
+## positive magnitude (shield pool, DoT per tick). set and grant_ticks are
+## never scaled. An entry's "magnitude_mult" (ContentDB.loadout) applies it in
+## collect_modifiers().
+static func scale_magnitude(effect: Dictionary, mult: float) -> void:
+    if absf(mult - 1.0) <= EPSILON or not effect.has("magnitude"):
+        return
+    var magnitude: float = float(effect["magnitude"])
+    var operation: String = String(effect.get("operation", ""))
+    if operation == "spawn_projectile_modifier":
+        operation = String(effect.get("apply", "add"))
+    match operation:
+        "multiply":
+            effect["magnitude"] = 1.0 + (magnitude - 1.0) * mult
+        "add", "heal", "damage", "cooldown_reduction":
+            effect["magnitude"] = magnitude * mult
+        "apply_status":
+            if magnitude > 0.0:
+                effect["magnitude"] = magnitude * mult
+        _:
+            return
+    effect["magnitude_mult"] = mult
 
 ## Returns a copy of `cooldowns` with every fired modifier that has a cooldown set to
 ## become ready at now + cooldown.

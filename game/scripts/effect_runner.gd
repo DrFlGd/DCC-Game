@@ -6,15 +6,18 @@ extends RefCounted
 ## (conditions, stacking, internal cooldowns; `chance` rolls use RunState.rng,
 ## and only when an effect actually has a chance), starts their cooldowns in
 ## inventory.effect_cooldowns and executes them. fire_item() does the same for
-## one record only (an active's or a consumable's on_use).
+## one record only (an active's or a consumable's on_use); fire_skill() for one
+## skill at a given rank (Wave 2F: an active skill's on_use, INT-scaled).
 ##
 ## `extra` context keys: target (enemy dictionary), origin (Vector2 centre for
 ## enemies_in_radius; default the crawler), slot, weapon_id, damage, source.
 ## Operations: heal (x heal_mult), damage (auto-hit, through
 ## combat.apply_damage with source "effect:<id>"), apply_status / set-status
 ## (StatusSystem), grant_ticks (RunState.add_ticks(n, "item:<id>" or
-## "skill:<id>")), cooldown_reduction (melee, ranged, items, all; skills and
-## dodge belong to later PRs). Stat operations on non-passive triggers are
+## "skill:<id>")), cooldown_reduction (melee, ranged, items, skills, dodge,
+## all; 2F added skills = every active-skill cooldown in
+## RunState.skill_cooldowns and dodge = the player's dodge_cooldown gap).
+## Stat operations on non-passive triggers are
 ## ignored (timed stat buffs are statuses, CONTENT_RULES §10).
 ## Autoloads are looked up at runtime, so tests may preload this module.
 const ContentDB = preload("res://scripts/content/content_db.gd")
@@ -66,6 +69,15 @@ static func fire(combat, trigger: String, extra: Dictionary = {}, slot: String =
 static func fire_item(combat, id: String, trigger: String = "on_use",
         extra: Dictionary = {}) -> Array[Dictionary]:
     var equipped: Array[Dictionary] = ContentDB.loadout([id])
+    return _collect_and_run(combat, equipped, trigger, extra)
+
+
+## Fires `trigger` for skill `id` at `rank` alone (an active skill's on_use).
+## The entry carries Loadout.skill_magnitude_mult() (INT scaling).
+static func fire_skill(combat, id: String, rank: int, trigger: String = "on_use",
+        extra: Dictionary = {}) -> Array[Dictionary]:
+    var equipped: Array[Dictionary] = ContentDB.loadout([{"id": id, "rank": rank, "stacks": 1,
+        "magnitude_mult": Loadout.skill_magnitude_mult()}])
     return _collect_and_run(combat, equipped, trigger, extra)
 
 
@@ -158,3 +170,13 @@ static func _reduce_cooldowns(combat, key: String, seconds: float) -> void:
         combat.player.fire_cooldown = maxf(0.0, combat.player.fire_cooldown - seconds)
     if key == "items" or key == "all":
         Inventory.reduce_active_cooldown(seconds)
+    if key == "skills" or key == "all":
+        var cooldowns: Dictionary = Inventory.run_state().skill_cooldowns
+        for id in cooldowns.keys():
+            var left: float = float(cooldowns[id]) - seconds
+            if left <= 0.000001:
+                cooldowns.erase(id)
+            else:
+                cooldowns[id] = left
+    if combat != null and (key == "dodge" or key == "all"):
+        combat.player.dodge_cooldown = maxf(0.0, combat.player.dodge_cooldown - seconds)

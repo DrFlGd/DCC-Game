@@ -59,6 +59,7 @@ const Announcer = preload("res://scripts/ui/announcer.gd")
 const ItemSystem = preload("res://scripts/item_system.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const DoorLock = preload("res://scripts/door_lock.gd")
+const Audio = preload("res://scripts/audio.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -89,6 +90,8 @@ var settings
 var announcer: Announcer
 ## D-07 door lock (Wave 2D).
 var door_lock: DoorLock
+## Sound effects, ambience and music on the Events bus (Wave 3A, audio.gd).
+var audio: Audio
 
 
 func _ready() -> void:
@@ -122,6 +125,7 @@ func _ready() -> void:
     settings = Settings.shared()
     settings.apply_window(get_window())
     announcer = _ensure_child("Announcer", Announcer) as Announcer
+    audio = _ensure_child("Audio", Audio) as Audio
     combat.setup(player, catalogue)
     # After services (the shop registers there), before Game's own Events hooks.
     items.setup(self)

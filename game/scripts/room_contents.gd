@@ -2,6 +2,8 @@ extends RefCounted
 ## Deterministic 24x24 obstacle/decoration map. Every linked exit is reachable
 ## from the center and from every other exit (flood fill on 4-neighbor cells).
 const Interactables = preload("res://scripts/interactables.gd")
+const Biomes = preload("res://scripts/biomes.gd")
+const Hazards = preload("res://scripts/hazards.gd")
 const SIZE := 24
 const TILE := 16.0
 const DIRECTIONS := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
@@ -85,15 +87,18 @@ static func density_for(kind: String, density: int, caps: Dictionary = {}) -> in
     return mini(density, int(table[kind])) if table.has(kind) else density
 
 
-## Generates a room interior: {blocked, props, interactables, plates}.
+## Generates a room interior: {blocked, props, interactables, plates, patches}.
 ## `props` are obstacles (rubble/pillar). `interactables` are
 ## Interactables.make() entries (chest, shrine, rest, shop) whose cells are
 ## also blocked. `plates` are trap pressure plates {id, cell, kind
 ## ("spike" | "drain"), armed, rearm}. Obstacle draws are unchanged from the
 ## prototype; features use their own RNG stream so obstacle maps of existing
-## kinds keep their layout.
+## kinds keep their layout. Wave 3B: `patches` are the biome's floor hazard
+## patches (Hazards.make_patch shape; [] for biomes without hazards), drawn
+## from a third RNG stream so obstacles, features and plates never change.
 static func generate(seed_value: int, room_id: int, links: Dictionary, kind: String,
-        density: int = 38, caps: Dictionary = {}, plate_rules: Dictionary = {}) -> Dictionary:
+        density: int = 38, caps: Dictionary = {}, plate_rules: Dictionary = {},
+        biome: String = "") -> Dictionary:
     var rng := RandomNumberGenerator.new()
     rng.seed = int(seed_value) + int(room_id) * 7919 + 39317
     var blocked: Dictionary = {}
@@ -129,7 +134,69 @@ static func generate(seed_value: int, room_id: int, links: Dictionary, kind: Str
         props.append({"cell": cell, "kind": kind_name})
     var result := {"blocked": blocked, "props": props, "interactables": [], "plates": []}
     _add_features(result, seed_value, room_id, links, kind, plate_rules)
+    result["patches"] = biome_patches(seed_value, room_id, kind, biome, blocked,
+        result["plates"])
     return result
+
+
+## Biome floor patches for a room (biomes.json `hazards`, filtered by room
+## kind): per spec, per_room [min, max] patches of cells [min, max] connected
+## cells. Patches never block movement; they avoid obstacles, plates (and
+## their neighbours), the 4x4 spawn centre, door lanes and each other.
+static func biome_patches(seed_value: int, room_id: int, kind: String, biome: String,
+        blocked: Dictionary, plates: Array = []) -> Array[Dictionary]:
+    var patches: Array[Dictionary] = []
+    var specs: Array = Biomes.hazard_specs(biome, kind) if biome != "" else []
+    if specs.is_empty():
+        return patches
+    var rng := RandomNumberGenerator.new()
+    rng.seed = int(seed_value) + int(room_id) * 7919 + 61031
+    var taken: Dictionary = {}
+    for plate in plates:
+        _reserve(taken, Vector2i(plate["cell"]))
+    for spec in specs:
+        var per_room: Array = spec.get("per_room", [1, 1])
+        var sizes: Array = spec.get("cells", [1, 1])
+        for _n in range(rng.randi_range(int(per_room[0]), int(per_room[1]))):
+            for _attempt in range(30):
+                var anchor := Vector2i(rng.randi_range(2, SIZE - 3), rng.randi_range(2, SIZE - 3))
+                if not _patch_cell_ok(anchor, blocked, taken):
+                    continue
+                var want: int = rng.randi_range(int(sizes[0]), int(sizes[1]))
+                var cells: Array[Vector2i] = [anchor]
+                for _grow in range(want * 6):
+                    if cells.size() >= want:
+                        break
+                    var next: Vector2i = cells[rng.randi_range(0, cells.size() - 1)] \
+                        + DIRECTIONS[rng.randi_range(0, 3)]
+                    if not cells.has(next) and _patch_cell_ok(next, blocked, taken):
+                        cells.append(next)
+                for cell in cells:
+                    _reserve(taken, cell)
+                patches.append(Hazards.make_patch(spec, cells,
+                    "%s_%d_%d" % [String(spec["kind"]), room_id, patches.size()]))
+                break
+    return patches
+
+
+static func _reserve(taken: Dictionary, cell: Vector2i) -> void:
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            taken[cell + Vector2i(dx, dy)] = true
+
+
+static func _patch_cell_ok(cell: Vector2i, blocked: Dictionary, taken: Dictionary) -> bool:
+    if cell.x < 2 or cell.y < 2 or cell.x > SIZE - 3 or cell.y > SIZE - 3:
+        return false
+    if blocked.has(cell) or taken.has(cell):
+        return false
+    if cell.x >= 10 and cell.x <= 13 and cell.y >= 10 and cell.y <= 13:
+        return false
+    if (cell.x >= 10 and cell.x <= 13) and (cell.y <= 3 or cell.y >= 20):
+        return false
+    if (cell.y >= 10 and cell.y <= 13) and (cell.x <= 3 or cell.x >= 20):
+        return false
+    return true
 
 
 static func _add_features(result: Dictionary, seed_value: int, room_id: int, links: Dictionary,

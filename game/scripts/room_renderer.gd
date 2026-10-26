@@ -11,10 +11,18 @@ extends Node2D
 ## World pixels are mapped to the window with `layout` (room_layout.gd), so the
 ## room is always 24x24 tiles whatever the window size.
 ##
+## Wave 3B: tiles are drawn by **slot name** from the room's biome
+## (Biomes.art: atlas + tiles.json; art-less biomes draw the stone_crypt atlas
+## multiplied by their fallback_tint). _piece(slot, ...) is the one entry
+## point; the real south wall, outer corners, thresholds and door states
+## replace the rotated wall-top stand-ins. Decals and small props are
+## sprinkled per cell from Biomes.cell_hash (floor seed, room, cell): no RNG.
+##
 ## Follow-up candidate: migrate tiles/props to a TileMapLayer and actors to
 ## Sprite2D/AnimatedSprite2D nodes under a transformed world root once
 ## animation work starts; keep this script as the debug-overlay layer.
 const Contents = preload("res://scripts/room_contents.gd")
+const Biomes = preload("res://scripts/biomes.gd")
 const Layout = preload("res://scripts/room_layout.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
 const Hazards = preload("res://scripts/hazards.gd")
@@ -29,17 +37,25 @@ const ROOM := Layout.ARENA
 const MID := Vector2(192, 192)
 const DIRECTIONS := ["N", "E", "S", "W"]
 const BACKGROUND := Color("#101720")
+## Last-resort atlas when a biome's tileset fails to load (rows 0-1 only).
 const CRYPT = preload("res://assets/biomes/stone_crypt/tileset_16x16.png")
+## Hazard patch animation: 4 frames at 6 fps (BIOMES_AND_TILESETS §8 Q4).
+const HAZARD_FPS := 6.0
+## Cells never dressed: the 4x4 spawn centre and the door lanes.
+const DRESSING_DECAL_SLOTS := ["decal_a", "decal_b", "decal_c", "decal_d"]
+const DRESSING_PROP_SLOTS := ["prop_small_a", "prop_small_b"]
 const CRAWLER = preload("res://assets/characters/crawler/facing_8.png")
 ## Telegraph colours by attack type (sprite tint blends 50 % toward these).
 const TELEGRAPH_COLORS := {"melee": Color("#ff5a4f"), "area": Color("#ffb347"),
     "dash": Color("#ff8c2a"), "ranged": Color("#d778dc"), "puddle": Color("#c6e05a"),
     "summon": Color("#f2a2c8"), "support": Color("#8fd3ff")}
+## Legacy sampler regions (rows 0-1 of the standard atlas), kept for reference
+## and for the CRYPT fallback; drawing goes through slot names now.
 const FLOOR_TILE := Rect2(0, 0, 16, 16)
 const FLOOR_ALT := Rect2(16, 0, 16, 16)
 const WALL_TOP := Rect2(32, 0, 16, 16)
-const WALL_LEFT_EDGE := Rect2(64, 0, 16, 16)
-const WALL_RIGHT_EDGE := Rect2(48, 0, 16, 16)
+const WALL_EDGE_E := Rect2(48, 0, 16, 16)
+const WALL_EDGE_W := Rect2(64, 0, 16, 16)
 const WALL_FACE := Rect2(80, 0, 16, 16)
 const WALL_TORCH := Rect2(96, 0, 16, 16)
 const DOOR_TILE := Rect2(112, 0, 16, 16)
@@ -59,6 +75,10 @@ var catalogue: Dictionary = {}
 var door_lock
 ## sprite id -> {texture: Texture2D, render: Vector2}, loaded on first use.
 var _sheets: Dictionary = {}
+## Biome atlas path -> Texture2D, loaded on first use (Wave 3B).
+var _atlases: Dictionary = {}
+## Biomes.art() of the room being drawn (set by _draw_room / use_biome).
+var _art: Dictionary = {}
 
 
 func setup(player_node, combat_node, collapse_rules, enemy_catalogue: Dictionary) -> void:
@@ -93,15 +113,23 @@ func _draw() -> void:
 
 
 func _draw_room() -> void:
-    # Supplied 8x2 native-16px atlas; the sampler has no explicit corner/south
-    # pieces, so rotated top-stone is a temporary joining fallback.
-    for y in range(SIZE):
-        for x in range(SIZE):
-            var tile_center := Vector2((float(x) + 0.5) * TILE, (float(y) + 0.5) * TILE)
-            var tile_region := FLOOR_ALT if (x * 17 + y * 13) % 9 == 0 else FLOOR_TILE
-            _crypt_piece(tile_region, tile_center, Vector2(TILE, TILE))
     var room: Dictionary = RunState.floor["rooms"][RunState.current_room_id]
     var kind: String = String(room["kind"])
+    var biome: String = String(room.get("biome", Biomes.default_id()))
+    use_biome(biome)
+    var state: Dictionary = RunState.current_room()
+    var blocked: Dictionary = state.get("blocked", {})
+    var floor_seed: int = RunState.floor_seed()
+    var room_id: int = int(room["id"])
+    var dressing: Dictionary = Biomes.dressing(biome)
+    for y in range(SIZE):
+        for x in range(SIZE):
+            var cell := Vector2i(x, y)
+            var tile_center := Vector2((float(x) + 0.5) * TILE, (float(y) + 0.5) * TILE)
+            _piece(floor_slot(cell, floor_seed, room_id, dressing), tile_center, Vector2(TILE, TILE))
+    var ambient: Color = Biomes.ambient(biome)
+    if ambient.a > 0.0:
+        draw_rect(ROOM, ambient)
     var tint := Color.TRANSPARENT
     if kind == "boss":
         tint = Color(0.3, 0.05, 0.09, 0.16)
@@ -111,8 +139,10 @@ func _draw_room() -> void:
         tint = Color(0.35, 0.24, 0.06, 0.14)
     if tint.a > 0.0:
         draw_rect(ROOM, tint)
+    _draw_dressing(blocked, floor_seed, room_id, dressing, biome)
+    _draw_patches(state.get("patches", []))
 
-    for prop in RunState.current_room().get("props", []):
+    for prop in state.get("props", []):
         _draw_obstacle(prop)
     _draw_room_features()
     _draw_pickups()
@@ -128,10 +158,142 @@ func _draw_room() -> void:
     elif kind == "guild_hall":
         _text("GUILD", MID + Vector2(-22, -146), 17, Color("#b4f9d8"))
     elif kind == "exit":
-        _crypt_piece(STAIRS, MID, Vector2(32, 32))
+        _piece("stairs_down", MID, Vector2(32, 32))
         _text("EXIT", MID + Vector2(-16, -146), 17, Color("#ffdc91"))
     elif ROOM_LABELS.has(kind):
         _text(String(ROOM_LABELS[kind][0]), MID + Vector2(-28, -146), 17, ROOM_LABELS[kind][1])
+
+
+# --- Wave 3B: biome slots, dressing and patches ----------------------------------
+
+## Selects the biome whose atlas and slot map _piece() draws with.
+func use_biome(biome: String) -> void:
+    _art = Biomes.art(biome)
+
+
+## The biome currently drawn (Biomes.art() shape), for tests and the HUD.
+func current_art() -> Dictionary:
+    return _art
+
+
+## Atlas texture of the current biome (CRYPT when its tileset cannot load).
+func atlas_texture() -> Texture2D:
+    var path: String = String(_art.get("texture", ""))
+    if path == "":
+        return CRYPT
+    if not _atlases.has(path):
+        var texture: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+        _atlases[path] = texture if texture != null else CRYPT
+    return _atlases[path]
+
+
+## Atlas region of `slot` in the current biome (standard layout when unnamed).
+func slot_region(slot: String) -> Rect2:
+    var slots: Dictionary = _art.get("slots", {})
+    return slots.get(slot, Biomes.standard_region(slot))
+
+
+## Floor slot of `cell`: the prototype's floor_b pattern, plus floor_c/d where
+## the biome's floor_variant_chance allows (stone_crypt: 0, unchanged look).
+static func floor_slot(cell: Vector2i, floor_seed: int, room_id: int, dressing: Dictionary) -> String:
+    var chance: float = float(dressing.get("floor_variant_chance", 0.0))
+    if chance > 0.0:
+        var roll: int = Biomes.cell_hash(floor_seed, room_id, cell, 7)
+        if float(roll % 1000) / 1000.0 < chance:
+            return "floor_c" if roll % 2 == 0 else "floor_d"
+    return "floor_b" if (cell.x * 17 + cell.y * 13) % 9 == 0 else "floor_a"
+
+
+## Cosmetic decals and small props on free cells, chosen per cell from
+## Biomes.cell_hash (no RNG): the same room always dresses the same way.
+## Returns the slot drawn at each cell: {Vector2i: String}.
+static func dressing_for(blocked: Dictionary, floor_seed: int, room_id: int,
+        dressing: Dictionary) -> Dictionary:
+    var picks: Dictionary = {}
+    var decal_chance: float = float(dressing.get("decal_chance", 0.0))
+    var prop_chance: float = float(dressing.get("prop_chance", 0.0))
+    var feature_chance: float = float(dressing.get("feature_chance", 0.0))
+    if decal_chance <= 0.0 and prop_chance <= 0.0 and feature_chance <= 0.0:
+        return picks
+    for y in range(1, SIZE - 1):
+        for x in range(1, SIZE - 1):
+            var cell := Vector2i(x, y)
+            if blocked.has(cell) or not dressable(cell):
+                continue
+            var roll: int = Biomes.cell_hash(floor_seed, room_id, cell, 11)
+            var unit: float = float(roll % 10000) / 10000.0
+            var pick: int = Biomes.cell_hash(floor_seed, room_id, cell, 13)
+            if unit < feature_chance:
+                picks[cell] = "feature_b"
+            elif unit < feature_chance + prop_chance:
+                picks[cell] = DRESSING_PROP_SLOTS[pick % DRESSING_PROP_SLOTS.size()]
+            elif unit < feature_chance + prop_chance + decal_chance:
+                picks[cell] = DRESSING_DECAL_SLOTS[pick % DRESSING_DECAL_SLOTS.size()]
+    return picks
+
+
+## False for the 4x4 spawn centre and the door approach lanes.
+static func dressable(cell: Vector2i) -> bool:
+    if cell.x >= 10 and cell.x <= 13 and cell.y >= 10 and cell.y <= 13:
+        return false
+    if (cell.x == 11 or cell.x == 12) and (cell.y <= 3 or cell.y >= SIZE - 4):
+        return false
+    if (cell.y == 11 or cell.y == 12) and (cell.x <= 3 or cell.x >= SIZE - 4):
+        return false
+    return true
+
+
+func _draw_dressing(blocked: Dictionary, floor_seed: int, room_id: int, dressing: Dictionary,
+        biome: String) -> void:
+    var picks: Dictionary = dressing_for(blocked, floor_seed, room_id, dressing)
+    var light: Dictionary = Biomes.light(biome)
+    for cell in picks.keys():
+        var center: Vector2 = Contents.cell_center(cell)
+        var slot: String = String(picks[cell])
+        if slot == "feature_b" and float(light["alpha"]) > 0.0:
+            _draw_light_pool(center, light)
+        _piece(slot, center, Vector2(TILE, TILE))
+
+
+## Soft light pool (two concentric discs) under glowing features.
+func _draw_light_pool(center: Vector2, light: Dictionary) -> void:
+    var color: Color = light["color"]
+    var radius: float = float(light["radius"])
+    var alpha: float = float(light["alpha"])
+    draw_circle(center, radius, Color(color, alpha * 0.5))
+    draw_circle(center, radius * 0.55, Color(color, alpha))
+
+
+## Current animation frame of an armed patch (4 frames, HAZARD_FPS).
+static func hazard_frame(time_seconds: float) -> int:
+    return int(floorf(time_seconds * HAZARD_FPS)) % 4
+
+
+## Biome floor patches: hazard frames (animated while armed, dimmed while
+## re-arming) with edge/corner transitions on open sides, or a decal slot
+## per cell (luminous puddles).
+func _draw_patches(patches: Array) -> void:
+    var t: float = float(Time.get_ticks_msec()) / 1000.0
+    for patch in patches:
+        var cells: Array = patch.get("cells", [])
+        var armed: bool = bool(patch.get("armed", true))
+        var tile: String = String(patch.get("tile", "hazard"))
+        var modulation := Color.WHITE if armed else Color(1, 1, 1, 0.55)
+        var lookup: Dictionary = {}
+        for cell in cells:
+            lookup[Vector2i(cell)] = true
+        for cell in cells:
+            var center: Vector2 = Contents.cell_center(Vector2i(cell))
+            if tile == "hazard":
+                var frame: int = hazard_frame(t + float(Vector2i(cell).x) * 0.07) if armed else 0
+                _piece("hazard_f%d" % frame, center, Vector2(TILE, TILE), 0.0, modulation)
+                for side in [["n", Vector2i(0, -1)], ["e", Vector2i(1, 0)], ["s", Vector2i(0, 1)],
+                        ["w", Vector2i(-1, 0)]]:
+                    if not lookup.has(Vector2i(cell) + side[1]):
+                        _piece("haz_edge_" + String(side[0]), center, Vector2(TILE, TILE), 0.0,
+                            modulation)
+            else:
+                _piece(tile, center, Vector2(TILE, TILE), 0.0, modulation)
 
 
 # --- Wave 2E: special rooms, interactables, plates, hazards ---------------------
@@ -174,7 +336,7 @@ func _draw_room_features() -> void:
         var tint := Color(1, 1, 1, 0.45) if used else Color.WHITE
         match String(feature["kind"]):
             "chest":
-                _crypt_piece(PROP_CHEST, center, Vector2(TILE, TILE), 0.0, tint)
+                _piece("chest", center, Vector2(TILE, TILE), 0.0, tint)
             "shrine":
                 draw_circle(center, 7.0, Color("#8fb8ff", 0.35 if used else 0.9))
                 draw_arc(center, 9.0, 0.0, TAU, 20, Color("#dfe9ff", tint.a), 1.0)
@@ -188,30 +350,47 @@ func _draw_room_features() -> void:
                 draw_circle(center, 5.0, Color("#fff1a7", tint.a))
 
 
+## The wall ring by slot: wall_top + wall_face(_lit) north, wall_south south,
+## wall_edge_w / wall_edge_e on the sides (the floor-facing rim of each edge
+## tile faces the room; see the asset README) and the four outer corners.
+## Door gaps show a threshold tile under the leaves.
 func _draw_walls(links: Dictionary) -> void:
     for x in range(SIZE):
         var px: float = (float(x) + 0.5) * TILE
-        var north_gap: bool = links.has("N") and (x == 11 or x == 12)
-        var south_gap: bool = links.has("S") and (x == 11 or x == 12)
-        if not north_gap:
-            _crypt_piece(WALL_TOP, Vector2(px, -TILE * 0.5), Vector2(TILE, TILE))
-            var face: Rect2 = WALL_TORCH if (x == 5 or x == 18) else WALL_FACE
-            _crypt_piece(face, Vector2(px, TILE * 0.5), Vector2(TILE, TILE))
-        if not south_gap:
-            _crypt_piece(WALL_TOP, Vector2(px, ROOM.end.y + TILE * 0.5),
-                Vector2(TILE, TILE), PI)
+        var gap: bool = x == 11 or x == 12
+        if links.has("N") and gap:
+            _piece("threshold", Vector2(px, -TILE * 0.5), Vector2(TILE, TILE))
+        else:
+            _piece("wall_top", Vector2(px, -TILE * 0.5), Vector2(TILE, TILE))
+            _piece("wall_face_lit" if (x == 5 or x == 18) else "wall_face",
+                Vector2(px, TILE * 0.5), Vector2(TILE, TILE))
+        if links.has("S") and gap:
+            _piece("threshold", Vector2(px, ROOM.end.y + TILE * 0.5), Vector2(TILE, TILE), PI)
+        else:
+            _piece("wall_south", Vector2(px, ROOM.end.y + TILE * 0.5), Vector2(TILE, TILE))
     for y in range(SIZE):
         var py: float = (float(y) + 0.5) * TILE
-        if not (links.has("W") and (y == 11 or y == 12)):
-            _crypt_piece(WALL_RIGHT_EDGE, Vector2(-TILE * 0.5, py), Vector2(TILE, TILE))
-        if not (links.has("E") and (y == 11 or y == 12)):
-            _crypt_piece(WALL_LEFT_EDGE, Vector2(ROOM.end.x + TILE * 0.5, py),
-                Vector2(TILE, TILE))
-    # Corner fallback uses wall-top stone because the free sampler omits corner tiles.
-    _crypt_piece(WALL_TOP, Vector2(-8, -8), Vector2(TILE, TILE))
-    _crypt_piece(WALL_TOP, Vector2(ROOM.end.x + 8, -8), Vector2(TILE, TILE), PI * 0.5)
-    _crypt_piece(WALL_TOP, ROOM.end + Vector2(8, 8), Vector2(TILE, TILE), PI)
-    _crypt_piece(WALL_TOP, Vector2(-8, ROOM.end.y + 8), Vector2(TILE, TILE), -PI * 0.5)
+        var gap: bool = y == 11 or y == 12
+        if links.has("W") and gap:
+            _piece("threshold", Vector2(-TILE * 0.5, py), Vector2(TILE, TILE), -PI * 0.5)
+        else:
+            _piece("wall_edge_w", Vector2(-TILE * 0.5, py), Vector2(TILE, TILE))
+        if links.has("E") and gap:
+            _piece("threshold", Vector2(ROOM.end.x + TILE * 0.5, py), Vector2(TILE, TILE), PI * 0.5)
+        else:
+            _piece("wall_edge_e", Vector2(ROOM.end.x + TILE * 0.5, py), Vector2(TILE, TILE))
+    _piece("corner_out_nw", Vector2(-8, -8), Vector2(TILE, TILE))
+    _piece("corner_out_ne", Vector2(ROOM.end.x + 8, -8), Vector2(TILE, TILE))
+    _piece("corner_out_se", ROOM.end + Vector2(8, 8), Vector2(TILE, TILE))
+    _piece("corner_out_sw", Vector2(-8, ROOM.end.y + 8), Vector2(TILE, TILE))
+
+
+## Door leaf slot: door_locked while DoorLock seals the room, door_open toward
+## rooms already visited, door_closed otherwise.
+func door_slot(next_id: int) -> String:
+    if door_lock != null and float(door_lock.visual) > 0.5:
+        return "door_locked"
+    return "door_open" if RunState.visited.has(next_id) else "door_closed"
 
 
 func _draw_door(direction: String, next_id: int) -> void:
@@ -245,8 +424,9 @@ func _draw_door(direction: String, next_id: int) -> void:
             label_pos = Vector2(ROOM.end.x - 40, MID.y + 6)
     # Two 16px leaf sprites visually fill each 32px linked-door opening.
     var door_offset := Vector2(TILE * 0.5, 0).rotated(rotation)
-    _crypt_piece(DOOR_TILE, door_center - door_offset, Vector2(TILE, TILE), rotation, color)
-    _crypt_piece(DOOR_TILE, door_center + door_offset, Vector2(TILE, TILE), rotation, color)
+    var leaf: String = door_slot(next_id)
+    _piece(leaf, door_center - door_offset, Vector2(TILE, TILE), rotation, color)
+    _piece(leaf, door_center + door_offset, Vector2(TILE, TILE), rotation, color)
     _draw_door_lock(door_center, rotation)
     var net_ticks: int = door_net_ticks(rules, RunState.ticks, kind,
         not RunState.visited.has(next_id), next_id)
@@ -266,8 +446,8 @@ func _draw_door(direction: String, next_id: int) -> void:
 func _draw_obstacle(prop: Dictionary) -> void:
     var cell: Vector2i = prop["cell"]
     var center: Vector2 = Contents.cell_center(cell)
-    var region: Rect2 = PROP_BARREL if prop["kind"] == "pillar" else PROP_BONES
-    _crypt_piece(region, center, Vector2(TILE, TILE))
+    _piece("obstacle_pillar" if prop["kind"] == "pillar" else "obstacle_rubble", center,
+        Vector2(TILE, TILE))
 
 
 func _draw_actors() -> void:
@@ -376,12 +556,23 @@ func _draw_telegraph(foe: Dictionary, attack: Dictionary, cue: Color) -> void:
             draw_arc(center, radius, 0.0, TAU, 32, cue, 1.5)
 
 
-func _crypt_piece(region: Rect2, center: Vector2, size: Vector2,
+## Draws one atlas slot of the current biome at `center` (world px), tinted by
+## the biome's fallback tint when it borrows another biome's art.
+func _piece(slot: String, center: Vector2, size: Vector2, rotation: float = 0.0,
+        modulation: Color = Color.WHITE) -> void:
+    if _art.is_empty():
+        use_biome(Biomes.default_id())
+    var tint: Color = _art.get("tint", Color.WHITE)
+    _atlas_piece(atlas_texture(), slot_region(slot), center, size, rotation,
+        modulation if tint == Color.WHITE else modulation * tint)
+
+
+func _atlas_piece(atlas: Texture2D, region: Rect2, center: Vector2, size: Vector2,
         rotation: float = 0.0, modulation: Color = Color.WHITE) -> void:
     var offset: Vector2 = layout["offset"]
     var scale: float = float(layout["scale"])
     draw_set_transform(offset + center * scale, rotation, Vector2.ONE * scale)
-    draw_texture_rect_region(CRYPT, Rect2(-size * 0.5, size), region, modulation)
+    draw_texture_rect_region(atlas, Rect2(-size * 0.5, size), region, modulation)
     draw_set_transform(offset, 0.0, Vector2.ONE * scale)
 
 

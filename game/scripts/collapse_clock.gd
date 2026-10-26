@@ -17,6 +17,7 @@ extends Node
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const Hazards = preload("res://scripts/hazards.gd")
 const Contents = preload("res://scripts/room_contents.gd")
+const Biomes = preload("res://scripts/biomes.gd")
 
 const COLLAPSE_TEXT := "THE FLOOR COLLAPSED! R = repeat, N = new seed"
 
@@ -172,7 +173,13 @@ func _spawn_debris(on_player: bool, extra: Dictionary) -> void:
                 break
     extra.merge({"hits_enemies": bool(settings.get("hits_enemies", true)),
         "color": Color("#d9a066")}, true)
-    game.combat.spawn_hazard(Hazards.make("debris", position,
+    # Wave 3B: the room's biome recolours and renames the debris (and may add a
+    # status); numbers, timing and the "debris" source stay the same.
+    var flavour: Dictionary = Biomes.grace_hazard(String(RunState.current_room_biome()))
+    var kind: String = String(flavour.get("kind", "debris"))
+    flavour.erase("kind")
+    extra.merge(flavour, true)
+    game.combat.spawn_hazard(Hazards.make(kind, position,
         float(settings.get("radius", 14.0)), float(settings.get("telegraph", 0.8)),
         int(settings.get("damage", 2)), float(settings.get("duration", 0.15)),
         "hazard:debris", extra))

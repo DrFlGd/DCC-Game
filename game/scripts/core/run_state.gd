@@ -273,6 +273,13 @@ func current_room() -> Dictionary:
     return room_states.get(current_room_id, {})
 
 
+## Biome id of the current room ("" outside a floor). Wave 3B.
+func current_room_biome() -> String:
+    if floor.is_empty():
+        return ""
+    return String(floor["rooms"][current_room_id].get("biome", ""))
+
+
 func current_room_kind() -> String:
     if floor.is_empty():
         return ""

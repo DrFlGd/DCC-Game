@@ -558,6 +558,12 @@
       "max_depth": 6,
       "threat": 2,
       "weight": 2.0,
+      "biome_affinity": {
+        "fungal_cavern": 1.5,
+        "flooded_catacombs": 0.8,
+        "maintenance_tunnels": 0.6,
+        "bone_foundry": 0.5
+      },
       "tags": [
         "beast",
         "vermin"
@@ -614,6 +620,12 @@
       "max_depth": 6,
       "threat": 3,
       "weight": 1.0,
+      "biome_affinity": {
+        "fungal_cavern": 1.3,
+        "flooded_catacombs": 2.0,
+        "maintenance_tunnels": 0.6,
+        "bone_foundry": 0.5
+      },
       "tags": [
         "beast",
         "vermin"
@@ -675,6 +687,12 @@
       "max_depth": 6,
       "threat": 4,
       "weight": 1.0,
+      "biome_affinity": {
+        "fungal_cavern": 1.5,
+        "flooded_catacombs": 0.8,
+        "maintenance_tunnels": 0.6,
+        "bone_foundry": 0.5
+      },
       "tags": [
         "beast",
         "vermin"
@@ -750,6 +768,12 @@
       "max_depth": 6,
       "threat": 4,
       "weight": 1.2,
+      "biome_affinity": {
+        "fungal_cavern": 2.0,
+        "flooded_catacombs": 1.0,
+        "maintenance_tunnels": 2.0,
+        "bone_foundry": 1.0
+      },
       "tags": [
         "beast",
         "armored",
@@ -815,6 +839,12 @@
       "max_depth": 6,
       "threat": 3,
       "weight": 1.0,
+      "biome_affinity": {
+        "fungal_cavern": 2.0,
+        "flooded_catacombs": 0.6,
+        "maintenance_tunnels": 0.3,
+        "bone_foundry": 0.2
+      },
       "tags": [
         "fungus",
         "plant"
@@ -881,6 +911,12 @@
       "max_depth": 6,
       "threat": 5,
       "weight": 0.8,
+      "biome_affinity": {
+        "fungal_cavern": 2.0,
+        "flooded_catacombs": 0.8,
+        "maintenance_tunnels": 0.5,
+        "bone_foundry": 0.5
+      },
       "tags": [
         "beast",
         "vermin"
@@ -998,6 +1034,12 @@
       "max_depth": 6,
       "threat": 4,
       "weight": 0.8,
+      "biome_affinity": {
+        "fungal_cavern": 0.5,
+        "flooded_catacombs": 2.0,
+        "maintenance_tunnels": 1.0,
+        "bone_foundry": 1.5
+      },
       "tags": [
         "humanoid",
         "cultist"
@@ -1073,6 +1115,12 @@
       "max_depth": 6,
       "threat": 6,
       "weight": 0.8,
+      "biome_affinity": {
+        "fungal_cavern": 0.5,
+        "flooded_catacombs": 2.0,
+        "maintenance_tunnels": 2.0,
+        "bone_foundry": 2.0
+      },
       "tags": [
         "construct",
         "armored",
@@ -1141,6 +1189,12 @@
       "max_depth": 6,
       "threat": 4,
       "weight": 0.8,
+      "biome_affinity": {
+        "fungal_cavern": 0.6,
+        "flooded_catacombs": 2.0,
+        "maintenance_tunnels": 1.0,
+        "bone_foundry": 2.0
+      },
       "tags": [
         "humanoid",
         "sapper"

@@ -3,6 +3,8 @@ extends "res://scripts/ui/screen_base.gd"
 ## from RunState.floor_stats() and a single Descend button. Simulation and the
 ## run clock are frozen while it is open.
 
+const Biomes = preload("res://scripts/biomes.gd")
+
 signal descend_requested
 
 var descend_button: Button
@@ -38,6 +40,9 @@ func open(floor_recap: Dictionary, next_depth: int, target_depth: int, hp: int,
     descend_button = _button("Descend to floor %d of %d" % [next_depth, target_depth],
         func(): descend_requested.emit())
     content.add_child(descend_button)
+    # Wave 3B: where the next floor leads (biome by depth).
+    content.add_child(_text("Next: %s" % Biomes.display_name(Biomes.for_depth(next_depth)),
+        12, SOFT, HORIZONTAL_ALIGNMENT_CENTER))
     content.add_child(_text("Leftover ticks do not carry over. The next floor sets its own clock.",
         11, MUTED, HORIZONTAL_ALIGNMENT_CENTER))
     descend_button.grab_focus()

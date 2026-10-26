@@ -30,7 +30,7 @@ Every enemy below is an **original design** (`adaptation_type: original`). The r
 
 **Deviations from the proposal below:**
 
-- **Schema names** follow the Wave 2C brief: `boss: bool` instead of `rank`; `band` plus `min_depth`/`max_depth` instead of `min_band`/`max_band`; `wind_up`/`recovery` instead of `windup_s`/`recovery_s`; `resistances` instead of `resist`; telegraph shapes are `arc | line | circle | dash`. `biome_affinity` and `required_for_clear` are not implemented yet. See §8 for the shipped schema.
+- **Schema names** follow the Wave 2C brief: `boss: bool` instead of `rank`; `band` plus `min_depth`/`max_depth` instead of `min_band`/`max_band`; `wind_up`/`recovery` instead of `windup_s`/`recovery_s`; `resistances` instead of `resist`; telegraph shapes are `arc | line | circle | dash`. `biome_affinity {biome_id: weight}` landed in Wave 3B (optional per archetype; validated ≥ 0; see ENCOUNTER_RULES R11); `required_for_clear` is not implemented yet. See §8 for the shipped schema.
 - **Not built in 2C:** the `dart_idol` trap actor, the band III spore lob, the `swift` and `splitting` modifiers, the shellback's frontal damage reduction while charging, and the `vulnerable` status after a wall hit (the charger is stunned; statuses on actors arrive with 2B). Status tags on attacks and hazards (`poisoned`, `burning`, `slowed`) are recorded but not applied until 2B adds actor statuses; hazards deal their flat damage now. Enemy puddles (spore burst, firebomb, flood pulse) and the volatile death burst are entries in the shared ground-hazard module [`hazards.gd`](../../game/scripts/hazards.gd) (kinds `puddle` and `volatile_burst`), spawned through `Combat.spawn_hazard(Hazards.make(...))`; enemy puddles add `status`, `damage_type` and an `interval` of the attack's `hazard.tick`.
 - **Sump Warden simplifications:** Flood Pulse is a 56 px puddle centred on the crawler (1 damage per second for 6 s, tagged `slowed`) instead of a 12×12 quadrant; Drain Call summons at the four corner "drains"; Undertow pulls 32 px and chains into Slam; phase 3 swaps in a 7-shot spray and the `enrage` ability gives cooldowns ×0.8 and speed ×1.2 below 25 %.
 - **Boss elites** (the depth 5–6 Bulwark brute) get the modifier's shield and resistances but not the elite HP/XP multipliers; their band HP comes from `hp_by_band`.
@@ -229,7 +229,7 @@ Per enemy:
 | `name`, `level`, `hp`, `ac`, `xp`, `speed`, `collision_radius`, `scores` | as before |
 | `role` | `chaser`, `ranged`, `charger`, `zoner`, `summoner`, `tank`, `support`, `elite`, `miniboss`, `boss` |
 | `band`, `min_depth`, `max_depth` | base band (veteran scaling counts from it) and pool eligibility |
-| `threat`, `weight` | budget cost and pick weight; `summon_only: true` keeps an enemy out of the pool |
+| `threat`, `weight`, `biome_affinity` | budget cost and pick weight; `biome_affinity {biome_id: multiplier}` (optional, 3B) scales the weight per biome; `summon_only: true` keeps an enemy out of the pool |
 | `tags` | strings for content `target_tag` conditions (`beast`, `vermin`, `armored`, `construct`, `fungus`, `humanoid`, …); elites add `elite` and the modifier's tags |
 | `boss` | data-driven boss flag: the exit unlocks when any `boss: true` enemy dies |
 | `resistances` | multipliers by damage type (`physical`, `fire`, `toxic`, `arcane`) or status id (for 2B); 0 = immune |

@@ -7,9 +7,13 @@ extends RefCounted
 ## route is unaffordable (or breaks another check) is regenerated with
 ## `seed + attempt x feasibility.seed_stride`, deterministically, and the
 ## result is recorded under `floor["feasibility"]`.
+## Wave 3B: every room gets a `biome` (and the floor its depth's biome) from
+## Biomes.assign() after the layout is final; it draws no random numbers, so
+## layouts, kinds and signature() are unchanged.
 ## Pure module: no autoload references, safe to preload from tests.
 
 const Collapse = preload("res://scripts/collapse_policy.gd")
+const Biomes = preload("res://scripts/biomes.gd")
 const CONFIG_PATH := "res://data/prototype_rules.json"
 const CARDINAL := [
     Vector2i(0, -1),
@@ -41,7 +45,8 @@ static func default_config() -> Dictionary:
 ## CollapsePolicy.budget_for).
 ## Returns {seed, generation_seed, depth, rooms, start_id, boss_id, exit_id,
 ## guild_id, specials {kind: [ids]}, relaxations [..], mandatory_route [ids],
-## mandatory_route_cost, budget, feasibility {ok, attempt, attempts, checks}}.
+## mandatory_route_cost, budget, feasibility {ok, attempt, attempts, checks},
+## biome}; every room also carries `biome` (Biomes.for_room).
 static func generate(seed_value: int, requested_count: int, options: Dictionary = {}) -> Dictionary:
     var depth: int = maxi(1, int(options.get("depth", 1)))
     var config: Dictionary = options.get("config", {})
@@ -66,11 +71,13 @@ static func generate(seed_value: int, requested_count: int, options: Dictionary 
         if attempt == 0:
             first = floor
         if bool(checks["ok"]):
+            Biomes.assign(floor)
             return floor
     # Exhausted: an error for CI; play falls back to attempt 0 (PROCEDURAL_GENERATION §6).
     push_error("Floor generation: no feasible layout for seed %d depth %d after %d attempts"
         % [seed_value, depth, max_attempts])
     first["feasibility"]["attempts"] = max_attempts
+    Biomes.assign(first)
     return first
 
 

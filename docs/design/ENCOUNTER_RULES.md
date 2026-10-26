@@ -13,7 +13,8 @@
 - **Spawns:** ≥ 96 px from every linked portal centre (ranged ≥ 120 px) instead of the old 82 px from cell (12, 12); without links (tests) ≥ 82 px from the true midpoint (192, 192). Bosses spawn at (192, 192); escorts ≥ 48 px from the boss. Actors with radius ≥ 8 need clearance (`can_occupy` at the cell centre) and a clearance path from the portals; a second pass accepts plain-grid reachability if no strict spot exists (those actors path with clearance where possible and slide along obstacles otherwise). Boss rooms cap obstacles at 24 (`room_obstacle_caps.boss` in `prototype_rules.json`, shared with the 2E caps).
 - **Activation:** 0.6 s dormancy on every room entry (`encounters.dormancy`, applied by Combat on `Events.room_entered`), first cooldown 0.4–1.0 s, then the wind-up: the earliest hit is about 1.35 s after entry, as specified.
 - **Trap rooms** (2E) get the R8 enemy part: half a normal budget with no minimum count; the plates are 2E's.
-- **Not implemented:** R7 (introduction rule; needs per-run "seen" tracking), R8 dart idols, R11 (biome affinity), the zoner door-lane rule in S3, S4 clearance *along the path* beyond the reachability flood, S7 and S8. Escort composition uses the budget (the fixed "1 scavenger + 1 spitting rat" escort is gone).
+- **R11 biome affinity (Wave 3B):** implemented. `generate_encounter(..., links, biome)` passes the room's biome to `eligible_pool`, which multiplies each archetype's `weight` by `biome_affinity[biome]` (default 1.0; `enemies.json`). `stone_crypt` lists no affinities, so depth 1–2 encounters are identical to 2C. Fungal caverns favour spore puffers, nest mothers and shellbacks (×2), rats (×1.3–1.5) and disfavour band III humanoids and golems (×0.5–0.6); flooded, maintenance and foundry weights follow the [biome matrix](BIOMES_AND_TILESETS.md#3-catalogue-matrix).
+- **Not implemented:** R7 (introduction rule; needs per-run "seen" tracking), R8 dart idols, the zoner door-lane rule in S3, S4 clearance *along the path* beyond the reachability flood, S7 and S8. Escort composition uses the budget (the fixed "1 scavenger + 1 spitting rat" escort is gone).
 - **Tests:** `tests/enemies_test.gd` covers T1–T5, T7 (20 seeds), T8, T9 and T10; `tests/enemy_combat_test.gd` covers T11 and the telegraph and dormancy timing.
 
 ## 1. Prototype behaviour before Wave 2C
@@ -86,7 +87,7 @@ These rules apply to normal, elite and trap rooms. A candidate that would break 
 | R8 | **Trap rooms:** 2 + ⌊depth / 3⌋ dart idols (maximum 4), on a separate trap budget, plus a 0.5× enemy budget. The enemy part may be empty if the remaining budget is under 4. |
 | R9 | **Elite rooms:** exactly 1 elite (2 from band IV), picked from eligible non-trap, non-summon archetypes, plus normal fill. |
 | R10 | **Repetition:** at most 3 of the same archetype per room, not counting summons. |
-| R11 | **Biome affinity:** each archetype's base pick weight is multiplied by its `biome_affinity[biome]` (default 1.0; listed affinities 2.0). |
+| R11 | **Biome affinity (implemented 3B):** each archetype's base pick weight is multiplied by its `biome_affinity[biome]` (default 1.0; favoured biomes 2.0, disfavoured 0.2–0.8). |
 | R12 | **Boss rooms:** the boss is fixed from the depth's boss pool ([ENEMY_TIERS.md §7](ENEMY_TIERS.md#7-bosses)). The escort is filled with the budget above, with no summoner or support in band I. |
 
 ### 4.1 Algorithm (deterministic)

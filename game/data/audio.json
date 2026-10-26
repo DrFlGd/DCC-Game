@@ -2,7 +2,7 @@
   "schema_version": 1,
   "_doc": "Sound map for scripts/audio.gd (see game/README.md, Audio). cues: trigger -> sound. A trigger is an Events signal name, optionally with a variant suffix picked from the payload (melee_swung.player, enemy_damaged.critical, ticks_changed.loss, run_ended.victory, message.<category>), or a reserved ui./music./ambient. name. Delete a cue to mute it. states: which music/ambient cue each Game state plays (RUNNING.boss = inside a live boss room); states not listed keep the current tracks.",
   "settings": {"pool_size": 12, "max_instances": 3, "crossfade_seconds": 0.6, "attack_window": 0.5},
-  "pending_signals": ["skill_used"],
+  "pending_signals": [],
   "cues": {
     "ui.move": {"stream": "res://assets/audio/sfx/ui_move.wav", "bus": "UI", "volume_db": -12.0, "pitch_var": 0.0, "cooldown": 0.05, "max_instances": 1, "group": "ui"},
     "ui.confirm": {"stream": "res://assets/audio/sfx/ui_confirm.wav", "bus": "UI", "volume_db": -8.0, "pitch_var": 0.0, "cooldown": 0.08, "max_instances": 1, "group": "ui"},

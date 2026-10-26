@@ -254,7 +254,7 @@ Starter items: actives `itm_time_pouch`, `itm_floor_stomp`, `itm_fan_club_decoy`
 | `cost` | Skill points per rank, 1..5 |
 | `unlock_level` | Character level needed to take rank 1 |
 | `prerequisites` | List of `{ "skill": "skl_...", "rank": N }`. Cycles are rejected |
-| `cooldown`, `stamina_cost` | Actives only. Stamina does not exist yet (section 10) |
+| `cooldown`, `stamina_cost` | Actives only. Stamina is the Wave 2D pool (`RunState.spend_stamina`); `skill_system.gd` spends it and runs the cooldown (Wave 2F) |
 
 Starter tree:
 
@@ -320,7 +320,7 @@ Effects that touch the collapse clock (`grant_ticks`) are deliberately small (1โ
 
 Wave 2B wired the content layer into play (weapons, items, statuses, triggers, loot, shop; see the module table at the top and [`game/README.md`](../../game/README.md#items-and-loot)). Still missing:
 
-- **Skills in play.** `skills.json` is validated, and `Loadout.current()` already reads `RunState.skills` (`"skl_id"` or `{"id", "rank"}`), but nothing grants skill points or ranks yet (Wave 2F). The `skills` and `dodge` keys of `cooldown_reduction` have no consumer.
+- **Skills are in play (Wave 2F).** `skill_system.gd` grants 1 skill point per level (`skills.points_per_level`), enforces `unlock_level`, `prerequisites` (skill and rank), `max_rank` and `cost`, stores `{"id", "rank"}` in `RunState.skills` (only the current rank's effects apply) and runs actives from two slots (`use_skill_1` / `use_skill_2`, `skills.slots`). Every `cooldown_reduction` key now has a consumer: `melee`, `ranged` (player attack timers), `items` (the active's seconds recharge), `skills` (every active-skill cooldown), `dodge` (the dodge gap) and `all`. Skill effect magnitudes are INT-scaled (COMBAT_AND_RPG ยง11); items are not. Still open: no reroll or draw of offered rank-ups (the whole tree is listed), no respec, and `skills.json` ranks may override `cooldown` but not `stamina_cost`.
 - **`on_dodge`** fires from `Combat.on_player_dodged()` (2D's dodge roll, merged). The roll also applies `evasive` for its i-frame window.
 - **Melee timing:** swings still resolve instantly (no wind-up / active / recovery frames, no per-swing LOS); the proposed `windup`/`active`/`recovery` weapon fields are not in the schema yet.
 - **Knockback** is computed from the weapon's `knockback` plus modifiers. Melee knockback gets +5 % per positive STR modifier. It travels in the damage context (`knockback`, `direction`), and 2D's finalise step applies it. The crowbar's 20 px equals 2D's default melee shove.

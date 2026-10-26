@@ -46,6 +46,13 @@ func _run() -> void:
     var original_hp: int = run_state.hp
     check(ui.stage_point("CON", 2), "player can allocate both points into CON")
     check(ui.remaining_points() == 0, "all points staged")
+    # Wave 2F: the level also granted a skill point; confirm waits for it.
+    check(run_state.skill_points == 1 and ui.skill_points() == 1, "one skill point awarded")
+    check(not ui.can_confirm(), "confirm waits while a skill is learnable")
+    ui.confirm_allocation()
+    check(ui.mode == "level_up", "confirm refused with an unspent skill point")
+    check(ui.pick_skill("skl_brawler") and run_state.skill_points == 0
+        and ui.skill_points() == 0 and ui.can_confirm(), "a skill pick spends the point")
     ui.confirm_allocation()
     check(ui.mode == "closed", "confirmation resumes game")
     check(game.state == game.State.RUNNING, "state machine returns to RUNNING")
@@ -103,6 +110,7 @@ func _run() -> void:
     check(run_state.level == 4, "multi-level XP award reaches level four")
     check(run_state.pending_stat_points == 6 and ui.mode == "level_up",
         "three level-ups grant six points without loss")
+    check(run_state.skill_points == 3, "and three skill points")
     # Esc cannot bypass the mandatory allocation screen.
     game._input(escape)
     check(ui.mode == "level_up", "Escape does not bypass allocation")
@@ -114,8 +122,8 @@ func _run() -> void:
     # Debug shortcut allows reviewers to exercise the modal without grinding.
     game._unhandled_input(_key(KEY_F9))
     check(run_state.level == 2 and ui.mode == "level_up" and
-        run_state.pending_stat_points == 2,
-        "F9 reaches the next XP threshold and opens allocation")
+        run_state.pending_stat_points == 2 and run_state.skill_points == 1,
+        "F9 reaches the next XP threshold, grants the skill point and opens allocation")
     game.start_run(424242)
 
     # R restarts on the same seed via the restart_seed action.

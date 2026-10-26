@@ -135,7 +135,8 @@ static func loadout_entry(id: String, rank: int = 1, stacks: int = 1, db: Dictio
         rank = chosen
     return {"id": id, "kind": kind, "rank": rank, "stacks": maxi(1, stacks), "effects": effects.duplicate()}
 
-## Builds a typed loadout from ids or {"id", "rank", "stacks"} dictionaries.
+## Builds a typed loadout from ids or {"id", "rank", "stacks"} dictionaries
+## (an optional "magnitude_mult" is passed through).
 static func loadout(owned: Array, db: Dictionary = {}) -> Array[Dictionary]:
     var result: Array[Dictionary] = []
     for owned_entry in owned:
@@ -143,6 +144,9 @@ static func loadout(owned: Array, db: Dictionary = {}) -> Array[Dictionary]:
         if owned_entry is Dictionary:
             entry = loadout_entry(String(owned_entry.get("id", "")), int(owned_entry.get("rank", 1)),
                 int(owned_entry.get("stacks", 1)), db)
+            # Wave 2F: INT scaling of skill effects (EffectResolver.scale_magnitude).
+            if not entry.is_empty() and owned_entry.has("magnitude_mult"):
+                entry["magnitude_mult"] = float(owned_entry["magnitude_mult"])
         else:
             entry = loadout_entry(String(owned_entry), 1, 1, db)
         if not entry.is_empty():

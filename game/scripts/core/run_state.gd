@@ -20,7 +20,7 @@ const DEFAULT_SEED := 424242
 const TELEMETRY_KEYS := ["rooms_entered", "shots_fired", "melee_swings", "kills",
     "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds",
     "floors_cleared", "ticks_granted", "dodges", "failsafe_despawns", "items_collected",
-    "loot_boxes_opened", "credits_earned"]
+    "loot_boxes_opened", "credits_earned", "skills_learned", "skills_used"]
 ## Telemetry keys snapshotted per floor for the intermission recap.
 const FLOOR_KEYS := ["rooms_entered", "kills", "damage_dealt", "damage_taken",
     "ticks_spent", "ticks_granted", "run_time_seconds"]
@@ -85,8 +85,18 @@ var statuses: Dictionary = {}
 ## records). sync_progression() applies them to max_hp and ac; set them with
 ## set_stat_modifiers().
 var stat_modifiers: Array = []
-## Reserved for the skills team: learned skill ids.
+## Learned skills (Wave 2F): [{"id": "skl_...", "rank": N}] (a plain id
+## still reads as rank 1). Changed through scripts/skill_system.gd. Persist
+## across floors; reset per run.
 var skills: Array = []
+## Banked (unspent) skill points and every point earned this run (Wave 2F).
+## Each level-up grants `skills.points_per_level` (1).
+var skill_points := 0
+var skill_points_earned := 0
+## Active skill id per slot (use_skill_1, use_skill_2; "" = empty). Per run.
+var skill_slots: Array = ["", ""]
+## Active skill id -> seconds of cooldown left. Cleared per run and per floor.
+var skill_cooldowns: Dictionary = {}
 ## Counters for tuning; see TELEMETRY_KEYS. Updated from Events signals.
 var telemetry: Dictionary = {}
 ## Wave 2D stamina pool (COMBAT_AND_RPG §3): spent by dodge and skills only,
@@ -154,6 +164,12 @@ func start_run(new_seed: int) -> void:
     statuses = {}
     stat_modifiers = []
     skills = []
+    skill_points = 0
+    skill_points_earned = 0
+    skill_slots = []
+    for _slot in range(maxi(1, int(config.get("skills", {}).get("slots", 2)))):
+        skill_slots.append("")
+    skill_cooldowns = {}
     tick_ledger.clear()
     _reset_telemetry()
     reset_for_floor(1)
@@ -161,7 +177,8 @@ func start_run(new_seed: int) -> void:
 
 
 ## Clears per-floor state (visited rooms, room states, boss flag, tick ledger).
-## XP, level, ability scores, HP, inventory and skills persist. With
+## XP, level, ability scores, HP, inventory, skills, skill points and skill
+## slots persist; skill cooldowns are cleared like the stamina refill. With
 ## `budget` >= 0 the clock is set to that fresh floor budget (leftover ticks do
 ## not carry over) and counted as ticks_granted; with the default -1 the clock
 ## is left alone.
@@ -174,6 +191,7 @@ func reset_for_floor(new_depth: int, budget: int = -1) -> void:
     boss_defeated = false
     tick_ledger.clear()
     statuses = {}
+    skill_cooldowns = {}
     # Before the budget is set, so its ticks_changed never reads as a stabilise.
     grace = Collapse.grace_initial()
     if budget >= 0:
@@ -290,7 +308,8 @@ func count(key: String, amount: int = 1) -> void:
 
 
 ## Adds XP; emits `xp_gained`, then `level_up` once per award that crosses one or
-## more thresholds (points for every level gained are banked).
+## more thresholds (stat points and skill points for every level gained are
+## banked; `skills.points_per_level` skill points per level, default 1).
 func award_xp(amount: int) -> void:
     var gained: int = maxi(0, amount)
     var prior_level: int = level
@@ -302,6 +321,10 @@ func award_xp(amount: int) -> void:
         hp = mini(max_hp, hp + (max_hp - old_max))
         var earned_levels: int = level - prior_level
         pending_stat_points += earned_levels * maxi(0, int(config.get("stat_points_per_level", 2)))
+        var skill_gain: int = earned_levels * maxi(0, int(config.get("skills", {}).get(
+            "points_per_level", 1)))
+        skill_points += skill_gain
+        skill_points_earned += skill_gain
         Events.level_up.emit(level, pending_stat_points)
 
 
@@ -435,7 +458,8 @@ func progression_context() -> Dictionary:
         "next_xp": RPG.next_level_xp(level) if level < 20 else "MAX",
         "hp": hp, "max_hp": max_hp, "ac": ac, "proficiency": proficiency,
         "melee_bonus": RPG.attack_bonus(ability_scores, "STR", level),
-        "ranged_bonus": RPG.attack_bonus(ability_scores, "DEX", level)
+        "ranged_bonus": RPG.attack_bonus(ability_scores, "DEX", level),
+        "skill_points": skill_points
     }
 
 
@@ -452,7 +476,9 @@ func summary() -> Dictionary:
         "xp": xp, "hp": hp, "max_hp": max_hp, "ticks": ticks,
         "rooms_visited": visited.size(), "boss_defeated": boss_defeated,
         "ability_scores": ability_scores.duplicate(true),
-        "inventory": inventory.duplicate(true), "skills": skills.duplicate(),
+        "inventory": inventory.duplicate(true), "skills": skills.duplicate(true),
+        "skill_points": skill_points, "skill_points_earned": skill_points_earned,
+        "skill_slots": skill_slots.duplicate(),
         "ledger_entries": tick_ledger.size(),
         "grace_triggered": int(grace.get("count", 0)),
         "grace_outcome": String(grace.get("outcome", "")),

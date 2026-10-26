@@ -4,12 +4,15 @@ extends RefCounted
 ## and RunState.skills, and resolves passive stats and attack profiles.
 ##
 ## RunState.skills entries may be plain ids ("skl_brawler", rank 1) or
-## {"id": "skl_brawler", "rank": 2}; the skills PR fills them.
+## {"id": "skl_brawler", "rank": 2} (SkillSystem, Wave 2F, writes the latter).
+## Only the current rank's effects are included (ranks replace each other),
+## scaled by INT (skill_magnitude_mult).
 ## Autoloads are looked up at runtime, so tests may preload this module.
 const ContentDB = preload("res://scripts/content/content_db.gd")
 const Resolver = preload("res://scripts/content/effect_resolver.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const StatusSystem = preload("res://scripts/status_system.gd")
+const RPG = preload("res://scripts/rpg_rules.gd")
 const DEFAULT_SPEED := 105.0
 
 
@@ -32,13 +35,25 @@ static func owned(slot: String = "", weapon_id: String = "") -> Array:
         result.append({"id": String(inv["active"]), "rank": 1, "stacks": 1})
     for entry in inv.get("passives", []):
         result.append({"id": String(entry["id"]), "rank": 1, "stacks": int(entry["count"])})
+    var mult: float = skill_magnitude_mult()
     for skill in rs.skills:
-        if skill is Dictionary:
-            result.append({"id": String(skill.get("id", "")), "rank": int(skill.get("rank", 1)),
-                "stacks": 1})
-        else:
-            result.append({"id": String(skill), "rank": 1, "stacks": 1})
+        var id: String = String(skill.get("id", "")) if skill is Dictionary else String(skill)
+        var rank: int = int(skill.get("rank", 1)) if skill is Dictionary else 1
+        if id == "" or rank <= 0:
+            continue
+        result.append({"id": id, "rank": rank, "stacks": 1, "magnitude_mult": mult})
     return result
+
+
+## INT scaling of skill effects (COMBAT_AND_RPG §11, Wave 2F): 1 +
+## skills.int_magnitude_per_mod (0.1) per positive INT modifier. Carried on
+## skill loadout entries as `magnitude_mult`; EffectResolver.collect_modifiers()
+## scales the effect magnitudes (scale_magnitude). Items are not scaled.
+static func skill_magnitude_mult() -> float:
+    var rs: Node = Inventory.run_state()
+    var per_mod: float = float(rs.config.get("skills", {}).get("int_magnitude_per_mod", 0.1))
+    var intelligence: int = maxi(0, RPG.modifier(int(rs.ability_scores.get("INT", 10))))
+    return 1.0 + per_mod * float(intelligence)
 
 
 ## ContentDB.loadout() of owned(): the entries EffectResolver.collect_modifiers() takes.

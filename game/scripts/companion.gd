@@ -110,9 +110,11 @@ func spawn() -> void:
     _announce("spawned", 2, "flavour")
 
 
-## Removes the companion (F8 off); the node is freed by Game.
+## Removes the companion (F8 off) and unbinds it from Game, so it ignores
+## Events until the node is freed (Game queue_frees it).
 func despawn() -> void:
     state = {}
+    game = null
     RunState.companion_pickup_bonus = 0.0
 
 

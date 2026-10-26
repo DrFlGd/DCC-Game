@@ -48,9 +48,13 @@ func open() -> void:
     content.add_child(_button("Quit", func(): quit_requested.emit()))
     feedback = _text("", 12, Color("#eccba6"), HORIZONTAL_ALIGNMENT_CENTER)
     content.add_child(feedback)
-    content.add_child(_text("Keyboard / gamepad: arrows or D-pad to move, Enter or A to choose",
-        11, MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+    # Wave 3C: worded for the last-used device; updates when it changes.
+    _add_hint(content)
     new_run_button.grab_focus()
+
+
+func _hint_text() -> String:
+    return nav_hint("", false)
 
 
 ## Starts a seeded run from `text`, or explains why it cannot. Returns whether

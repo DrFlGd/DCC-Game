@@ -8,6 +8,10 @@ extends CanvasLayer
 ## the world (State.MAP) while it is open.
 ## build_model() is pure and the node never reads autoloads, so tests may
 ## preload this script; Game passes the model in with open().
+## Wave 3C: text follows text_scale and the header names the device's close
+## inputs (Back / B on a gamepad).
+const Accessibility = preload("res://scripts/core/accessibility.gd")
+const InputBindings = preload("res://scripts/core/input_bindings.gd")
 
 ## Fill colours by room kind (shared with the HUD minimap).
 const KIND_COLORS := {
@@ -119,8 +123,11 @@ func _draw_map() -> void:
     var view: Vector2 = canvas.get_viewport_rect().size
     canvas.draw_rect(Rect2(Vector2.ZERO, view), Color(0.02, 0.03, 0.06, 0.93))
     var font: Font = ThemeDB.fallback_font
-    canvas.draw_string(font, Vector2(24, 34), "FLOOR MAP  |  TICKS %d  |  M / Esc: close"
-        % int(model["ticks"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color("#f2da99"))
+    var close_hint: String = "%s / B: close" % InputBindings.hint("map") if InputBindings.is_gamepad() \
+        else "%s / Esc: close" % InputBindings.hint("map")
+    canvas.draw_string(font, Vector2(24, 34), "FLOOR MAP  |  TICKS %d  |  %s"
+        % [int(model["ticks"]), close_hint], HORIZONTAL_ALIGNMENT_LEFT, -1.0, Accessibility.px(18),
+        Color("#f2da99"))
     var bounds: Rect2i = model["bounds"]
     var span := Vector2(maxi(1, bounds.size.x), maxi(1, bounds.size.y))
     var area := Rect2(Vector2(40, 60), view - Vector2(80, 110))
@@ -138,7 +145,7 @@ func _draw_map() -> void:
         canvas.draw_line(a, b, Color("#56657a"), 2.0)
         if String(edge["label"]) != "":
             canvas.draw_string(font, (a + b) * 0.5 + Vector2(-10, -4), String(edge["label"]),
-                HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color.WHITE)
+                HORIZONTAL_ALIGNMENT_LEFT, -1.0, Accessibility.px(13), Color.WHITE)
     var size: float = unit * 0.62
     for room in model["rooms"]:
         var center: Vector2 = centers[int(room["id"])]
@@ -153,6 +160,6 @@ func _draw_map() -> void:
             canvas.draw_rect(rect.grow(4.0), Color.WHITE, false, 2.5)
         if String(room["icon"]) != "":
             canvas.draw_string(font, center + Vector2(-5, 5), String(room["icon"]),
-                HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color("#101720"))
+                HORIZONTAL_ALIGNMENT_LEFT, -1.0, Accessibility.px(15), Color("#101720"))
         if bool(room["cleared"]):
             canvas.draw_circle(rect.end - Vector2(4, 4), 2.5, Color("#a5d49b"))

@@ -122,7 +122,7 @@ Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rule
 
 `Game` (`scripts/game.gd`) is a state machine: `TITLE → RUNNING ⇄ PAUSED / LEVEL_UP → INTERMISSION → RUNNING (next floor) … → SUMMARY → TITLE or RUNNING`. Every change emits `Events.game_state_changed(previous, current)` with the state names. The screens are code-built `CanvasLayer`s in `scripts/ui/` (`title_screen.gd`, `intermission_screen.gd`, `summary_screen.gd`, `settings_screen.gd`, sharing `screen_base.gd`); they only emit requests, and `Game` acts on them. Simulation and the run clock (`run_time_seconds`) only advance in `RUNNING`.
 
-**Settings** (`scripts/core/settings.gd`, a plain `RefCounted` with one shared instance, `Settings.shared()`) hold the window resolution preset, fullscreen, master volume (stored only until audio lands), damage numbers on/off and screen-shake intensity. They are loaded and the window settings applied at startup, saved to `user://settings.cfg` on every change, and announced with `Events.settings_changed(values)`. `--script` test runs use `user://settings_test.cfg` instead.
+**Settings** (`scripts/core/settings.gd`, a plain `RefCounted` with one shared instance, `Settings.shared()`) hold the window resolution preset, fullscreen, master, music and effects volumes (applied to the audio buses by `scripts/audio.gd`), damage numbers on/off and screen-shake intensity. They are loaded and the window settings applied at startup, saved to `user://settings.cfg` on every change, and announced with `Events.settings_changed(values)`. `--script` test runs use `user://settings_test.cfg` instead.
 
 ## Editing the clock and floor
 
@@ -185,6 +185,21 @@ Events.announcement_requested.emit("mimic_bit_you", {"text": "That chest had tee
 
 Unknown triggers with a `text` show that text verbatim (priority defaults to 2, category to `system`). **New achievements** are a JSON record whose `event` is a signal name and whose `requires` maps keys (`run.kills`, `room.damage_taken`, `floor.revisits`, `floor.seconds`, `hp_fraction`, `ticks`, `depth`, `life.kills`, `event.<field>`, ...; see `TRACKER_KEYS` and `LIVE_KEYS` in `scripts/core/achievements.gd`) to `{"<op>": value}` with `>=`, `<=`, `>`, `<`, `==`, `!=`, `in` or `contains`. Achievements can also be granted directly with `Events.achievement_unlocked.emit(id)`.
 
+## Audio
+
+Sound is a presentation layer on the `Events` bus (`scripts/audio.gd`, the `Audio` child of `Game`); nothing in the simulation depends on it, and it never touches `RunState.rng`.
+
+- **Buses.** [`default_bus_layout.tres`](default_bus_layout.tres) defines `Master → Music, SFX, Ambient, UI` (wired in `project.godot`, `[audio] buses/default_bus_layout`). `Audio.ensure_buses()` adds any that are missing, so a stale layout never breaks playback.
+- **Settings.** `master_volume`, `music_volume` (also the Ambient bus) and `sfx_volume` (also the UI bus) are 0–1 sliders on the settings page, saved to `user://settings.cfg` and applied on `Events.settings_changed` with `linear_to_db` (0 is -80 dB and mutes the bus, 1 is 0 dB). Defaults: 1.0 / 0.8 / 1.0.
+- **Sound effects.** A pool of 12 `AudioStreamPlayer`s plays one-shots round-robin; when every player is busy the oldest slot is reused. Each cue has a `cooldown` (so thirty rat hits in one frame play once), a `max_instances` cap on simultaneous copies and a `pitch_var` spread (combat sounds vary ±6 %). Hits after a swing use the melee hit, after a shot the ranged hit, criticals a higher-pitched variant.
+- **Music and ambience.** The Music and Ambient buses each own two players and crossfade (0.6 s) when the Game state changes: `TITLE` → title theme, `RUNNING` → crypt drone, a live boss room → boss drone, `INTERMISSION` / `SUMMARY` → the theme at a lower mix. Pause, map and dialog keep the current tracks. Both loops are seamless (whole-cycle oscillators, a `smpl` loop chunk the importer picks up).
+- **Menus.** Every `Button` / `Slider` in the tree is hooked through `SceneTree.node_added`: focus plays `ui.move`, a press `ui.confirm`; opening the pause menu plays `ui.open`, resuming `ui.back`.
+- **Headless.** The Dummy audio driver still advances playback, so `tests/audio_test.gd` runs the real node; nothing needs a device.
+
+**Regenerating sounds.** Every WAV is synthesised by [`tools/gen_sfx.py`](../tools/gen_sfx.py) (Python 3, standard library only, deterministic): `python3 tools/gen_sfx.py` from the repository root rewrites `assets/audio/{sfx,ambient,music}/*.wav` (22050 Hz, 16-bit mono, peak -6 dBFS, about 2 MB in total); `--only melee_hit level_up` rewrites a subset. See [`assets/audio/README.md`](assets/audio/README.md).
+
+**Adding or retuning a sound.** Edit [`data/audio.json`](data/audio.json). `cues` maps a trigger to `{"stream", "bus", "volume_db", "pitch_var", "cooldown"}` plus optional `max_instances`, `pitch`, `group` (cues in a group share one cooldown) and `loop` (music/ambient only). A trigger is an `Events` signal name (`chest_opened`), a signal with a payload variant that `audio.gd` picks (`melee_swung.player`, `projectile_fired.enemy`, `enemy_damaged.critical`, `enemy_damaged.melee` / `.ranged`, `player_damaged.hazard`, `credits_changed.gain` / `.spend`, `ticks_changed.gain` / `.loss`, `run_ended.victory` / `.defeat`, `message.<category>`), or a reserved `ui.*`, `music.*` or `ambient.*` name. A signal that is only a cue name (`SIMPLE_SIGNALS` in `audio.gd`, e.g. `item_used`, `level_up`, `skill_learned`) needs no code; delete a cue to mute it. Signals another wave has not landed yet go in `pending_signals` (currently `skill_used`). `states` maps Game states (and `RUNNING.boss`) to a Music and an Ambient cue. From code: `game.audio.play("item_used")` (returns false when throttled or capped), `audio.set_track("Music", "music.title")`. `tests/audio_test.gd` validates the file: streams exist, buses, numeric ranges, every signal named exists on `Events`, every cue the code asks for is mapped.
+
 ## Run tests
 
 From the repository root, with `godot` pointing to Godot 4.7.2 (or `GODOT=/path/to/godot`):
@@ -222,9 +237,11 @@ The runtime is event-driven. Two autoloads hold shared state and messaging; `Gam
 
 ```text
 game/
-├── project.godot               # autoloads (Events, RunState) and the Input Map
+├── project.godot               # autoloads (Events, RunState), audio bus layout and the Input Map
+├── default_bus_layout.tres     # Master -> Music, SFX, Ambient, UI
 ├── README.md
 ├── assets/                     # see assets/README.md (separate files, 8-way facing contract)
+│   └── audio/                  # generated WAVs (tools/gen_sfx.py): sfx/, ambient/, music/
 ├── scenes/Main.tscn            # Game root + Player, Combat, RoomRenderer, Hud, CharacterMenu
 ├── scripts/
 │   ├── core/
@@ -237,6 +254,7 @@ game/
 │   │   ├── achievements.gd     # achievement tracker and rules (pure)
 │   │   ├── profile.gd          # user://profile.json: unlocks, lifetime stats (static accessors)
 │   │   └── telemetry.gd        # per-run report to user://telemetry/
+│   ├── audio.gd                # SFX pool, music/ambient crossfade, Events -> data/audio.json cues
 │   ├── game.gd                 # orchestrator + State {RUNNING, LEVEL_UP, PAUSED, ENDED(unused),
 │   │                           #   TITLE, SUMMARY, INTERMISSION, MAP, DIALOG}: floors, doors, screens
 │   ├── collapse_clock.gd       # zero-clock grace driver: timer, debris waves, hard collapse
@@ -275,6 +293,7 @@ game/
 │   ├── prototype_rules.json    # run (depths, rooms), collapse + budget, obstacles, abilities
 │   ├── enemies.json            # enemy roster (schema v2), sprite sheets, band guardrails, budgets, elites
 │   ├── announcer.json          # system lines by trigger, toast/rate-limit settings
+│   ├── audio.json              # Events trigger -> sound cue, state -> music/ambient track
 │   └── achievements.json       # achievement definitions
 └── tests/
     ├── run_all.sh              # runs everything below; used by CI
@@ -287,7 +306,7 @@ game/
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no companion AI, no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

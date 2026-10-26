@@ -13,6 +13,8 @@ const Settings = preload("res://scripts/core/settings.gd")
 var settings
 var back_button: Button
 var volume_label: Label
+var music_label: Label
+var sfx_label: Label
 var shake_label: Label
 
 
@@ -49,6 +51,12 @@ func open(target_settings) -> void:
     volume_label = _text("", 15, MUTED)
     grid.add_child(volume_label)
     grid.add_child(_slider(settings.master_volume, "master_volume"))
+    music_label = _text("", 15, MUTED)
+    grid.add_child(music_label)
+    grid.add_child(_slider(settings.music_volume, "music_volume"))
+    sfx_label = _text("", 15, MUTED)
+    grid.add_child(sfx_label)
+    grid.add_child(_slider(settings.sfx_volume, "sfx_volume"))
 
     grid.add_child(_text("Damage numbers", 15, MUTED))
     var numbers := CheckButton.new()
@@ -61,7 +69,7 @@ func open(target_settings) -> void:
     grid.add_child(_slider(settings.screen_shake, "screen_shake"))
     _update_labels()
 
-    content.add_child(_text("Volume is stored now and used once audio arrives. Saved to user://settings.cfg.",
+    content.add_child(_text("Music also sets the ambience; effects also set menu sounds. Saved to user://settings.cfg.",
         11, MUTED))
     back_button = _button("Back  (Esc)", close)
     content.add_child(back_button)
@@ -99,5 +107,9 @@ func _slider(value: float, key: String) -> HSlider:
 func _update_labels() -> void:
     if volume_label != null:
         volume_label.text = "Master volume  %d%%" % roundi(settings.master_volume * 100.0)
+    if music_label != null:
+        music_label.text = "Music volume  %d%%" % roundi(settings.music_volume * 100.0)
+    if sfx_label != null:
+        sfx_label.text = "Effects volume  %d%%" % roundi(settings.sfx_volume * 100.0)
     if shake_label != null:
         shake_label.text = "Screen shake  %d%%" % roundi(settings.screen_shake * 100.0)

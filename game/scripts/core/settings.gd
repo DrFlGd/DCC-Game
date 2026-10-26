@@ -26,8 +26,8 @@ const RESOLUTION_PRESETS := [
 ]
 const DEFAULT_RESOLUTION := Vector2i(960, 540)
 ## Setting keys, in the order the settings screen shows them.
-const KEYS := ["resolution", "fullscreen", "master_volume", "show_damage_numbers",
-    "screen_shake"]
+const KEYS := ["resolution", "fullscreen", "master_volume", "music_volume", "sfx_volume",
+    "show_damage_numbers", "screen_shake"]
 
 static var _shared
 
@@ -36,8 +36,11 @@ var path := PATH
 ## Windowed size; always one of RESOLUTION_PRESETS.
 var resolution := DEFAULT_RESOLUTION
 var fullscreen := false
-## 0.0-1.0. Stored only until audio lands (Wave 3).
+## 0.0-1.0 linear volumes; scripts/audio.gd maps them to the audio buses
+## (Master; Music and Ambient; SFX and UI), 0 = muted (-80 dB).
 var master_volume := 1.0
+var music_volume := 0.8
+var sfx_volume := 1.0
 ## Floating damage numbers (combat-feel work reads this).
 var show_damage_numbers := true
 ## 0.0 (off) - 1.0 (full) screen-shake multiplier.
@@ -86,8 +89,8 @@ func set_value(key: String, value) -> bool:
             resolution = value
         "fullscreen":
             fullscreen = bool(value)
-        "master_volume":
-            master_volume = clampf(float(value), 0.0, 1.0)
+        "master_volume", "music_volume", "sfx_volume":
+            set(key, clampf(float(value), 0.0, 1.0))
         "show_damage_numbers":
             show_damage_numbers = bool(value)
         "screen_shake":

@@ -17,6 +17,7 @@ See [`biomes/README.md`](biomes/README.md) for the standard 8×6 slot layout, th
 | Rat | [`enemies/rat/facing_8.png`](enemies/rat/facing_8.png) | 8×32px frames from supplied directional GIF, rendered at 24×24 |
 | Armored boss | [`enemies/brute_boss/facing_8.png`](enemies/brute_boss/facing_8.png) | 8×96px source frames, rendered at 48×48 |
 | Weapons | `weapons/<weapon_id>/...` | Independent per-weapon sheets (future task) |
+| Audio | [`audio/`](audio/README.md) (`sfx/`, `ambient/`, `music/`) | 38 generated 22050 Hz 16-bit mono WAVs from `tools/gen_sfx.py`; mapped by `data/audio.json` |
 
 ## Imported sampler tile coordinates
 

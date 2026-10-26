@@ -52,7 +52,8 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 - **Six-floor run loop:** title screen (random or typed seed), per-depth room counts and fresh collapse budgets, between-floor intermission, victory on floor 6, run summary for every outcome, abandon from pause, and persisted settings.
 - Omnidirectional aim; ranged fire and directional melee; basic damage and enemy AI; enemy health/state maintained across revisits.
 - A seeded smoke-test suite covering topology, deterministic generation, room tags, policies, and a route-budget diagnostic.
-- **16×16 dungeon sampler stone floors, masonry, torches, side edges, double-leaf doors and prop sprites**. Free sampler omits true corner/south wall pieces, so temporary matching wall-top rotations fill those joins.
+- **16×16 dungeon sampler stone floors, masonry, torches, side edges, double-leaf doors and prop sprites**, completed by generated placeholder south walls, corners, thresholds and door states (Wave 3B).
+- **Biomes by depth (Wave 3B):** stone crypt (floors 1–2), fungal cavern (3–4, spore clouds and luminous puddles), guild interiors for every guild hall; flooded catacombs, maintenance tunnels and bone foundry render as tinted crypt art until their art lands. See [Biomes](#biomes).
 - **Eight-way facing sprites** for the player (mouse aim) and every enemy (AI facing); see [`assets/enemies/README.md`](assets/enemies/README.md).
 - **Separate per-biome and per-character/enemy assets** rather than a master atlas. See [asset conventions](assets/README.md).
 - **Fixed 24×24 interior tiles (384×384 world pixels)**; resize changes only rendering scale and screen-space HUD. Minimum window 720×480, with selectable common window resolutions from the pause menu.
@@ -98,11 +99,21 @@ Combat feel lives in Wave 2D. Design: [COMBAT_AND_RPG.md §3, §8, §9](../docs/
 
 **Every room remains exactly 24×24 tiles = 384×384 world pixels**, independently of display resolution. Game movement speeds, combat ranges, collision footprints and enemy AI spacings were halved relative to the previous 32px prototype to keep approximately the same gameplay-to-tile proportions. The window can still scale the room up or down. Use **Esc → Display resolution → Apply resolution** or drag the window border; neither changes the dungeon tile count.
 
-This is the **free sampler**, not the complete tile pack. Its README mentions dedicated bottom corners and a south-wall edge that are **not included in the supplied 12-tile assets**. We temporarily join outer corners and south walls with rotated wall-top tiles, and use wall faces/torches for the north side. These transitions can be revisited after acquiring/creating the missing pieces.
+This is the **free sampler**, not the complete tile pack. Its README mentions dedicated bottom corners and a south-wall edge that are **not included in the supplied 12-tile assets**. Since Wave 3B the renderer draws by **slot name** from a per-biome 128×96 atlas: the crypt's rows 0–1 are the sampler, and its south wall, corners, thresholds, door states, decals and props in rows 2–5 are generated placeholders (`tileset_16x16_full.png`).
 
 Player and rat sprite sheets remain separate. The **crawler and ordinary enemies render at 24×24** (about 1.5 terrain tiles), and the **boss at 48×48** (3 tiles). They retain all eight compass facings E, SE, S, SW, W, NW, N, NE. Source frames can be higher resolution; the renderer displays them with nearest-neighbor scaling. The 8 poses are prototype facings, not movement animations.
 
-See [asset conventions and tile index](assets/README.md) for the complete mapping. Doors still look closed even when the procedural graph permits passage; proper door open/locked sprites and animation remain future work.
+See [asset conventions and tile index](assets/README.md) for the complete mapping. Doors show closed toward unvisited rooms, open toward visited ones and a barred `door_locked` leaf while the room is sealed; door animation remains future work.
+
+## Biomes
+
+Floors have a **biome by depth** ([`data/biomes.json`](data/biomes.json), [design](../docs/design/BIOMES_AND_TILESETS.md)): `stone_crypt` on floors 1–2, `fungal_cavern` on 3–4, `flooded_catacombs` on 5–6, `maintenance_tunnels` on 7–8 and `bone_foundry` from 9; every guild hall is a `guild_interior`. The generator stamps `room.biome` after the layout (no extra random draws, so seeds and the determinism fixtures are unchanged); the floor line and the intermission screen name the biome.
+
+- **Art:** each biome with art has `assets/biomes/<id>/tileset_16x16.png` (8×6 slots of 16 px) and a `tiles.json` naming the 48 slots; [`scripts/biomes.gd`](scripts/biomes.gd) resolves `Biomes.region(biome, slot)` and the renderer draws through `_piece(slot, ...)`. Biomes without art (flooded, maintenance, foundry) draw the crypt atlas multiplied by their `fallback_tint`. Decals and small props are sprinkled per cell from a hash of the floor seed, room and cell.
+- **Hazards:** a biome's `hazards[]` become floor patches in hostile rooms (`room_contents.gd`, its own RNG stream). Standing on a patch fires a telegraphed [`hazards.gd`](scripts/hazards.gd) entry carrying the biome's status: fungal **spore clouds** poison, **luminous puddles** slow; each re-arms after a few seconds. Collapse debris takes the biome's `grace_hazard` flavour (spore bursts in the caverns).
+- **Enemies:** `biome_affinity` in [`data/enemies.json`](data/enemies.json) scales pick weights per biome (ENCOUNTER_RULES R11): spore puffers, nest mothers and shellbacks favour the caverns; rats stay common; band III humanoids and golems are rare there. The crypt lists no affinities, so floors 1–2 spawn exactly as before.
+- **Regenerate the placeholder atlases:** `python3 tools/gen_biome_tileset.py [--mockups]` from the repository root, then re-import (`godot --headless --path game --editor --quit`).
+- **Config knobs:** per biome `depths`, `fallback_tint`, `ambient`, `light`, `dressing` chances, `hazards[]` (`kind, tile, status, damage, telegraph, duration, rearm, radius, color, cells, per_room, room_kinds`) and `grace_hazard`.
 
 ## Enemy and RPG design references
 
@@ -198,6 +209,7 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | Test | Covers |
 | --- | --- |
 | `smoke_test.gd` | Pure logic: layout, assets, RPG math, allocation, catalogue, generation, obstacles, encounters, facing, Input Map |
+| `biomes_test.gd` | `biomes.json` validation and depth bands, biome on every room (depths 1–8, guild halls → guild_interior), atlases 128×96 with complete `tiles.json`, renderer slot lookup and fallback tint, fungal patches as valid hazard entries, affinity weights (depth 1–2 unchanged), a live fungal floor |
 | `determinism_test.gd` | Seed 424242 floor signature, kind-masked geometry, obstacle maps, encounters and a scripted combat trace equal captured constants (regenerated in Wave 2E for the special rooms; the geometry and combat trace are unchanged since the pre-refactor `main.gd`) |
 | `run_state_test.gd` | `RunState`: start_run, multi-level XP, allocation, damage/heal clamps, ticks, telemetry, summary |
 | `enemies_test.gd` | Enemy schema v2 (shipped and broken records), roster, budgets within 10 % and composition rules over 20 seeds × depths 1–6, boss/elite rooms, spawn constraints, veteran/elite scaling, phases, twin_shot geometry, dormancy and wind-up state machine |
@@ -240,7 +252,8 @@ game/
 │   ├── game.gd                 # orchestrator + State {RUNNING, LEVEL_UP, PAUSED, ENDED(unused),
 │   │                           #   TITLE, SUMMARY, INTERMISSION, MAP, DIALOG}: floors, doors, screens
 │   ├── collapse_clock.gd       # zero-clock grace driver: timer, debris waves, hard collapse
-│   ├── hazards.gd              # ground hazards: telegraph -> active -> expire, drawing (pure)
+│   ├── hazards.gd              # ground hazards: telegraph -> active -> expire, drawing, biome patches (pure)
+│   ├── biomes.gd               # biome catalogue: depth bands, room assignment, atlas slots, hazards (pure)
 │   ├── interactables.gd        # interactable entries (chest, shrine, rest, sign...) (pure)
 │   ├── room_services.gd        # interact registry + prompts, chest/shrine/rest/sign, trap plates
 │   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames, dodge/dash, attack phases
@@ -254,7 +267,7 @@ game/
 │   ├── pickups.gd              # floor pickups per room (room_states[id].pickups)
 │   ├── item_system.gd          # node: pickups, loot sources, active / consumables, shop, credits
 │   ├── ui/item_card.gd         # NEW ITEM reward card
-│   ├── room_renderer.gd        # immediate-mode drawing of the room, doors (tick previews), actors
+│   ├── room_renderer.gd        # immediate-mode drawing by biome atlas slot: room, doors (tick previews), actors
 │   ├── ui/hud.gd               # status lines (FLOOR d/target), clock / grace countdown, prompt, minimap
 │   ├── ui/floor_map.gd         # full floor map overlay (M); build_model() is pure
 │   ├── ui/choice_dialog.gd     # small modal choice prompt (shrine)
@@ -267,11 +280,12 @@ game/
 │   ├── character_menu.gd       # level-up allocation, pause and stat screens
 │   ├── floor_generator.gd      # deterministic graph, special rooms, feasibility re-roll
 │   ├── room_layout.gd          # fixed 24x24 world, fit-to-window scale
-│   ├── room_contents.gd        # obstacles, chests/shrines/rest, trap plates, reachability
+│   ├── room_contents.gd        # obstacles, chests/shrines/rest, trap plates, biome patches, reachability
 │   ├── enemy_system.gd         # catalogue v2 + validator, threat budgets, spawns, enemy AI state machine
 │   ├── rpg_rules.gd            # six stats, d20 attack and XP progression
 │   └── collapse_policy.gd      # transition pricing, budget (via run_rules), route rooms, grace rules
 ├── data/
+│   ├── biomes.json             # six biomes: depth bands, palettes, atlases, fallback tints, hazards, dressing
 │   ├── prototype_rules.json    # run (depths, rooms), collapse + budget, obstacles, abilities
 │   ├── enemies.json            # enemy roster (schema v2), sprite sheets, band guardrails, budgets, elites
 │   ├── announcer.json          # system lines by trigger, toast/rate-limit settings
@@ -287,7 +301,7 @@ game/
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but floors differ only in size, seed and enemy roster so far (no biomes yet), and it has no classes or skill selection, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but only two biomes have their own (placeholder) art so far, and it has no classes or skill selection, no companion AI, no finished movement/attack animations, audio, or mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

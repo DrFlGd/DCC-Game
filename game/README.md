@@ -25,6 +25,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Pause → Settings / Abandon run | — | — | Open the settings page; abandon the run (asks to confirm, ends as *abandoned*) |
 | Arrows / Enter on menus | D-pad / A | `ui_*` (built in) | Move between and press buttons on the title, intermission, summary and settings screens |
 | F9 (prototype debug) | — | `debug_level_up` | Award XP up to the next level (2 ability points and 1 skill point) so you can test the level-up menu immediately |
+| F8 (prototype debug) | — | `debug_toggle_companion` | Turn the companion prototype on / off for this session (spawns it beside you mid-run; see [Companion](#companion-prototype)) |
 | Mouse in level-up menu | — | — | Assign and refund points with + / −, then confirm |
 | R | — | `restart_seed` | Restart using same seed (during a run or on the run summary) |
 | N | — | `new_seed` | Restart using a new seed (during a run or on the run summary) |
@@ -37,6 +38,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | X | X | `use_skill_2` | Use the active skill in slot 2 |
 | M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc also closes it) |
 | 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc walks away without using it |
+| Hold E 0.4 s (no prompt showing) | Hold A | `interact` | Companion prototype only: toggle the hound between **stay** and **follow** |
 
 Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). `use_item`, `use_consumable` and `next_consumable` are live (Wave 2B). `use_skill_1` and `use_skill_2` are live (Wave 2F; polled with a press-edge latch so the LT axis fires once per pull). Reserved actions with default bindings: `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Free gamepad inputs: R3, D-pad up / left. `tests/inventory_test.gd` and `tests/skills_test.gd` fail if two gameplay actions share a key, button or axis direction. Aiming is still mouse-only.
 
@@ -89,6 +91,19 @@ Wave 2F puts `data/content/skills.json` (Wave 1B) into play. Design: [COMBAT_AND
 - **HUD.** The SKILLS panel under the loadout shows both slots with a cooldown sweep and the seconds left, greys a slot you cannot afford, and flags banked points.
 - **Config keys** (`data/prototype_rules.json` `skills`): `points_per_level` (1), `slots` (2), `int_magnitude_per_mod` (0.1), `dashes` (skill id → `{distance, duration, recovery}`).
 - **For other systems.** `SkillSystem.describe()` is the menu / HUD view model; `SkillSystem.rank_of(id)`, `cooldown_left(id)`, `reduce_cooldowns(seconds)`; `EffectRunner.fire_skill(combat, id, rank, trigger)` runs one skill's effects; `Loadout.skill_magnitude_mult()` is the INT factor.
+
+## Companion (prototype)
+
+Wave 3E adds one follower, the **Scrap Hound** (`cmp_scrap_hound` in `data/companions.json`), behind a flag. Design: [COMBAT_AND_RPG.md §13](../docs/design/COMBAT_AND_RPG.md#13-companions--d-10). It is **off by default**: `companion.enabled` in `data/prototype_rules.json` is `false`, so the default game and the determinism fixtures never see it.
+
+- **Turning it on.** Set `companion.enabled` to `true`, or press **F8** (`debug_toggle_companion`, a keyboard-only developer action) during a run: the hound appears beside you, and the choice holds for the rest of the session (F8 again removes it).
+- **Behaviour.** It follows within 28 px, picks the enemy you hit last (else the enemy nearest to it) within 160 px of you, and bites on its own 0.9 s cooldown after a 0.15 s wind-up. Kills give you the XP and credits. Your item `on_hit` / `on_kill` effects do **not** fire on its kills. It teleports beside you on every room entry, when more than 170 px away, or when stuck for 1.5 s.
+- **Danger.** Non-boss melee, dash and area enemies may switch to it when it is within 64 px of them and closer than you (30 %, re-checked each second). Enemy bullets hit it too. At 0 HP it is **downed**: stand within 24 px of it for 2 s to revive it at 50 % HP. It also gets up on its own after 25 s, and at full HP at each floor start.
+- **Command.** Hold **E** for 0.4 s with no interaction prompt showing to make it **stay**: it holds its spot and only bites what is in reach. Hold E again to make it follow. Entering a room resets it to follow.
+- **Buff.** While it is up, your pickup radius is +1 px (`crawler_buffs`).
+- **HUD.** An amber HP pip right of the stamina bar, labelled PAL (or STAY, or DOWN with the revive progress).
+- **Config keys** (`data/prototype_rules.json` `companion`): `enabled` (false), `id`, `retarget_chance` (0.3), `retarget_radius` (64), `retarget_interval` (1.0 s), `command_hold_seconds` (0.4). Per-companion stats, the bite, revive rules and announcer lines live in `data/companions.json`.
+- **Code.** `scripts/companion.gd` (the node: rolls, damage, revive, signals, drawing), `scripts/companion_ai.gd` (pure AI), `scripts/companions.gd` (loader and validator). Enemies retarget in `enemy_system.gd` (`update_companion_target`), and `Combat.hit_companion()` handles hits on it. The companion has its own RNG, seeded from `seed ^ depth`, so it never changes the run's dice. It sends `Events.companion_spawned`, `companion_downed`, `companion_revived` and `companion_killed_enemy`, and counts kills in the `companion_kills` telemetry key.
 
 ## Feel
 
@@ -255,6 +270,7 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `inventory_test.gd` | Wave 2B: starting loadout, weapon / active swaps and drops, active recharge by seconds / rooms / floors, the belt, passive stacking and stats, scripted pickups, chest and boss loot box, credits, the shop, `grant_ticks` stabilising the grace, loot determinism, Input Map collisions |
 | `items_combat_test.gd` | Wave 2B: starter weapons equal the prototype numbers, spread / burst / beam / pierce, melee arc / thrust / spin geometry, `on_hit` and DoT, shields and player statuses, the decoy, boss immunity, `on_kill` / `on_damage_taken`, hazard statuses, a render pass |
 | `combat_feel_test.gd` | Wave 2D: dodge distance, timing and i-frames, stamina cost/delay/regen and the two-chain rule, dodge refusals, knockback (resist, walls, interrupts, boss cap, crawler), hit-stop freeze and budget, damage numbers and the setting, movement penalties, door lock timing/kinds/grace/clear, locked-door dodge, 15 s failsafe |
+| `companion_test.gd` | Wave 3E: `companions.json` validation, flag off (no node, no enemy keys, `RunState.rng` untouched), spawn beside the crawler, follow / leash / stuck teleports, target selection and the crawler's mark, bites on cooldown through `apply_damage` (source `companion`), XP and credits but no `on_kill`, the retarget rule, strikes and bullets on the companion, downed / channel / auto / floor-start revive, room-entry teleport, stay command, F8, per-seed determinism |
 | `achievements_test.gd` | Achievements on scripted event sequences (never twice), profile save/load and corrupt-file recovery, telemetry report keys and 50-file retention |
 
 **Writing tests that touch autoloads.** In `--script` mode (Godot 4.7.2) the `Events` and `RunState` autoload nodes already exist under `/root` when `_initialize()` runs (their `_ready()` runs a frame later), but their global identifiers are **not** visible to the test script or anything it `preload`s, because those compile before autoloads are registered. A compile error there makes Godot hang instead of exiting. So: fetch autoloads with `get_root().get_node("RunState")`, and `load()` game scripts or `res://scenes/Main.tscn` at runtime instead of `preload`ing them. Pure-logic modules that never mention an autoload can still be preloaded.
@@ -292,6 +308,9 @@ game/
 │   ├── room_services.gd        # interact registry + prompts, chest/shrine/rest/sign, trap plates
 │   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames, dodge/dash, attack phases
 │   ├── skill_system.gd         # skill points, learning rules, active-skill slots and cooldowns (Wave 2F)
+│   ├── companion.gd            # Wave 3E follower node behind companion.enabled: rolls, revive, signals, drawing
+│   ├── companion_ai.gd         # pure follower AI: follow, leash, targets, bite wind-up, downed (Wave 3E)
+│   ├── companions.gd           # companions.json loader and validator (pure)
 │   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage() + feedback/knockback
 │   ├── fx.gd                   # hit feedback state: hit-stop, shake, flashes, numbers, death bursts (pure)
 │   ├── door_lock.gd            # D-07 door lock, unreachable-enemy failsafe, room-clear moment
@@ -322,6 +341,7 @@ game/
 ├── data/
 │   ├── biomes.json             # six biomes: depth bands, palettes, atlases, fallback tints, hazards, dressing
 │   ├── prototype_rules.json    # run (depths, rooms), collapse + budget, obstacles, abilities
+│   ├── companions.json         # companion prototype records (schema v1): stats, bite, revive, lines
 │   ├── enemies.json            # enemy roster (schema v2), sprite sheets, band guardrails, budgets, elites
 │   ├── announcer.json          # system lines by trigger, toast/rate-limit settings
 │   ├── audio.json              # Events trigger -> sound cue, state -> music/ambient track
@@ -337,7 +357,7 @@ game/
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but only two biomes have their own (placeholder) art so far, and it has no classes, an 8-skill starter tree only, no companion AI, no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but only two biomes have their own (placeholder) art so far, and it has no classes, an 8-skill starter tree only, only a flagged one-follower companion prototype (off by default), no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

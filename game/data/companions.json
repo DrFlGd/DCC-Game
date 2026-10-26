@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "companions": {
+    "cmp_scrap_hound": {
+      "name": "Scrap Hound",
+      "description": "A dungeon-bred mongrel stitched together from three other dogs and most of a toaster. Loyal to whoever fed it last, which, regrettably, was you.",
+      "adaptation_type": "original",
+      "sprite": "res://assets/characters/companion/facing_4.png",
+      "frame": [24, 24],
+      "render": [20, 20],
+      "radius": 5.0,
+      "hp": 16,
+      "hp_per_level": 3,
+      "ac": 13,
+      "speed": 118,
+      "return_speed_mult": 1.35,
+      "follow_distance": 28,
+      "leash_distance": 170,
+      "engage_radius": 160,
+      "stuck_seconds": 1.5,
+      "hit_iframes": 0.4,
+      "scores": {"STR": 12, "DEX": 15, "CON": 12, "INT": 4, "WIS": 12, "CHA": 7},
+      "attacks": [
+        {
+          "id": "bite",
+          "type": "melee",
+          "telegraph": "arc",
+          "arc": 110,
+          "ability": "DEX",
+          "proficient": true,
+          "range": 14,
+          "cooldown": 0.9,
+          "wind_up": 0.15,
+          "recovery": 0.2,
+          "damage_die": 4,
+          "damage_bonus": 0,
+          "damage_type": "physical",
+          "knockback": 6
+        }
+      ],
+      "revive": {
+        "radius": 24,
+        "channel_seconds": 2.0,
+        "hp_ratio": 0.5,
+        "auto_seconds": 25.0,
+        "on_floor_start": true
+      },
+      "crawler_buffs": {"pickup_radius": 1},
+      "lines": {
+        "spawned": [
+          "COMPANION ASSIGNED: one Scrap Hound. Batteries not included. Rabies possibly included."
+        ],
+        "downed": [
+          "Your hound is down. It is still technically a good boy. Revive it before the floor files it under loot.",
+          "Companion incapacitated. The System reminds you that pets are a privilege, not a strategy.",
+          "The Scrap Hound has stopped wagging. Stand over it and look sorry.",
+          "Hound down. Viewers are already drafting the memorial montage."
+        ],
+        "revived": [
+          "Companion restored. It has forgiven you. It has not forgotten.",
+          "The Scrap Hound is back on its feet and holding a grudge against the floor.",
+          "Revival complete. Please do not ask where the replacement parts came from."
+        ],
+        "stay": [
+          "Hound ordered to stay. It is pretending it did not hear you, but it is staying."
+        ],
+        "follow": [
+          "Hound released. It resumes following you at an emotionally supportive distance."
+        ]
+      }
+    }
+  }
+}

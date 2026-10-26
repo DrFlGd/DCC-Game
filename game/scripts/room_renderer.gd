@@ -461,6 +461,9 @@ func _draw_actors() -> void:
         draw_circle(point, 2.5, color)
     for foe in RunState.current_room().get("enemies", []):
         _draw_enemy(foe)
+    # Wave 3E: the companion prototype draws itself (companion.gd draw_on).
+    if combat.get("companion") != null:
+        combat.companion.draw_on(self)
     var at: Vector2 = player.world_position
     var aim: Vector2 = player.aim_direction
     _draw_dodge_trail(at)

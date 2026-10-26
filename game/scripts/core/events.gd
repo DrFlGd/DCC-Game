@@ -146,6 +146,19 @@ signal skill_learned(skill_id: String, rank: int)
 ## on_use effects already ran and its cooldown started (2F, SkillSystem).
 signal skill_used(skill_id: String, rank: int)
 
+# --- Companion prototype (Wave 3E, companion.gd) -------------------------------
+
+## The follower `companion_id` (data/companions.json) appeared beside the
+## crawler: run start with `companion.enabled`, or the F8 developer toggle.
+signal companion_spawned(companion_id: String)
+## The companion reached 0 HP and is downed (the crawler can revive it).
+signal companion_downed()
+## The downed companion got back up (revive channel, auto timer, floor start).
+signal companion_revived()
+## The companion's bite killed an enemy of type `definition_id` (enemy_killed
+## has already been emitted; XP and credits went to the crawler).
+signal companion_killed_enemy(definition_id: String)
+
 # --- Presentation ------------------------------------------------------------
 
 ## Player settings changed and were saved. `settings` is Settings.to_dict()

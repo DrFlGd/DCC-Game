@@ -23,6 +23,8 @@ extends RefCounted
 ##              cooldowns {attack_id: s}, dormant (s), phase, volley, repath,
 ##              waypoints
 ##   summons    summoner (parent instance_id or ""), summon_serial, rng_seed
+##   companion  target ("player" or "companion"), retarget_timer, retarget_serial
+##              (Wave 3E; only written while the companion prototype is on)
 const Room = preload("res://scripts/room_contents.gd")
 const RPG = preload("res://scripts/rpg_rules.gd")
 
@@ -621,7 +623,84 @@ static func on_room_entered(foe: Dictionary, dormancy: float) -> void:
 ##   summon      {attack}
 ##   support     {attack}
 ##   wall_stun   {} (a dash ended in an obstacle)
+## Wave 3E: when Combat's `world` carries companion keys (companion_alive,
+## companion_pos, companion_rules, retarget_seed; added only while the
+## companion prototype is on), update_companion_target() may point this enemy
+## at the companion: the step then runs against a view of the world whose
+## player_pos is the companion, and every returned action is tagged
+## `target: "companion"` (Combat routes those strikes to hit_companion()).
 static func step(foe: Dictionary, definition: Dictionary, delta: float,
+        world: Dictionary) -> Array[Dictionary]:
+    if not world.has("companion_alive"):
+        return _step_against(foe, definition, delta, world)
+    if float(foe.get("dormant", 0.0)) <= 0.0:
+        update_companion_target(foe, definition, delta, world)
+    if String(foe.get("target", "player")) != "companion":
+        return _step_against(foe, definition, delta, world)
+    var view: Dictionary = world.duplicate()
+    view["player_pos"] = world["companion_pos"]
+    view["player_velocity"] = Vector2.ZERO
+    var actions: Array[Dictionary] = _step_against(foe, definition, delta, view)
+    for action in actions:
+        action["target"] = "companion"
+    return actions
+
+
+# --- Companion targeting (Wave 3E) -------------------------------------------------
+
+## True when `definition` may retarget to the companion: its explicit
+## `targets_companion`, else every non-boss with a melee, dash or area attack.
+static func can_target_companion(definition: Dictionary) -> bool:
+    if definition.has("targets_companion"):
+        return bool(definition["targets_companion"])
+    if bool(definition.get("boss", false)):
+        return false
+    for attack in definition.get("attacks", []):
+        if ["melee", "dash", "area"].has(String(attack.get("type", ""))):
+            return true
+    return false
+
+
+## The retarget rule. Re-evaluated only while the enemy is idle, every
+## `retarget_interval` s (1.0): an eligible enemy (can_target_companion) whose
+## companion is within `retarget_radius` (64 px) AND nearer than the crawler
+## switches to it when companion_roll() < `retarget_chance` (0.3); otherwise it
+## (re)targets the crawler. A downed companion sends everyone back to the
+## crawler at once. Writes foe.target ("player" or "companion"),
+## retarget_timer and retarget_serial; consumes no RNG.
+static func update_companion_target(foe: Dictionary, definition: Dictionary, delta: float,
+        world: Dictionary) -> void:
+    if not bool(world.get("companion_alive", false)):
+        foe["target"] = "player"
+        return
+    foe["retarget_timer"] = float(foe.get("retarget_timer", 0.0)) - delta
+    if String(foe.get("state", "idle")) != "idle" or float(foe["retarget_timer"]) > 0.0:
+        return
+    var rules: Dictionary = world.get("companion_rules", {})
+    foe["retarget_timer"] = float(rules.get("retarget_interval", 1.0))
+    foe["target"] = "player"
+    if not can_target_companion(definition):
+        return
+    var here: Vector2 = foe["pos"]
+    var buddy: Vector2 = world["companion_pos"]
+    var to_buddy: float = here.distance_to(buddy)
+    if to_buddy > float(rules.get("retarget_radius", 64.0)) \
+            or to_buddy >= here.distance_to(Vector2(world["player_pos"])):
+        return
+    var serial: int = int(foe.get("retarget_serial", 0)) + 1
+    foe["retarget_serial"] = serial
+    if companion_roll(String(foe.get("instance_id", "")), serial,
+            int(world.get("retarget_seed", 0))) < float(rules.get("retarget_chance", 0.3)):
+        foe["target"] = "companion"
+
+
+## Deterministic 0..1 roll from the enemy id, its evaluation count and the
+## floor's seed (no RNG stream is consumed).
+static func companion_roll(instance_id: String, serial: int, seed_value: int) -> float:
+    return float(posmod(hash("%s|%d|%d" % [instance_id, serial, seed_value]), 10000)) / 10000.0
+
+
+static func _step_against(foe: Dictionary, definition: Dictionary, delta: float,
         world: Dictionary) -> Array[Dictionary]:
     var actions: Array[Dictionary] = []
     _tick_timers(foe, delta)

@@ -20,7 +20,7 @@ const DEFAULT_SEED := 424242
 const TELEMETRY_KEYS := ["rooms_entered", "shots_fired", "melee_swings", "kills",
     "damage_dealt", "damage_taken", "ticks_spent", "run_time_seconds",
     "floors_cleared", "ticks_granted", "dodges", "failsafe_despawns", "items_collected",
-    "loot_boxes_opened", "credits_earned", "skills_learned", "skills_used"]
+    "loot_boxes_opened", "credits_earned", "skills_learned", "skills_used", "companion_kills"]
 ## Telemetry keys snapshotted per floor for the intermission recap.
 const FLOOR_KEYS := ["rooms_entered", "kills", "damage_dealt", "damage_taken",
     "ticks_spent", "ticks_granted", "run_time_seconds"]
@@ -105,6 +105,14 @@ var stamina := 100.0
 var max_stamina := 100.0
 ## Seconds since the last spend_stamina(); regen waits for `regen_delay`.
 var stamina_idle := 0.0
+## Wave 3E companion prototype (companion.gd). `companion_enabled` is set by
+## start_run() from `companion.enabled` in prototype_rules.json (false by
+## default), inverted while `companion_toggled` (the F8 developer key,
+## toggle_companion(), kept for the session). `companion_pickup_bonus` is the
+## companion's crawler_buffs.pickup_radius while it is up (Loadout reads it).
+var companion_enabled := false
+var companion_toggled := false
+var companion_pickup_bonus := 0.0
 ## Telemetry values when the current floor started (see floor_stats()).
 var _floor_baseline: Dictionary = {}
 var _floor_closed := false
@@ -170,6 +178,8 @@ func start_run(new_seed: int) -> void:
     for _slot in range(maxi(1, int(config.get("skills", {}).get("slots", 2)))):
         skill_slots.append("")
     skill_cooldowns = {}
+    companion_enabled = bool(config.get("companion", {}).get("enabled", false)) != companion_toggled
+    companion_pickup_bonus = 0.0
     tick_ledger.clear()
     _reset_telemetry()
     reset_for_floor(1)
@@ -307,6 +317,14 @@ func set_stat_modifiers(modifiers: Array) -> void:
     if max_hp > old_max and hp > 0:
         hp = mini(max_hp, hp + max_hp - old_max)
     hp = mini(hp, max_hp)
+
+
+## F8 (`debug_toggle_companion`): flips the companion for this session.
+## Returns the new companion_enabled; Game spawns or removes the node.
+func toggle_companion() -> bool:
+    companion_toggled = not companion_toggled
+    companion_enabled = not companion_enabled
+    return companion_enabled
 
 
 ## Adds `amount` to a telemetry counter in TELEMETRY_KEYS (for feature nodes).

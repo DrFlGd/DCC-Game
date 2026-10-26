@@ -14,6 +14,7 @@ Art remains organized by family, not in one shared master sheet. The environment
 
 See [`biomes/README.md`](biomes/README.md) for the standard 8×6 slot layout, the generator and the placeholder labelling.
 | Crawler | [`characters/crawler/facing_8.png`](characters/crawler/facing_8.png) | 8×48px source frames, rendered at 24×24 |
+| Companion (prototype) | [`characters/companion/facing_4.png`](characters/companion/facing_4.png) | Generated placeholder: 5×24px frames (E, S, W, N, downed), rendered at 20×20; see [`characters/README.md`](characters/README.md) |
 | Rat | [`enemies/rat/facing_8.png`](enemies/rat/facing_8.png) | 8×32px frames from supplied directional GIF, rendered at 24×24 |
 | Armored boss | [`enemies/brute_boss/facing_8.png`](enemies/brute_boss/facing_8.png) | 8×96px source frames, rendered at 48×48 |
 | Weapons | `weapons/<weapon_id>/...` | Independent per-weapon sheets (future task) |

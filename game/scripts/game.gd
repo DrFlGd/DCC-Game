@@ -73,6 +73,7 @@ const DoorLock = preload("res://scripts/door_lock.gd")
 const SkillSystem = preload("res://scripts/skill_system.gd")
 const Audio = preload("res://scripts/audio.gd")
 const InputBindings = preload("res://scripts/core/input_bindings.gd")
+const Companion = preload("res://scripts/companion.gd")
 
 ## World room bounds; never changes with window size.
 const ROOM := Layout.ARENA
@@ -111,6 +112,9 @@ var _skill_held: Array = [false, false]
 var audio: Audio
 ## Mouse position last frame (screen px), for the aim source rules (3C).
 var _last_mouse_screen := Vector2.INF
+## Wave 3E follower prototype (companion.gd); null unless
+## RunState.companion_enabled (prototype_rules `companion.enabled`, F8).
+var companion: Companion
 
 
 func _ready() -> void:
@@ -196,6 +200,7 @@ func _ensure_child(child_name: String, script: Script) -> Node:
 ## test). Same seed + same inputs = same run.
 func start_run(new_seed: int) -> void:
     RunState.start_run(new_seed)
+    _sync_companion()
     rules = Collapse.new(RunState.config.get("collapse", {}))
     renderer.rules = rules
     _close_screens()
@@ -434,6 +439,9 @@ func _physics_process(delta: float) -> void:
     # A kill above may have opened the level-up modal; enemies freeze with it.
     if state == State.RUNNING:
         combat.update_enemies(step)
+    # Wave 3E: the companion moves and bites after the enemies' turn.
+    if state == State.RUNNING and companion != null:
+        companion.update(step, companion.build_world())
     # Wave 2E: hazards, plates/prompts and the grace timer, each frozen by modals.
     if state == State.RUNNING:
         combat.update_hazards(step)
@@ -569,6 +577,12 @@ func _unhandled_input(event: InputEvent) -> void:
         start_run(RunState.seed)
     elif event.is_action_pressed("new_seed"):
         start_run(random_seed())
+    elif event.is_action_pressed("debug_toggle_companion") and state == State.RUNNING:
+        # Developer shortcut (F8): companion prototype on/off for this session.
+        RunState.toggle_companion()
+        _sync_companion()
+        if companion != null:
+            companion.spawn()
     elif event.is_action_pressed("debug_level_up") and state == State.RUNNING \
             and RunState.level < 20:
         # Prototype playtest shortcut: jump to the next XP threshold.
@@ -603,6 +617,21 @@ func _character_context() -> Dictionary:
     context["inventory"] = Inventory.describe()
     context["skills"] = SkillSystem.describe()
     return context
+
+
+## Creates or removes the Companion child to match RunState.companion_enabled
+## (it spawns on floor_started, or at once from the F8 toggle).
+func _sync_companion() -> void:
+    if RunState.companion_enabled and companion == null:
+        companion = _ensure_child("Companion", Companion) as Companion
+        companion.setup(self)
+    elif not RunState.companion_enabled and companion != null:
+        companion.despawn()
+        remove_child(companion)
+        companion.queue_free()
+        companion = null
+    combat.companion = companion
+    hud.companion = companion
 
 
 func _on_enemy_killed(definition_id: String, xp: int, _position: Vector2) -> void:

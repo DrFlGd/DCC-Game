@@ -29,6 +29,8 @@ var hover: Dictionary = {}
 var canvas: Control
 ## Seconds left on the "ROOM CLEAR" flourish (show_room_clear, Wave 2D).
 var room_clear_left := 0.0
+## Wave 3E: the Companion node while the prototype is on (set by Game), else null.
+var companion = null
 const ROOM_CLEAR_SECONDS := 1.1
 
 
@@ -82,6 +84,7 @@ func _draw_hud() -> void:
         str(RPG.next_level_xp(level)) if level < 20 else "MAX",
         RunState.proficiency], Vector2(14, 43), 15, Color("#e5eafa"))
     _draw_stamina_bar(Vector2(14, 47))
+    _draw_companion_pip(Vector2(176, 47))
     var stat_parts: PackedStringArray = []
     for ability in RPG.ABILITIES:
         var score: int = int(RunState.ability_scores[ability])
@@ -118,6 +121,26 @@ func _draw_stamina_bar(origin: Vector2) -> void:
         canvas.draw_line(origin + Vector2(tick * i, 0), origin + Vector2(tick * i, 4),
             Color(0, 0, 0, 0.5), 1.0)
     _text("STA", origin + Vector2(width + 6, 5), 9, Color("#a7cfcb"))
+
+
+## Wave 3E: a small companion HP pip right of the stamina bar (amber bar,
+## STAY marker, DOWN with the revive progress while downed).
+func _draw_companion_pip(origin: Vector2) -> void:
+    if companion == null:
+        return
+    var info: Dictionary = companion.hud_info()
+    if info.is_empty():
+        return
+    var width := 40.0
+    canvas.draw_rect(Rect2(origin - Vector2(1, 1), Vector2(width + 2, 6)), Color("#0b0f16"))
+    if String(info["state"]) == "downed":
+        canvas.draw_rect(Rect2(origin, Vector2(width * float(info["revive"]), 4)), Color("#ffe08a"))
+        _text("DOWN", origin + Vector2(width + 6, 5), 9, Color("#ff8a7a"))
+        return
+    var ratio: float = clampf(float(info["hp"]) / float(maxi(1, int(info["max_hp"]))), 0.0, 1.0)
+    canvas.draw_rect(Rect2(origin, Vector2(width * ratio, 4)), Color("#e7b25b"))
+    _text("PAL" if String(info["mode"]) == "follow" else "STAY", origin + Vector2(width + 6, 5), 9,
+        Color("#a7cfcb"))
 
 
 ## "ROOM CLEAR" banner across the top third with a gold border pulse.

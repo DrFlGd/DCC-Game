@@ -150,8 +150,15 @@ signal skill_used(skill_id: String, rank: int)
 
 ## Player settings changed and were saved. `settings` is Settings.to_dict()
 ## (resolution, fullscreen, master_volume, music_volume, sfx_volume,
-## show_damage_numbers, screen_shake). scripts/audio.gd applies the volumes.
+## show_damage_numbers, screen_shake; Wave 3C adds text_scale, high_contrast,
+## reduced_flash, colorblind_telegraphs, aim_assist). scripts/audio.gd applies
+## the volumes. Also emitted after the controls screen rebinds an action.
 signal settings_changed(settings: Dictionary)
+
+## The player switched input device: "keyboard" (keyboard and mouse) or
+## "gamepad" (Wave 3C). Game emits it from its input handling; hint lines
+## (HUD, menus) re-read InputBindings.hint() for the new device.
+signal input_device_changed(device: String)
 
 ## Asks the dungeon-system announcer for a line. `trigger` is a key in
 ## data/announcer.json; `context` fills its {placeholders}. With no lines for

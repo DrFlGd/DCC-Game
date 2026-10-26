@@ -200,6 +200,13 @@
       "locking_kinds": ["normal", "elite", "boss", "trap"]
     }
   },
+  "input": {
+    "aim_deadzone": 0.25,
+    "aim_fallback_to_move": true,
+    "aim_assist_degrees": 8,
+    "aim_assist_range": 200,
+    "reticle_distance": 34
+  },
   "player_ability_scores": {
     "STR": 14,
     "DEX": 14,

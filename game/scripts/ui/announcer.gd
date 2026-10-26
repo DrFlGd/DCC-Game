@@ -19,6 +19,10 @@ const Achievements = preload("res://scripts/core/achievements.gd")
 const Profile = preload("res://scripts/core/profile.gd")
 const Telemetry = preload("res://scripts/core/telemetry.gd")
 const Enemies = preload("res://scripts/enemy_system.gd")
+## Wave 3C: toasts and the log follow text_scale and high_contrast; the hint
+## names the live toggle_log binding for the last-used device.
+const Accessibility = preload("res://scripts/core/accessibility.gd")
+const InputBindings = preload("res://scripts/core/input_bindings.gd")
 
 ## Above the run-loop screens (12) and settings (20) so toasts show over them.
 ## Toasts are held back while a modal (pause, level-up) is open.
@@ -72,6 +76,7 @@ var _log_panel: PanelContainer
 var _log_text: RichTextLabel
 var _hint: Label
 var _log_version := -1
+var _log_title: Label
 
 
 func _ready() -> void:
@@ -109,6 +114,29 @@ func _ready() -> void:
     Events.announcement_requested.connect(_on_announcement_requested)
     for signal_name in OPTIONAL_SIGNALS:
         _connect_optional(signal_name)
+    Events.settings_changed.connect(func(_values): apply_accessibility())
+    Events.input_device_changed.connect(func(_device): apply_accessibility())
+    apply_accessibility()
+
+
+## Re-applies text size, contrast and hint wording to the built controls
+## (toasts are drawn every frame and need nothing).
+func apply_accessibility() -> void:
+    if _log_panel == null:
+        return
+    var log_key: String = InputBindings.hint("toggle_log")
+    _hint.text = "%s: system log" % log_key
+    _hint.add_theme_font_size_override("font_size", Accessibility.px(11))
+    _hint.add_theme_constant_override("outline_size", Accessibility.outline())
+    _hint.add_theme_color_override("font_outline_color", Accessibility.OUTLINE_COLOR)
+    _log_title.text = "SYSTEM LOG  (%s to close)" % log_key
+    _log_title.add_theme_font_size_override("font_size", Accessibility.px(13))
+    _log_text.add_theme_font_size_override("normal_font_size", Accessibility.px(LOG_FONT))
+    var style := _log_panel.get_theme_stylebox("panel") as StyleBoxFlat
+    if style != null:
+        style.bg_color = Accessibility.panel(Color(0.03, 0.05, 0.09, 0.88))
+        style.border_color = Accessibility.HIGH_CONTRAST_BORDER if Accessibility.high_contrast() \
+            else Color("#5fb3b3")
 
 
 ## Picks a line for `trigger` (placeholders from RunState, overridden by
@@ -428,6 +456,7 @@ func _build_ui() -> void:
     column.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _log_panel.add_child(column)
     var title := Label.new()
+    _log_title = title
     title.text = "SYSTEM LOG  (L to close)"
     title.add_theme_font_size_override("font_size", 13)
     title.add_theme_color_override("font_color", Color("#f6d48d"))
@@ -454,7 +483,7 @@ func _layout_ui() -> void:
     var width: float = clampf(view.x * 0.3, 220.0, 340.0)
     _log_panel.position = Vector2(view.x - width - 12.0, 100.0)
     _log_panel.size = Vector2(width, maxf(120.0, view.y - 170.0))
-    _hint.position = Vector2(view.x - 92.0, view.y - 38.0)
+    _hint.position = Vector2(view.x - _hint.get_minimum_size().x - 12.0, view.y - 38.0)
     _hint.visible = not RunState.floor.is_empty() and _game_state != "TITLE"
 
 
@@ -472,22 +501,29 @@ func _draw_toasts() -> void:
     var font: Font = ThemeDB.fallback_font
     var view: Vector2 = _canvas.size
     var max_text: float = minf(640.0, view.x - 60.0) - TOAST_PADDING.x * 2.0
+    var font_size: int = Accessibility.px(TOAST_FONT)
+    var contrast: bool = Accessibility.high_contrast()
     var y: float = TOAST_TOP
     for entry in brain.on_screen:
         var text: String = String(entry["text"])
         var alpha: float = brain.alpha_for(entry, clock)
         var natural: Vector2 = font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER,
-            -1, TOAST_FONT)
+            -1, font_size)
         var text_width: float = minf(natural.x, max_text)
         var text_size: Vector2 = font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER,
-            text_width, TOAST_FONT)
+            text_width, font_size)
         var box := Rect2(Vector2((view.x - text_width) * 0.5 - TOAST_PADDING.x, y),
             Vector2(text_width, text_size.y) + TOAST_PADDING * 2.0)
         var accent: Color = CATEGORY_COLORS.get(entry["category"], Color.WHITE)
-        _canvas.draw_rect(box, Color(0.03, 0.05, 0.09, 0.9 * alpha))
-        _canvas.draw_rect(box, Color(accent, alpha * (1.0 if int(entry["priority"]) >= 4 else 0.55)),
-            false, 2.0 if int(entry["priority"]) >= 4 else 1.0)
-        _canvas.draw_multiline_string(font, box.position + Vector2(TOAST_PADDING.x,
-            TOAST_PADDING.y + font.get_ascent(TOAST_FONT)), text, HORIZONTAL_ALIGNMENT_CENTER,
-            text_width, TOAST_FONT, -1, Color(accent, alpha))
+        _canvas.draw_rect(box, Color(0.0, 0.0, 0.0, alpha) if contrast
+            else Color(0.03, 0.05, 0.09, 0.9 * alpha))
+        _canvas.draw_rect(box, Color(accent, alpha * (1.0 if int(entry["priority"]) >= 4 or contrast
+            else 0.55)), false, 2.0 if int(entry["priority"]) >= 4 or contrast else 1.0)
+        var text_at: Vector2 = box.position + Vector2(TOAST_PADDING.x,
+            TOAST_PADDING.y + font.get_ascent(font_size))
+        if contrast:
+            _canvas.draw_multiline_string_outline(font, text_at, text, HORIZONTAL_ALIGNMENT_CENTER,
+                text_width, font_size, -1, Accessibility.OUTLINE, Color(0, 0, 0, alpha))
+        _canvas.draw_multiline_string(font, text_at, text, HORIZONTAL_ALIGNMENT_CENTER,
+            text_width, font_size, -1, Color(accent, alpha))
         y += box.size.y + TOAST_GAP

@@ -30,7 +30,7 @@ const ACTIONS := [
 ]
 ## Developer actions: bound in project.godot, never listed or remapped, but
 ## their keys stay reserved (rebinding onto them is refused).
-const HIDDEN_ACTIONS := ["restart_seed", "new_seed", "debug_level_up"]
+const HIDDEN_ACTIONS := ["restart_seed", "new_seed", "debug_level_up", "debug_toggle_companion"]
 ## Bindings that can never be removed: pause keeps Esc and Start whatever the
 ## player adds to it.
 const LOCKED := {"pause": ["keycode:4194305", "joy_button:6"]}

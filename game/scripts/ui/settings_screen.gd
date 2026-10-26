@@ -6,7 +6,7 @@ extends "res://scripts/ui/screen_base.gd"
 ## when Back (or Esc, routed by Game) closes the page.
 ##
 ## Wave 3C: accessibility rows (text size, high contrast, reduced flash,
-## colour-blind telegraphs, gamepad aim assist) and a "Controls…" button that
+## colour-blind telegraphs, gamepad aim assist) and a "Remap controls…" row that
 ## opens the controls screen (ui/controls_screen.gd, a child of this node).
 ## Rebinding there is relayed as setting_changed("input_bindings", overrides)
 ## so Game saves it like any other setting. Changing text size or contrast
@@ -116,6 +116,11 @@ func _build_page(focus_name: String) -> void:
     grid.add_child(_toggle("colorblind_telegraphs"))
     grid.add_child(_label("Gamepad aim assist"))
     grid.add_child(_toggle("aim_assist"))
+    # Last row of the grid so D-pad down reaches it before Back.
+    grid.add_child(_label("Controls"))
+    controls_button = _button("Remap controls…", open_controls)
+    controls_button.name = "controls"
+    grid.add_child(controls_button)
     _update_labels()
 
     var note := _text("Music also sets the ambience; effects also set menu sounds. Reduced flashing"
@@ -123,15 +128,9 @@ func _build_page(focus_name: String) -> void:
     note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     note.custom_minimum_size.x = 540
     content.add_child(note)
-    var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation", 10)
-    content.add_child(row)
-    controls_button = _button("Controls…", open_controls)
-    controls_button.name = "controls"
-    row.add_child(controls_button)
     back_button = _button("Back", close)
     back_button.name = "back"
-    row.add_child(back_button)
+    content.add_child(back_button)
     _add_hint(content)
     var target: Node = center.find_child(focus_name, true, false) if focus_name != "" else null
     if target is Control:

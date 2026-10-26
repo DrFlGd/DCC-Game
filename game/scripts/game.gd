@@ -505,7 +505,8 @@ func _redraw() -> void:
     if state == State.RUNNING:
         shown = door_lock.prompt() if door_lock.prompt() != "" else (
             items.prompt if items.prompt != "" else services.prompt)
-    hud.prompt = shown
+    # Wave 3C: prompts are written with "[E]"; show the live interact binding.
+    hud.prompt = shown.replace("[E]", "[%s]" % InputBindings.hint("interact"))
     hud.hover = items.hover if state == State.RUNNING else {}
     # Wave 3C: the gamepad reticle (hidden for mouse aim).
     hud.reticle = player.reticle_point() if state == State.RUNNING \
@@ -670,8 +671,8 @@ func _confirm_stat_allocation(changes: Dictionary) -> void:
     character_menu.close_menu()
     _change_state(State.RUNNING)
     var banked: String = "" if RunState.skill_points <= 0 else \
-        "  |  %d skill point%s banked (Esc > Skills)" % [RunState.skill_points,
-            "" if RunState.skill_points == 1 else "s"]
+        "  |  %d skill point%s banked (%s > Skills)" % [RunState.skill_points,
+            "" if RunState.skill_points == 1 else "s", InputBindings.hint("pause")]
     Events.say("Level %d stats confirmed. HP %d/%d  AC %d%s" % [
         RunState.level, RunState.hp, RunState.max_hp, RunState.ac, banked], "progression")
 

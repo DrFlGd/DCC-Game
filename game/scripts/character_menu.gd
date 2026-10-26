@@ -121,6 +121,19 @@ static func key_name(action: String) -> String:
     return InputBindings.hint(action)
 
 
+## Explicit left / right neighbours along a row of buttons (wrapping), so the
+## D-pad walks the row instead of jumping to a wider control below it.
+static func link_row(row: Container) -> void:
+    var buttons: Array = []
+    for child in row.get_children():
+        if child is Control and (child as Control).focus_mode != Control.FOCUS_NONE:
+            buttons.append(child)
+    for i in range(buttons.size()):
+        var here: Control = buttons[i]
+        here.focus_neighbor_left = here.get_path_to(buttons[(i - 1 + buttons.size()) % buttons.size()])
+        here.focus_neighbor_right = here.get_path_to(buttons[(i + 1) % buttons.size()])
+
+
 ## Focusable list wrapper so a gamepad can scroll it (see _input).
 func _focus_scroll(scroll: ScrollContainer) -> void:
     scroll.name = "scroll"
@@ -553,6 +566,8 @@ func _pause_content(content: VBoxContainer) -> void:
     var resume := _button("Resume game  (%s)" % key_name("pause"), Callable(self, "_resume"))
     resume.name = "resume"
     content.add_child(resume)
+    link_row(row)
+    link_row(resolution_row)
     content.add_child(_text("%s: move   %s: aim   %s: shoot   %s: melee   %s / %s: skills   %s" % [
         InputBindings.move_hint(), InputBindings.aim_hint(), key_name("fire"), key_name("melee"),
         key_name("use_skill_1"), key_name("use_skill_2"),

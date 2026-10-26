@@ -39,6 +39,7 @@ func _run() -> void:
     _test_reduced_flash()
     _test_device_names()
     await _test_controls_screen()
+    await _test_menus_live()
     await _test_live_gamepad_aim()
     InputBindings.reset_defaults()
     InputBindings.device = InputBindings.KEYBOARD
@@ -427,6 +428,48 @@ func _test_controls_screen() -> void:
     screen._on_cancel()
     check(not screen.is_open() and closed.size() == 1, "B closes the controls screen")
     screen.queue_free()
+    await process_frame
+
+
+## Choice dialog B, and the settings page rebuilding for text size / contrast.
+func _test_menus_live() -> void:
+    var dialog = load("res://scripts/ui/choice_dialog.gd").new()
+    get_root().add_child(dialog)
+    var cancelled: Array = []
+    dialog.cancelled.connect(func(): cancelled.append(true))
+    dialog.open("Shrine", "An offer.", [{"id": "a", "label": "Accept"}])
+    var b := InputEventJoypadButton.new()
+    b.button_index = JOY_BUTTON_B
+    b.pressed = true
+    dialog._input(b)
+    check(not dialog.is_open() and cancelled.size() == 1, "B cancels the choice dialog")
+    dialog.queue_free()
+    var page = load("res://scripts/ui/settings_screen.gd").new()
+    get_root().add_child(page)
+    var scratch = Settings.new(SCRATCH)
+    var seen: Array = []
+    page.setting_changed.connect(func(key, _value): seen.append(key))
+    page.open(scratch)
+    await process_frame
+    check(page.controls_button != null and page.center.find_child("text_scale", true, false) != null
+        and page.center.find_child("reduced_flash", true, false) != null, "settings lists the 3C rows")
+    var before_size: int = page.back_button.get_theme_font_size("font_size")
+    var shared = Settings.shared()
+    var shared_scale: float = shared.text_scale
+    shared.set_value("text_scale", 1.5)
+    check(page.change("text_scale", 1.5) and seen.has("text_scale"), "text size change emitted")
+    await process_frame
+    check(page.back_button.get_theme_font_size("font_size") > before_size, "page rebuilt at the new size")
+    check(page.center.find_child("text_scale", true, false) == get_root().gui_get_focus_owner(),
+        "focus kept on the text size row")
+    shared.set_value("text_scale", shared_scale)
+    page.open_controls()
+    check(page.controls_screen.is_open(), "Remap controls opens the controls screen")
+    page.back()
+    check(not page.controls_screen.is_open() and page.is_open(), "back closes controls first")
+    page.back()
+    check(not page.is_open(), "then the settings page")
+    page.queue_free()
     await process_frame
 
 

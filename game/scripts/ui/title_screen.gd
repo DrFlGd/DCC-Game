@@ -10,11 +10,13 @@ signal settings_requested
 signal quit_requested
 
 const PROFILE_SCRIPT := "res://scripts/core/profile.gd"
+const VersionInfo := preload("res://scripts/core/version_info.gd")
 const MAX_SEED := 2147483647
 
 var seed_input: LineEdit
 var feedback: Label
 var new_run_button: Button
+var version_label: Label
 
 
 func _ready() -> void:
@@ -50,6 +52,14 @@ func open() -> void:
     content.add_child(feedback)
     content.add_child(_text("Keyboard / gamepad: arrows or D-pad to move, Enter or A to choose",
         11, MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+    if version_label == null:
+        version_label = _text(VersionInfo.label_text(), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+        version_label.name = "VersionLabel"
+        version_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT,
+            Control.PRESET_MODE_MINSIZE, 8)
+        version_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+        version_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+        overlay.add_child(version_label)
     new_run_button.grab_focus()
 
 

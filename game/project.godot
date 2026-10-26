@@ -3,9 +3,11 @@
 config_version=5
 
 [application]
-config/name="DCC Game — Technical Prototype"
+config/name="DCC Game"
+config/version="0.1.0"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://assets/ui/icon.png"
 
 [audio]
 
@@ -185,3 +187,4 @@ use_skill_2={
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=true
+textures/vram_compression/import_etc2_astc=true

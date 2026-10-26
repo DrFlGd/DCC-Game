@@ -3,6 +3,7 @@ name: Godot export (release builds)
 # Builds Linux, Windows and macOS (unsigned) packages from game/export_presets.cfg.
 # Cut a release by pushing a tag that matches config/version in game/project.godot:
 #   git tag v0.1.0 && git push origin v0.1.0
+# The tag creates a *draft* GitHub Release with the zips; publish it by hand.
 # A manual run (Actions -> Godot export -> Run workflow) builds the zips as
 # workflow artifacts without publishing a release.
 
@@ -121,6 +122,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: DCC Game ${{ github.ref_name }}
+          # Draft: a person publishes it after checking the asset rights note
+          # (README "Rights") and the IP stance (D-12).
+          draft: true
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |

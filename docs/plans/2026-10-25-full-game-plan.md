@@ -78,5 +78,38 @@ The repo is a solid technical spike, not yet a game:
   - [Combat and RPG](../design/COMBAT_AND_RPG.md) for 2B, 2D and 2F
   - [Enemy tiers](../design/ENEMY_TIERS.md) and [encounter rules](../design/ENCOUNTER_RULES.md) for 2C
   - [Biomes](../design/BIOMES_AND_TILESETS.md) for 3B
-- **Decisions:** where a design doc sets a *Proposed default*, the PR that implements it links the doc section. Owner sign-off moves the decision to *Accepted* in the roadmap's decision table (§3 of the roadmap).
+- **Decisions:** where a design doc sets a *Proposed default*, the PR that implements it links the doc section. Owner sign-off moves the decision to *Accepted* in the roadmap's decision table (§2 of the roadmap).
 - **Open questions for the owner** (§5 above) are answered in the PR conversation or the project chat. Answers are then copied into the relevant design doc.
+
+## 7. Outcome
+
+*(Added 2026-10-26, after Wave 3. It records what happened; everything above stays as originally planned.)*
+
+Every row in §3 shipped as one pull request, merged into `main` in the order of the PR numbers. The deviations each PR made are recorded in the design doc sections it links to. Current state and next steps are in the [roadmap](../ROADMAP.md).
+
+| Wave | Row | PR | Merged |
+| --- | --- | --- | --- |
+| 1 | 1A Architecture refactor | #2 | 2026-10-25 |
+| 1 | 1B Content data layer | #1 | 2026-10-25 |
+| 1 | 1C Design docs | #3 | 2026-10-25 |
+| 2 | 2A Run loop & screens | #4 | 2026-10-25 |
+| 2 | 2B Items, loot & inventory | #9 | 2026-10-25 |
+| 2 | 2C Enemy roster & telegraphs | #7 | 2026-10-25 |
+| 2 | 2D Combat feel | #8 | 2026-10-25 |
+| 2 | 2E Collapse v1 & special rooms | #6 | 2026-10-25 |
+| 2 | 2F Skills & abilities | #11 | 2026-10-26 |
+| 2 | 2G Dungeon-system announcer | #5 | 2026-10-25 |
+| 3 | 3A Audio | #10 | 2026-10-26 |
+| 3 | 3B Second biome | #12 | 2026-10-26 |
+| 3 | 3C Input & accessibility | #14 | 2026-10-26 |
+| 3 | 3D Release pipeline and docs rewrite | #15 | — |
+| 3 | 3E Companion prototype | #13 | 2026-10-26 |
+
+**Result:** a six-floor vertical slice that can be played from start to finish. It has 23 headless test suites, export presets for Linux, Windows and unsigned macOS, and a tag-driven release workflow.
+
+**Not done:**
+- No GitHub Actions run since the billing block. The suites and a Linux export were verified locally.
+- No hands-on balance playtest.
+- Placeholder art and audio.
+- Floors 5–6 use the tinted fallback biome.
+- No mid-run saves.

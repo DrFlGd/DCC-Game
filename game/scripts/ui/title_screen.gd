@@ -10,11 +10,13 @@ signal settings_requested
 signal quit_requested
 
 const PROFILE_SCRIPT := "res://scripts/core/profile.gd"
+const VersionInfo := preload("res://scripts/core/version_info.gd")
 const MAX_SEED := 2147483647
 
 var seed_input: LineEdit
 var feedback: Label
 var new_run_button: Button
+var version_label: Label
 
 
 func _ready() -> void:
@@ -50,6 +52,16 @@ func open() -> void:
     content.add_child(feedback)
     # Wave 3C: worded for the last-used device; updates when it changes.
     _add_hint(content)
+    if version_label != null:  # rebuilt so it follows text scale / contrast
+        overlay.remove_child(version_label)
+        version_label.queue_free()
+    version_label = _text(VersionInfo.label_text(), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+    version_label.name = "VersionLabel"
+    version_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT,
+        Control.PRESET_MODE_MINSIZE, 8)
+    version_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    version_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    overlay.add_child(version_label)
     new_run_button.grab_focus()
 
 

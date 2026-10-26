@@ -1,6 +1,8 @@
-# DCC Game — Godot 16×16 Stone-Crypt Prototype
+# DCC Game — engineering reference
 
-This is the **D-01 Option A technical spike**, not a finished game. The first environment now uses the **user-provided 16×16 dungeon sampler tiles** and separate graphics files for the stone-crypt biome, the player and each enemy type (generated placeholders for most of the Wave 2C roster). All actors have eight direction-dependent idle sprites. The projectile effects, HUD, guild marker, and melee telegraph remain simple debug graphics.
+This is the engineering reference for the Godot project: setup, controls and input, how each system works, config keys, data files, the scripts map and the tests. For what the game is, screenshots, builds and releases, see the [root README](../README.md); for status and next milestones, the [roadmap](../docs/ROADMAP.md).
+
+The game is a playable six-floor slice built in Waves 1–3 of the [full-game plan](../docs/plans/2026-10-25-full-game-plan.md). Art and audio are placeholders: the stone crypt uses the **user-provided 16×16 dungeon sampler tiles** completed by generated tiles, the fungal cavern and guild interior are generated atlases, the crawler and rat sheets were supplied and the rest of the roster and the companion are generated 8-way (companion 4-way) sheets. Projectiles, telegraphs and HUD are drawn shapes; actors have facing poses but no walk or attack animations.
 
 ## Engine
 
@@ -55,15 +57,16 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 - Editable collapse rules for first entry, revisits, boss rooms, guild halls, and exit, with an entry ledger printed to Godot's **Output** panel.
 - Visible tick/health HUD (`FLOOR d/6`), door preview of net tick effects, and restart handling.
 - **Six-floor run loop:** title screen (random or typed seed), per-depth room counts and fresh collapse budgets, between-floor intermission, victory on floor 6, run summary for every outcome, abandon from pause, and persisted settings.
-- Omnidirectional aim; ranged fire and directional melee; basic damage and enemy AI; enemy health/state maintained across revisits.
-- A seeded smoke-test suite covering topology, deterministic generation, room tags, policies, and a route-budget diagnostic.
+- Omnidirectional aim (mouse or right stick); weapon-pattern melee and ranged attacks; data-driven enemy AI; enemy health/state maintained across revisits.
+- 23 headless test suites (`tests/run_all.sh`), including seeded determinism fixtures, run on CI.
+- **Release pipeline (Wave 3D):** Linux / Windows / macOS export presets, `config/version` plus a build stamp shown on the title screen, a tag-driven export workflow. See [Builds and versions](#builds-and-versions).
 - **16×16 dungeon sampler stone floors, masonry, torches, side edges, double-leaf doors and prop sprites**, completed by generated placeholder south walls, corners, thresholds and door states (Wave 3B).
 - **Biomes by depth (Wave 3B):** stone crypt (floors 1–2), fungal cavern (3–4, spore clouds and luminous puddles), guild interiors for every guild hall; flooded catacombs, maintenance tunnels and bone foundry render as tinted crypt art until their art lands. See [Biomes](#biomes).
 - **Eight-way facing sprites** for the player (mouse aim) and every enemy (AI facing); see [`assets/enemies/README.md`](assets/enemies/README.md).
 - **Separate per-biome and per-character/enemy assets** rather than a master atlas. See [asset conventions](assets/README.md).
 - **Fixed 24×24 interior tiles (384×384 world pixels)**; resize changes only rendering scale and screen-space HUD. Minimum window 720×480, with selectable common window resolutions from the pause menu.
 - **Deterministic rubble and pillar obstacles**, tested for walkable routes from room center to every connected exit.
-- **Data-driven enemy roster** (9 archetypes across 7 roles, 2 elite modifiers, 2 phased bosses), depth-scaled threat budgets, telegraphed attacks, hazards and summons, and a six-ability d20-inspired XP/level system.
+- **Data-driven enemy roster** (12 enemies: 9 pool archetypes and the summoned rat pup across 7 roles, plus 2 phased bosses; 2 elite modifiers), depth-scaled threat budgets, telegraphed attacks, hazards and summons, and a six-ability d20-inspired XP/level system.
 - **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
 - **Esc pause menu and character-stat page** with HP, AC, level, XP, proficiency, six scores/modifiers, and derived melee/ranged attack bonuses.
 - **Skills** (Wave 2F): 1 skill point per level, an 8-skill starter tree with ranks and prerequisites, two active-skill slots (Z / X) with stamina costs and cooldowns, and a Skills page in the pause menu.
@@ -203,7 +206,7 @@ New scores immediately update AC (DEX), max HP (CON), STR-based melee and DEX-ba
 
 Press **Esc** to open the pause menu. Choose **View character stats** to see your build, **Skills** to spend banked skill points and rebind the Z / X slots, select one of the built-in **windowed resolution presets** (800×600, 960×540, 1024×768, 1280×720, 1280×800, 1366×768, 1440×900, 1600×900, 1920×1080, 2560×1440, 3840×2160) and click **Apply resolution**, or select **Resume game** to return. Large options may be limited by your monitor/window manager; resizing affects the viewport, not the fixed 24×24 room. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
 
-Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). Gamepad bindings exist for movement, fire, melee and pause; gamepad aiming and menu navigation, plus more UI/audio accessibility, remain future tasks.
+Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). Every page works with the keyboard alone or a gamepad alone (see [Input and accessibility](#input-and-accessibility)).
 
 ## Run flow and screens
 
@@ -248,7 +251,7 @@ Open `data/prototype_rules.json`. Restart the game after editing it.
 
 **The collapse clock (v1, [COLLAPSE_SYSTEM.md](../docs/design/COLLAPSE_SYSTEM.md)).** Doors are never refused for lack of ticks; only the sealed exit refuses. A cost larger than what is left takes the clock to 0. When the clock reaches 0 by anything other than the exit, a **10 s grace period** starts: the tick counter becomes a red countdown, doors stay unlocked, entering rooms is free (first-entry grants still apply) and falling-debris markers telegraph for 0.8 s before dealing 2 damage (a dodge's i-frames avoid them). Regaining any ticks (guild hall, shrine, elite clear, items) stabilises the floor; a second zero on the same floor gives 5 s, a third collapses at once. The timer running out ends the run as **collapsed**. The unsealed exit always resolves first, so leaving with exactly the last tick, or during grace, clears the floor. Pause, level-up, the map and the shrine prompt freeze the grace timer and hazards. The HUD counter turns amber at ≤ 6 and red at ≤ 3, and a door label ends in a red `!` when walking through would leave the clock at 0. No values are final; each floor's room count, route cost and budget are printed to the console when it starts.
 
-**Special rooms.** Side rooms (never the guaranteed spine) can be a **treasure** room (a chest that rolls the `treasure_room` loot table), a **trap** room (spike and tick-drain pressure plates), a **shrine** (one choice: +2 ticks or heal 50 %), or an **elite** room (a harder fight; until the enemies team adds an `elite` table it uses the normal one). The **guild hall** has a rest station (full heal, once per floor) and a shop sign (the shop arrives with the items team). Chest loot is announced (`Events.chest_opened`) but not yet added to an inventory.
+**Special rooms.** Side rooms (never the guaranteed spine) can be a **treasure** room (a chest that rolls the `treasure_room` loot table and drops it as pickups), a **trap** room (spike and tick-drain pressure plates), a **shrine** (one choice: +2 ticks or heal 50 %), or an **elite** room (one elite with a bulwark or volatile modifier plus normal fill, ENCOUNTER_RULES R9; +1 tick on clear). The **guild hall** has a rest station (full heal, once per floor) and the shop (see [Items and loot](#items-and-loot)).
 
 ## The System
 
@@ -259,7 +262,7 @@ The dungeon is narrated by an indifferent, game-show-flavoured **system** (desig
 - **Achievements.** 23 in [`data/achievements.json`](data/achievements.json). When one unlocks, a toast appears and the profile is saved. **Esc → Achievements** lists them all (secret ones show as ??? until earned).
 - **Profile.** `user://profile.json` keeps unlocks (with timestamp and seed) and lifetime stats: runs, best depth, total kills and floors, victories, collapses, deaths by cause, last seed. It is saved on every unlock and at the end of every run. A missing file starts blank; an unreadable one is renamed to `profile.json.corrupt`. Read it anywhere with `const Profile = preload("res://scripts/core/profile.gd")` and `Profile.best_depth()`, `total_runs()`, `total_kills()`, `total_floors()`, `victories()`, `deaths_by_cause()`, `last_seed()`, `is_unlocked(id)`, `unlocked()` or `stats()`.
 - **Telemetry.** Each finished run writes `user://telemetry/run-<unix>-<seed>.json`, and the newest 50 are kept. A report holds `RunState.summary()`, the tick ledger, seconds per room (`"<depth>:<room>"`), a count of every bus signal, the run's unlocks and every announcer line with its fate (`shown`, `preempted`, `dropped_modal`, `dropped_stale`, ...), for tuning.
-- **Where `user://` is:** Linux `~/.local/share/godot/app_userdata/DCC Game — Technical Prototype/`, Windows `%APPDATA%\Godot\app_userdata\DCC Game — Technical Prototype\`, macOS `~/Library/Application Support/Godot/app_userdata/DCC Game — Technical Prototype/`. Headless test runs (`--script`) use the `test/` subfolder so they never touch your profile.
+- **Where `user://` is:** Linux `~/.local/share/godot/app_userdata/DCC Game/`, Windows `%APPDATA%\Godot\app_userdata\DCC Game\`, macOS `~/Library/Application Support/Godot/app_userdata/DCC Game/` (the folder follows `config/name`; before Wave 3D it was `DCC Game — Technical Prototype`, and data there is not migrated). Headless test runs (`--script`) use the `test/` subfolder so they never touch your profile.
 
 **Adding lines.** Edit [`data/announcer.json`](data/announcer.json): `lines` maps a trigger key to an array of `{"text", "weight", "priority", "cooldown_seconds", "once_per_run", "category"}`. Text is at most two lines (`\n`) of 90 characters. Placeholders are `{depth}`, `{kills}`, `{ticks}`, `{seed}`, `{level}`, `{hp}`, `{max_hp}`, `{xp}` and `{room}`, plus some that only certain triggers can use: `{enemy}` (kills, big hits, the defeat obituary), `{damage}`, `{streak}`, `{achievement}` / `{quip}` and `{idle}`. Categories are `flavour`, `warning`, `celebration`, `sponsor`, `taunt`, `obituary`, `achievement` and `system`. Selection is weighted and seeded (`run seed ^ request counter`), so a replayed seed replays its lines. A shown line puts its trigger on cooldown, and a `once_per_run` line is not repeated until the next run. `tests/announcer_test.gd` validates the file: known triggers, unique texts, placeholders allowed for the trigger, numeric ranges, and at least 5 lines per common trigger. Everything is original writing. Keep the tone corporate, cheerful and indifferent, aim the joke at the situation, never at people, and keep it PG-13.
 
@@ -285,17 +288,18 @@ Sound is a presentation layer on the `Events` bus (`scripts/audio.gd`, the `Audi
 
 **Regenerating sounds.** Every WAV is synthesised by [`tools/gen_sfx.py`](../tools/gen_sfx.py) (Python 3, standard library only, deterministic): `python3 tools/gen_sfx.py` from the repository root rewrites `assets/audio/{sfx,ambient,music}/*.wav` (22050 Hz, 16-bit mono, peak -6 dBFS, about 2 MB in total); `--only melee_hit level_up` rewrites a subset. See [`assets/audio/README.md`](assets/audio/README.md).
 
-**Adding or retuning a sound.** Edit [`data/audio.json`](data/audio.json). `cues` maps a trigger to `{"stream", "bus", "volume_db", "pitch_var", "cooldown"}` plus optional `max_instances`, `pitch`, `group` (cues in a group share one cooldown) and `loop` (music/ambient only). A trigger is an `Events` signal name (`chest_opened`), a signal with a payload variant that `audio.gd` picks (`melee_swung.player`, `projectile_fired.enemy`, `enemy_damaged.critical`, `enemy_damaged.melee` / `.ranged`, `player_damaged.hazard`, `credits_changed.gain` / `.spend`, `ticks_changed.gain` / `.loss`, `run_ended.victory` / `.defeat`, `message.<category>`), or a reserved `ui.*`, `music.*` or `ambient.*` name. A signal that is only a cue name (`SIMPLE_SIGNALS` in `audio.gd`, e.g. `item_used`, `level_up`, `skill_learned`) needs no code; delete a cue to mute it. Signals another wave has not landed yet go in `pending_signals` (currently `skill_used`). `states` maps Game states (and `RUNNING.boss`) to a Music and an Ambient cue. From code: `game.audio.play("item_used")` (returns false when throttled or capped), `audio.set_track("Music", "music.title")`. `tests/audio_test.gd` validates the file: streams exist, buses, numeric ranges, every signal named exists on `Events`, every cue the code asks for is mapped.
+**Adding or retuning a sound.** Edit [`data/audio.json`](data/audio.json). `cues` maps a trigger to `{"stream", "bus", "volume_db", "pitch_var", "cooldown"}` plus optional `max_instances`, `pitch`, `group` (cues in a group share one cooldown) and `loop` (music/ambient only). A trigger is an `Events` signal name (`chest_opened`), a signal with a payload variant that `audio.gd` picks (`melee_swung.player`, `projectile_fired.enemy`, `enemy_damaged.critical`, `enemy_damaged.melee` / `.ranged`, `player_damaged.hazard`, `credits_changed.gain` / `.spend`, `ticks_changed.gain` / `.loss`, `run_ended.victory` / `.defeat`, `message.<category>`), or a reserved `ui.*`, `music.*` or `ambient.*` name. A signal that is only a cue name (`SIMPLE_SIGNALS` in `audio.gd`, e.g. `item_used`, `level_up`, `skill_learned`) needs no code; delete a cue to mute it. Signals another wave has not landed yet go in `pending_signals` (empty now that `skill_used` has landed). `states` maps Game states (and `RUNNING.boss`) to a Music and an Ambient cue. From code: `game.audio.play("item_used")` (returns false when throttled or capped), `audio.set_track("Music", "music.title")`. `tests/audio_test.gd` validates the file: streams exist, buses, numeric ranges, every signal named exists on `Events`, every cue the code asks for is mapped.
 
 ## Run tests
 
 From the repository root, with `godot` pointing to Godot 4.7.2 (or `GODOT=/path/to/godot`):
 
 ```sh
-game/tests/run_all.sh
+game/tests/run_all.sh            # reuse the import cache in game/.godot
+game/tests/run_all.sh --clean    # delete game/.godot first (CI does this; also CLEAN_IMPORT=1)
 ```
 
-It runs, failing fast with a summary: the import step, `tests/scripts_parse_test.gd` (compiles every script; the import alone does not report parse errors), `tests/smoke_test.gd`, every other `tests/*_test.gd`, and a short launch of the main scene. A step fails on a non-zero exit, a timeout, or any `SCRIPT ERROR` in its output. GitHub Actions runs the same script (`.github/workflows/godot-ci.yml`).
+It runs, failing fast with a summary: the import step, `tests/scripts_parse_test.gd` (compiles every script; the import alone does not report parse errors), `tests/smoke_test.gd`, every other `tests/*_test.gd`, and a short launch of the main scene. A step fails on a non-zero exit, a timeout (`TEST_TIMEOUT`, default 180 s per step), or any `SCRIPT ERROR` in its output. GitHub Actions runs the same script with `--clean` (`.github/workflows/godot-ci.yml`, on pull requests and pushes to `main`). **A segfault (exit code 139)** in the import or the first test after new or changed WAV assets is a stale import cache: re-run with `--clean`.
 
 | Test | Covers |
 | --- | --- |
@@ -319,6 +323,17 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `combat_feel_test.gd` | Wave 2D: dodge distance, timing and i-frames, stamina cost/delay/regen and the two-chain rule, dodge refusals, knockback (resist, walls, interrupts, boss cap, crawler), hit-stop freeze and budget, damage numbers and the setting, movement penalties, door lock timing/kinds/grace/clear, locked-door dodge, 15 s failsafe |
 | `companion_test.gd` | Wave 3E: `companions.json` validation, flag off (no node, no enemy keys, `RunState.rng` untouched), spawn beside the crawler, follow / leash / stuck teleports, target selection and the crawler's mark, bites on cooldown through `apply_damage` (source `companion`), XP and credits but no `on_kill`, the retarget rule, strikes and bullets on the companion, downed / channel / auto / floor-start revive, room-entry teleport, stay command, F8, per-seed determinism |
 | `achievements_test.gd` | Achievements on scripted event sequences (never twice), profile save/load and corrupt-file recovery, telemetry report keys and 50-file retention |
+| `release_test.gd` | Wave 3D: `version.json` keys and agreement with `config/version`, project name and 128×128 icon, `export_presets.cfg` (Linux / Windows presets: embedded PCK, x86_64, no console wrapper, paths under `../builds/`; unsigned macOS), the title screen's bottom-right `v<version> · <commit>` label |
+
+## Builds and versions
+
+Wave 3D. Usage, the release workflow and how to cut a tag are in the [root README](../README.md#run-test-and-build); the details:
+
+- **Presets** ([`export_presets.cfg`](export_presets.cfg)): `Linux x86_64` → `../builds/linux/dcc-game`, `Windows x86_64` → `../builds/windows/dcc-game.exe` (both embed the PCK, no console wrapper; Windows resources are set by Godot's built-in PE editing, no rcedit) and `macOS` → `../builds/macos/dcc-game.zip` (universal, `codesign/codesign=0`, unsigned; users must allow it in Gatekeeper). All presets exclude `tests/*` and include `*.json`. `builds/` is git-ignored; create the folder before exporting. The universal macOS export needs `rendering/textures/vram_compression/import_etc2_astc=true`, which is set in `project.godot` (no 2D texture here uses VRAM compression, so nothing re-imports).
+- **Templates:** Godot 4.7.2 export templates (`linux_release.x86_64`, `windows_release_x86_64.exe`, `macos.zip`) in `~/.local/share/godot/export_templates/4.7.2.stable/` (or `$XDG_DATA_HOME/godot/...`). CI installs them through `chickensoft-games/setup-godot` (`include-templates: true`), falling back to the official `.tpz`.
+- **Version:** `application/config/version` in `project.godot` (semver) is the single source. [`version.json`](version.json) holds `{version, commit, built_at}`; the committed file says `commit: "dev"`. [`tools/stamp_version.py`](../tools/stamp_version.py) rewrites it from `config/version` and `git rev-parse --short=7 HEAD` (`--commit`, `--built-at` override; `--reset` restores the committed default). [`scripts/core/version_info.gd`](scripts/core/version_info.gd) reads both (`VersionInfo.info()`, `label_text()`), and the title screen shows the label bottom-right.
+- **Icon:** `config/icon` is [`assets/ui/icon.png`](assets/ui/icon.png), a 128×128 placeholder from [`tools/gen_icon.py`](../tools/gen_icon.py).
+- **Screenshots:** [`tools/screenshot.gd`](../tools/screenshot.gd) captures the README screenshots at 1× from the live game: `xvfb-run -a godot --path game --rendering-driver opengl3 --script ../tools/screenshot.gd -- [--seed N] [--out DIR]` (default `docs/art/screenshots/`). It needs a display with OpenGL; it does not run under `--headless`.
 
 **Writing tests that touch autoloads.** In `--script` mode (Godot 4.7.2) the `Events` and `RunState` autoload nodes already exist under `/root` when `_initialize()` runs (their `_ready()` runs a frame later), but their global identifiers are **not** visible to the test script or anything it `preload`s, because those compile before autoloads are registered. A compile error there makes Godot hang instead of exiting. So: fetch autoloads with `get_root().get_node("RunState")`, and `load()` game scripts or `res://scenes/Main.tscn` at runtime instead of `preload`ing them. Pure-logic modules that never mention an autoload can still be preloaded.
 
@@ -328,11 +343,14 @@ The runtime is event-driven. Two autoloads hold shared state and messaging; `Gam
 
 ```text
 game/
-├── project.godot               # autoloads (Events, RunState), audio bus layout and the Input Map
+├── project.godot               # name, config/version, icon, autoloads (Events, RunState), audio bus layout, Input Map
+├── export_presets.cfg          # Linux / Windows / macOS export presets (Wave 3D)
+├── version.json                # build stamp {version, commit, built_at}; "dev" when unstamped
 ├── default_bus_layout.tres     # Master -> Music, SFX, Ambient, UI
 ├── README.md
 ├── assets/                     # see assets/README.md (separate files, 8-way facing contract)
-│   └── audio/                  # generated WAVs (tools/gen_sfx.py): sfx/, ambient/, music/
+│   ├── audio/                  # generated WAVs (tools/gen_sfx.py): sfx/, ambient/, music/
+│   └── ui/icon.png             # 128x128 placeholder app icon (tools/gen_icon.py)
 ├── scenes/Main.tscn            # Game root + Player, Combat, RoomRenderer, Hud, CharacterMenu
 ├── scripts/
 │   ├── core/
@@ -346,6 +364,7 @@ game/
 │   │   ├── announcer_brain.gd  # seeded line picking, cooldowns, toast queue rules (pure)
 │   │   ├── achievements.gd     # achievement tracker and rules (pure)
 │   │   ├── profile.gd          # user://profile.json: unlocks, lifetime stats (static accessors)
+│   │   ├── version_info.gd     # config/version + version.json -> "v0.1.0 · dev" (pure, 3D)
 │   │   └── telemetry.gd        # per-run report to user://telemetry/
 │   ├── audio.gd                # SFX pool, music/ambient crossfade, Events -> data/audio.json cues
 │   ├── game.gd                 # orchestrator + State {RUNNING, LEVEL_UP, PAUSED, ENDED(unused),
@@ -375,7 +394,7 @@ game/
 │   ├── ui/floor_map.gd         # full floor map overlay (M); build_model() is pure
 │   ├── ui/choice_dialog.gd     # small modal choice prompt (shrine)
 │   ├── ui/announcer.gd         # "The System": toasts, system log, achievements, profile, telemetry
-│   ├── ui/title_screen.gd      # New run / Seeded run / Settings / Quit
+│   ├── ui/title_screen.gd      # New run / Seeded run / Settings / Quit, version label
 │   ├── ui/intermission_screen.gd # floor recap + Descend
 │   ├── ui/summary_screen.gd    # run summary + Retry seed / New run / Title
 │   ├── ui/settings_screen.gd   # settings page (title and pause menu), accessibility rows
@@ -407,7 +426,7 @@ game/
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but only two biomes have their own (placeholder) art so far, and it has no classes, an 8-skill starter tree only, only a flagged one-follower companion prototype (off by default), no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **vertical slice**, not a finished game. It supports a six-floor descent with the systems above, but only two biomes have their own (placeholder) art so far, and it has no classes, an 8-skill starter tree only, only a flagged one-follower companion prototype (off by default), no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 
@@ -416,5 +435,7 @@ This is a **technical prototype**, not a finished game. It supports multiple bas
 - Resize the window by dragging its border, or choose **Esc → Display resolution → Apply resolution**. The **24×24 room never changes**; only its visual scale/centering and screen-space HUD change.
 - Replaying with **R** repeats the graph exactly but moment-to-moment mouse and keyboard inputs are not recorded.
 - If an edited JSON file is invalid, the game reports an error and exits; use the headless smoke-test command after making rule changes.
+- If the import step or a test crashes with exit code 139 after pulling new audio, delete `game/.godot` (or run `tests/run_all.sh --clean`).
+- An export that fails with "The given export path doesn't exist" needs its `builds/<platform>/` folder created first.
 
 **Asset distribution note:** The sampler README does not include an explicit redistribution license. Before publicly distributing builds or source asset files, confirm the permissions associated with the supplied pack.

@@ -137,8 +137,14 @@ signal status_changed(target: String, status_id: String, active: bool)
 ## The boss loot box in `room_id` was opened and rolled `loot_ids` (the
 ## boss_kill table); the ids are placed as pickups at the crate (2B).
 signal loot_box_opened(room_id: int, loot_ids: Array)
-## The player learned a skill. Owned by the skills team.
-signal skill_learned(skill_id: String)
+## The crawler learned rank `rank` of skill `skill_id` (1 = newly learned;
+## ranks replace each other). Emitted by SkillSystem.learn() after
+## RunState.skills and RunState.skill_points changed (2F). ItemSystem
+## recomputes passive stats in response.
+signal skill_learned(skill_id: String, rank: int)
+## The crawler used active skill `skill_id` at `rank`: stamina was spent, its
+## on_use effects already ran and its cooldown started (2F, SkillSystem).
+signal skill_used(skill_id: String, rank: int)
 
 # --- Presentation ------------------------------------------------------------
 

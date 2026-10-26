@@ -1,5 +1,6 @@
 extends CanvasLayer
-## Screen-space HUD: status lines, last message, minimap and control hints.
+## Screen-space HUD: status lines, last message, minimap and control hints;
+## the loadout panel (2B) and the active-skill slots under it (2F).
 ## Reads RunState only; the message line is fed by `Events.message`. The
 ## end-of-run banner was replaced by the run summary screen (Wave 2A); Game
 ## hides the HUD on the title screen.
@@ -10,6 +11,7 @@ const Layout = preload("res://scripts/room_layout.gd")
 const FloorMap = preload("res://scripts/ui/floor_map.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const StatusSystem = preload("res://scripts/status_system.gd")
+const SkillSystem = preload("res://scripts/skill_system.gd")
 ## Tick counter colour thresholds (COLLAPSE_SYSTEM §8).
 const TICKS_AMBER := 6
 const TICKS_RED := 3
@@ -91,11 +93,12 @@ func _draw_hud() -> void:
     _draw_clock(view)
     _draw_grace_vignette(view)
     _draw_loadout(view)
+    _draw_skills()
     _draw_tooltip()
     _draw_prompt(view)
     _draw_room_clear(view)
-    _text("WASD: move | Mouse: aim | LMB: shoot | Space: melee | Shift: dodge | E: interact | Q: item | C/V: belt",
-        Vector2(14, view.y - 46), 14, Color("#dce9f2"))
+    _text("WASD: move | Mouse: aim | LMB: shoot | Space: melee | Shift: dodge | E: interact | Q: item | C/V: belt | Z/X: skills",
+        Vector2(14, view.y - 46), 13, Color("#dce9f2"))
     _text("Esc: pause / stats | M: map | R: replay | N: new seed | 24x24 room, 16px tiles",
         Vector2(14, view.y - 21), 12, Color("#a7cfcb"))
 
@@ -233,6 +236,46 @@ func _draw_loadout(view: Vector2) -> void:
         parts.append(label)
     if not parts.is_empty():
         _fit(", ".join(parts), Vector2(origin.x + 8, y), width - 16.0, 11, Color("#c9e3ff"))
+
+
+# --- Skill slots (Wave 2F) -----------------------------------------------------
+
+## Under the loadout panel: one row per active-skill slot with its key, name,
+## a cooldown sweep and the seconds left; greyed while the stamina cost is not
+## affordable. Banked skill points are flagged in the header.
+func _draw_skills() -> void:
+    var width: float = clampf(Vector2(layout["offset"]).x - 24.0, 150.0, 230.0)
+    var origin := Vector2(10, 322)
+    var slots: Array = SkillSystem.describe_slots()
+    canvas.draw_rect(Rect2(origin, Vector2(width, 22.0 + 20.0 * slots.size())),
+        Color(0.08, 0.11, 0.16, 0.78))
+    _text("SKILLS", origin + Vector2(8, 15), 11, Color("#f2da99"))
+    if RunState.skill_points > 0:
+        _fit("%d pt: Esc > Skills" % RunState.skill_points, origin + Vector2(58, 15), width - 64.0,
+            10, Color("#a9e7c5"))
+    var y: float = origin.y + 22.0
+    for entry in slots:
+        var center := Vector2(origin.x + 16, y + 7)
+        canvas.draw_arc(center, 7.0, 0.0, TAU, 20, Color("#2c3a4c"), 3.0)
+        var key: String = "[%s] " % String(entry["key"])
+        if String(entry["id"]) == "":
+            _text(key + "empty", Vector2(origin.x + 30, y + 11), 11, Color("#6f8090"))
+            y += 20.0
+            continue
+        var left: float = float(entry["cooldown_left"])
+        var fraction: float = 1.0 if left <= 0.0 \
+            else clampf(1.0 - left / maxf(0.01, float(entry["cooldown"])), 0.0, 1.0)
+        var ring: Color = Color("#7fe6a0") if bool(entry["ready"]) else (
+            Color("#e0b85a") if left > 0.0 else Color("#6f8090"))
+        canvas.draw_arc(center, 7.0, -PI * 0.5, -PI * 0.5 + TAU * fraction, 20, ring, 3.0)
+        var affordable: bool = bool(entry["affordable"])
+        _fit(key + String(entry["name"]), Vector2(origin.x + 30, y + 11), width - 86.0, 12,
+            Color.WHITE if affordable else Color("#7d8b99"))
+        var detail: String = "%.1fs" % left if left > 0.0 else (
+            "ready" if affordable else "%d sta" % int(entry["stamina_cost"]))
+        _text(detail, Vector2(origin.x + width - 50, y + 11), 10,
+            Color("#a7b4c2") if affordable else Color("#d9a441"))
+        y += 20.0
 
 
 static func _recharge_text(active: Dictionary) -> String:

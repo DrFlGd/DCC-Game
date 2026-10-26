@@ -2,6 +2,13 @@ extends CanvasLayer
 ## Modal UI; gameplay is frozen by Game (LEVEL_UP / PAUSED states) while this
 ## overlay is visible. Scores and context come from RunState via game.gd.
 ## Esc toggles pause; level-up must be allocated before combat resumes.
+## Wave 2F: the level-up overlay also lists every skill (context["skills"],
+## SkillSystem.describe(), passed in by Game so this script stays
+## autoload-free). A pick emits skill_learn_requested and Game answers with
+## update_context(). Confirm needs every ability point staged and every skill
+## point spent, unless nothing is learnable; "Save for later" banks skill
+## points. The pause menu's Skills page lists learned skills, slot bindings
+## and banked points, and spends them the same way.
 signal resume_requested
 signal allocation_confirmed(changes: Dictionary)
 signal resolution_requested(size: Vector2i)
@@ -9,6 +16,11 @@ signal resolution_requested(size: Vector2i)
 signal settings_requested
 ## Pause -> Abandon run -> confirm: Game ends the run as "abandoned".
 signal abandon_requested
+## Level-up overlay or Skills page: learn one rank of `skill_id` (Game calls
+## SkillSystem.learn and then update_context).
+signal skill_learn_requested(skill_id: String)
+## Skills page: bind learned active skill `skill_id` to `slot` (0-based).
+signal skill_slot_requested(skill_id: String, slot: int)
 
 const RPG = preload("res://scripts/rpg_rules.gd")
 const Achievements = preload("res://scripts/core/achievements.gd")
@@ -17,6 +29,7 @@ const Settings = preload("res://scripts/core/settings.gd")
 ## Kept as an alias so callers and tests can keep using CharacterMenu's name;
 ## the list itself lives in settings.gd.
 const RESOLUTION_PRESETS = Settings.RESOLUTION_PRESETS
+const SLOT_KEYS := ["Z", "X"]
 const ABILITY_NAMES := {
     "STR": "Strength", "DEX": "Dexterity", "CON": "Constitution",
     "INT": "Intelligence", "WIS": "Wisdom", "CHA": "Charisma"
@@ -85,6 +98,55 @@ func show_level_up(new_scores: Dictionary, new_context: Dictionary,
     _refresh()
 
 
+## Replaces the context (Game calls it after a skill pick or slot change)
+## without touching staged ability points. The page is rebuilt next frame,
+## because the request usually comes from one of its own buttons.
+func update_context(new_context: Dictionary) -> void:
+    context = new_context.duplicate(true)
+    if is_inside_tree() and mode != "closed":
+        call_deferred("_refresh")
+
+
+## SkillSystem.describe() from the context ({} when Game passed none).
+func skill_view() -> Dictionary:
+    return context.get("skills", {})
+
+
+## Banked skill points.
+func skill_points() -> int:
+    return int(skill_view().get("points", 0))
+
+
+## Ids of the skills that can take a rank now.
+func learnable_skills() -> Array:
+    var result: Array = []
+    for entry in skill_view().get("skills", []):
+        if bool(entry.get("learnable", false)):
+            result.append(String(entry["id"]))
+    return result
+
+
+## Asks Game to learn one rank of `skill_id` (level-up overlay or Skills page).
+## Returns false when the skill is not learnable now.
+func pick_skill(skill_id: String) -> bool:
+    if mode == "closed" or not learnable_skills().has(skill_id):
+        return false
+    skill_learn_requested.emit(skill_id)
+    return true
+
+
+## Skills page: asks Game to bind `skill_id` to `slot`.
+func assign_skill_slot(skill_id: String, slot: int) -> void:
+    if mode == "pause":
+        skill_slot_requested.emit(skill_id, slot)
+
+
+## Confirm is allowed once every ability point is staged and every skill
+## point is spent (or nothing is learnable, so nobody gets stuck).
+func can_confirm() -> bool:
+    return remaining_points() == 0 and (skill_points() == 0 or learnable_skills().is_empty())
+
+
 func remaining_points() -> int:
     var used := 0
     for ability in RPG.ABILITIES:
@@ -108,7 +170,16 @@ func stage_point(ability: String, change: int) -> bool:
 
 
 func confirm_allocation() -> void:
-    if mode != "level_up":
+    if mode != "level_up" or not can_confirm():
+        return
+    if RPG.validate_allocation(scores, staged, point_pool, score_cap):
+        allocation_confirmed.emit(staged.duplicate(true))
+
+
+## "Save for later": confirms the ability points and keeps the skill points
+## banked (spend them on the pause menu's Skills page).
+func bank_and_confirm() -> void:
+    if mode != "level_up" or remaining_points() != 0:
         return
     if RPG.validate_allocation(scores, staged, point_pool, score_cap):
         allocation_confirmed.emit(staged.duplicate(true))
@@ -171,6 +242,10 @@ func _refresh() -> void:
     if not is_inside_tree() or mode == "closed":
         return
     overlay.visible = true
+    # Keyboard / gamepad focus survives a rebuild when the same control exists.
+    var focused: Control = get_viewport().gui_get_focus_owner()
+    var focus_name: String = String(focused.name) if focused != null \
+        and center.is_ancestor_of(focused) else ""
     for node in center.get_children():
         center.remove_child(node)
         node.queue_free()
@@ -204,54 +279,175 @@ func _refresh() -> void:
         _achievements_content(content)
     elif page == "inventory":
         _inventory_content(content)
+    elif page == "skills":
+        _skills_content(content)
     else:
         _pause_content(content)
+    if focus_name != "":
+        var again: Node = panel.find_child(focus_name, true, false)
+        if again is Control and (again as Control).focus_mode != Control.FOCUS_NONE \
+                and not (again is BaseButton and (again as BaseButton).disabled):
+            (again as Control).grab_focus()
 
 
 func _level_up_content(content: VBoxContainer) -> void:
     content.add_child(_text("LEVEL UP!   Level %d" % int(context.get("level", 1)),
         25, Color("#f6d48d")))
-    content.add_child(_text("Spend %d ability points  •  %d remaining  •  max score %d" % [
-        point_pool, remaining_points(), score_cap], 14, Color("#c5dee4")))
-    content.add_child(_text("STR: melee  •  DEX: ranged + AC  •  CON: maximum HP", 12,
-        Color("#9cbac6")))
+    var points: int = skill_points()
+    content.add_child(_text("Ability points %d/%d left  •  Skill points %d  •  max score %d" % [
+        remaining_points(), point_pool, points, score_cap], 14, Color("#c5dee4")))
+    content.add_child(_text("STR melee • DEX ranged, AC • CON HP • INT skill power • WIS stamina • CHA prices",
+        12, Color("#9cbac6")))
 
+    # Two abilities per row so the skill list fits a 480 px tall window.
     var grid := GridContainer.new()
-    grid.columns = 4
-    grid.add_theme_constant_override("h_separation", 8)
+    grid.columns = 8
+    grid.add_theme_constant_override("h_separation", 6)
     grid.add_theme_constant_override("v_separation", 2)
     content.add_child(grid)
     for ability in RPG.ABILITIES:
         var score: int = int(scores.get(ability, 10)) + int(staged.get(ability, 0))
         var previous: int = int(scores.get(ability, 10))
-        var detail := _text("%s  %s" % [ability, ABILITY_NAMES[ability]], 14, Color.WHITE)
-        detail.custom_minimum_size.x = 230
+        var detail := _text(ability, 14, Color.WHITE)
+        detail.tooltip_text = ABILITY_NAMES[ability]
+        detail.mouse_filter = Control.MOUSE_FILTER_PASS
+        detail.custom_minimum_size.x = 38
         grid.add_child(detail)
-        var value := _text("%d → %d  (%+d)" % [previous, score, RPG.modifier(score)],
+        var value := _text("%d → %d (%+d)" % [previous, score, RPG.modifier(score)],
             14, Color("#a9e7c5"))
-        value.custom_minimum_size.x = 155
+        value.custom_minimum_size.x = 112
         grid.add_child(value)
-
         var minus := _button("−", Callable(self, "_on_change_point").bind(ability, -1))
-        minus.custom_minimum_size.x = 38
+        minus.name = "minus_" + ability
+        minus.custom_minimum_size.x = 34
         minus.disabled = int(staged.get(ability, 0)) <= 0
         grid.add_child(minus)
         var plus := _button("+", Callable(self, "_on_change_point").bind(ability, 1))
-        plus.custom_minimum_size.x = 38
+        plus.name = "plus_" + ability
+        plus.custom_minimum_size.x = 34
         plus.disabled = remaining_points() == 0 or score >= score_cap
         grid.add_child(plus)
 
-    content.add_child(_text("INT / WIS / CHA are reserved for future skills, spells, and checks.",
-        12, Color("#b4c4d2")))
-    var confirm := _button("Confirm allocation • Return to dungeon",
-        Callable(self, "confirm_allocation"))
-    confirm.disabled = remaining_points() != 0
+    var learnable: Array = learnable_skills()
+    content.add_child(_text("SKILLS   %s" % ("pick a rank-up, or save the point for later" if points > 0
+        else "no skill points left"), 14, Color("#f6d48d")))
+    var first_skill: Button = _skill_list(content, 150.0, false)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 10)
+    content.add_child(row)
+    var confirm := _button("Confirm • Return to dungeon", Callable(self, "confirm_allocation"))
+    confirm.name = "confirm"
+    confirm.disabled = not can_confirm()
     confirm.custom_minimum_size.y = 34
-    content.add_child(confirm)
-    content.add_child(_text("Combat and collapse are frozen. Allocate all points to continue.",
-        12, Color("#e2c78e")))
+    row.add_child(confirm)
+    var bank: Button = null
+    if points > 0 and not learnable.is_empty():
+        bank = _button("Save %d skill point%s for later" % [points, "" if points == 1 else "s"],
+            Callable(self, "bank_and_confirm"))
+        bank.name = "bank"
+        bank.disabled = remaining_points() != 0
+        bank.custom_minimum_size.y = 34
+        row.add_child(bank)
+    var footer := "Combat and collapse are frozen."
+    if remaining_points() > 0:
+        footer += " Allocate every ability point to continue."
+    elif points > 0 and not learnable.is_empty():
+        footer += " Pick a skill or save the point."
+    content.add_child(_text(footer, 12, Color("#e2c78e")))
     if remaining_points() == 0:
-        confirm.grab_focus()
+        if can_confirm():
+            confirm.grab_focus()
+        elif first_skill != null:
+            first_skill.grab_focus()
+        elif bank != null:
+            bank.grab_focus()
+    else:
+        for ability in RPG.ABILITIES:
+            var plus: Node = grid.find_child("plus_" + ability, false, false)
+            if plus is Button and not (plus as Button).disabled:
+                (plus as Button).grab_focus()
+                break
+
+
+## One row per skill (name, rank X/Y, kind, cost, description, next rank or
+## the locked reason; unlearnable rows greyed). `with_slots` adds slot buttons
+## for learned actives (Skills page). Returns the first enabled pick button.
+func _skill_list(content: VBoxContainer, height: float, with_slots: bool) -> Button:
+    var first: Button = null
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size = Vector2(538, height)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.follow_focus = true
+    content.add_child(scroll)
+    var rows := VBoxContainer.new()
+    rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    rows.add_theme_constant_override("separation", 3)
+    scroll.add_child(rows)
+    var entries: Array = skill_view().get("skills", [])
+    if entries.is_empty():
+        rows.add_child(_text("No skills on file. The System is still drafting the paperwork.", 12,
+            Color("#8ea3b3")))
+    for entry in entries:
+        var id: String = String(entry["id"])
+        var rank: int = int(entry.get("rank", 0))
+        var max_rank: int = int(entry.get("max_rank", 1))
+        var learnable: bool = bool(entry.get("learnable", false))
+        var reason: String = String(entry.get("reason", ""))
+        var row := HBoxContainer.new()
+        row.add_theme_constant_override("separation", 8)
+        rows.add_child(row)
+        var label := "Learn" if rank == 0 else "Rank up"
+        if rank >= max_rank:
+            label = "Maxed"
+        elif not learnable and reason != "points":
+            label = "Locked"
+        var pick := _button(label, Callable(self, "pick_skill").bind(id))
+        pick.name = "learn_" + id
+        pick.custom_minimum_size.x = 78
+        pick.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+        pick.disabled = not learnable
+        row.add_child(pick)
+        if learnable and first == null:
+            first = pick
+        var info := VBoxContainer.new()
+        info.add_theme_constant_override("separation", 0)
+        info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        row.add_child(info)
+        var kind: String = String(entry.get("kind", "passive"))
+        var heading := "%s   rank %d/%d   %s   cost %d" % [String(entry.get("name", id)), rank,
+            max_rank, kind, int(entry.get("cost", 1))]
+        if kind == "active":
+            heading += "   %d stamina, %.1fs" % [int(entry.get("stamina_cost", 0)),
+                float(entry.get("cooldown", 0.0))]
+            if int(entry.get("slot", -1)) >= 0:
+                heading += "   [%s]" % SLOT_KEYS[int(entry["slot"])]
+        var color := Color("#a9e7c5") if rank > 0 else (Color.WHITE if learnable else Color("#7d8b99"))
+        info.add_child(_text(heading, 13, color))
+        var lines: PackedStringArray = [String(entry.get("description", ""))]
+        if rank >= max_rank:
+            lines.append("Now: " + ", ".join(PackedStringArray(entry.get("effects", []))))
+        elif not entry.get("next", []).is_empty():
+            lines.append(("Next: " if rank > 0 else "Rank 1: ") + ", ".join(PackedStringArray(entry["next"])))
+        if not learnable and String(entry.get("detail", "")) != "" and rank < max_rank:
+            lines.append("Locked: " + String(entry["detail"]) if reason != "points"
+                else String(entry["detail"]))
+        var detail := _text("\n".join(lines), 11, Color("#8ea3b3") if learnable or rank > 0
+            else Color("#66737f"))
+        detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        detail.custom_minimum_size.x = 420
+        info.add_child(detail)
+        if with_slots and kind == "active" and rank > 0:
+            var slot_row := HBoxContainer.new()
+            slot_row.add_theme_constant_override("separation", 6)
+            info.add_child(slot_row)
+            for slot in range(skill_view().get("slots", []).size()):
+                var bind := _button("Slot %d [%s]" % [slot + 1, SLOT_KEYS[slot] if slot < SLOT_KEYS.size()
+                    else str(slot + 1)], Callable(self, "assign_skill_slot").bind(id, slot))
+                bind.name = "slot_%d_%s" % [slot, id]
+                bind.custom_minimum_size.y = 26
+                bind.disabled = int(entry.get("slot", -1)) == slot
+                slot_row.add_child(bind)
+    return first
 
 
 func _on_change_point(ability: String, change: int) -> void:
@@ -291,12 +487,15 @@ func _pause_content(content: VBoxContainer) -> void:
     row.add_theme_constant_override("separation", 10)
     content.add_child(row)
     row.add_child(_button("Inventory", Callable(self, "_open_inventory_page")))
+    var banked: int = skill_points()
+    row.add_child(_button("Skills (%d)" % banked if banked > 0 else "Skills",
+        Callable(self, "_open_skills_page")))
     row.add_child(_button("Settings", func(): settings_requested.emit()))
     row.add_child(_button("Achievements", Callable(self, "_open_achievements_page")))
     row.add_child(_button("Abandon run", Callable(self, "_open_abandon_page")))
     var resume := _button("Resume game  (Esc)", Callable(self, "_resume"))
     content.add_child(resume)
-    content.add_child(_text("WASD: move   Mouse: aim   Left click: shoot   Space: melee",
+    content.add_child(_text("WASD: move   Mouse: aim   Left click: shoot   Space: melee   Z / X: skills",
         12, Color("#9eb8c4")))
     resume.grab_focus()
 
@@ -423,6 +622,35 @@ func _inventory_content(content: VBoxContainer) -> void:
             i + 1, String(entry["name"]), int(entry["count"]), int(entry.get("stack_max", 1))], entry)
     content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
     content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+
+
+## Skills page (Wave 2F): banked points, slot bindings, then every skill with
+## its rank; banked points are spent here exactly as on the level-up overlay.
+func _open_skills_page() -> void:
+    if mode == "pause":
+        page = "skills"
+        _refresh()
+
+
+func _skills_content(content: VBoxContainer) -> void:
+    var view: Dictionary = skill_view()
+    var points: int = skill_points()
+    content.add_child(_text("SKILLS   %d point%s banked" % [points, "" if points == 1 else "s"], 25,
+        Color("#f6d48d")))
+    var parts: PackedStringArray = []
+    for entry in view.get("slots", []):
+        parts.append("[%s] %s" % [String(entry.get("key", "?")),
+            String(entry["name"]) if String(entry.get("id", "")) != "" else "empty"])
+    content.add_child(_text("Active slots:  " + "    ".join(parts) if not parts.is_empty()
+        else "Active slots: none", 14, Color("#c5dee4")))
+    var first: Button = _skill_list(content, 262.0, true)
+    var back := _button("Back to pause menu", Callable(self, "_open_overview_page"))
+    content.add_child(back)
+    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+    if first != null:
+        first.grab_focus()
+    else:
+        back.grab_focus()
 
 
 func _inventory_row(rows: VBoxContainer, heading: String, entry: Dictionary) -> void:

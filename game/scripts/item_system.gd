@@ -4,7 +4,7 @@ extends Node
 ##
 ## - Inventory lifecycle: the starting loadout on run_started (inventory.gd).
 ## - Passive stats: recomputed when dirty (inventory_changed, stats_changed,
-##   status_changed, player_damaged/healed, level_up): RunState
+##   status_changed, player_damaged/healed, level_up, skill_learned): RunState
 ##   stat_modifiers (max HP, AC), the crawler's speed and both attack profiles.
 ## - Triggers: on_room_enter, on_room_clear, on_level_up and periodic here;
 ##   on_hit / on_kill / on_damage_taken in Combat's damage pipeline; on_use
@@ -61,7 +61,8 @@ func setup(game_node) -> void:
             [Events.boss_defeated, _on_boss_defeated], [Events.chest_opened, _on_chest_opened],
             [Events.level_up, _on_level_up], [Events.inventory_changed, mark_dirty],
             [Events.stats_changed, _on_dirty_1], [Events.player_damaged, _on_dirty_2],
-            [Events.player_healed, _on_dirty_1], [Events.status_changed, _on_status_changed]]:
+            [Events.player_healed, _on_dirty_1], [Events.status_changed, _on_status_changed],
+            [Events.skill_learned, _on_dirty_2]]:
         var event: Signal = pair[0]
         if not event.is_connected(pair[1]):
             event.connect(pair[1])

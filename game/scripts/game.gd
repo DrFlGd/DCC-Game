@@ -21,6 +21,9 @@ extends Node2D
 ## Wave 2D adds DoorLock (D-07 door lock and failsafe, door_lock.gd), the dodge
 ## roll (try_dodge), stamina regen, attack movement penalties and hit-stop
 ## (Combat.advance_feedback freezes the simulation).
+## Wave 2F adds SkillSystem (skill_system.gd: skill points, learning, the two
+## active-skill slots and cooldowns); Game routes `use_skill_1/2`, the frame
+## step and CharacterMenu's skill requests to it.
 signal state_changed(previous: int, current: int)
 
 ## RUNNING: simulation ticks. LEVEL_UP / PAUSED: CharacterMenu is modal and the
@@ -59,7 +62,9 @@ const FloorMap = preload("res://scripts/ui/floor_map.gd")
 const Announcer = preload("res://scripts/ui/announcer.gd")
 const ItemSystem = preload("res://scripts/item_system.gd")
 const Inventory = preload("res://scripts/inventory.gd")
+const ContentDB = preload("res://scripts/content/content_db.gd")
 const DoorLock = preload("res://scripts/door_lock.gd")
+const SkillSystem = preload("res://scripts/skill_system.gd")
 const Audio = preload("res://scripts/audio.gd")
 
 ## World room bounds; never changes with window size.
@@ -91,6 +96,10 @@ var settings
 var announcer: Announcer
 ## D-07 door lock (Wave 2D).
 var door_lock: DoorLock
+## Skills and active abilities (Wave 2F).
+var skills: SkillSystem
+## use_skill_N held last frame (press-edge latch for the slot actions).
+var _skill_held: Array = [false, false]
 ## Sound effects, ambience and music on the Events bus (Wave 3A, audio.gd).
 var audio: Audio
 
@@ -133,6 +142,8 @@ func _ready() -> void:
     player.configure(RunState.config.get("feel", {}))
     door_lock = _ensure_child("DoorLock", DoorLock) as DoorLock
     door_lock.setup(self)
+    skills = _ensure_child("SkillSystem", SkillSystem) as SkillSystem
+    skills.setup(self)
     renderer.setup(player, combat, null, catalogue)
     renderer.door_lock = door_lock
     _relayout()
@@ -142,6 +153,8 @@ func _ready() -> void:
     character_menu.resolution_requested.connect(_apply_resolution)
     character_menu.settings_requested.connect(open_settings)
     character_menu.abandon_requested.connect(_on_abandon)
+    character_menu.skill_learn_requested.connect(_on_skill_learn_requested)
+    character_menu.skill_slot_requested.connect(_on_skill_slot_requested)
     title_screen.new_run_requested.connect(func(): start_run(random_seed()))
     title_screen.seeded_run_requested.connect(start_run)
     title_screen.settings_requested.connect(open_settings)
@@ -370,6 +383,13 @@ func _physics_process(delta: float) -> void:
     # kept; hit-stop then freezes the simulation and only the rest of the frame runs.
     if Input.is_action_just_pressed("dodge"):
         player.dodge_buffer = float(player.dodge_settings["buffer"])
+    # Wave 2F: active skills, polled with an edge latch so the LT axis and a
+    # held key fire once per pull (press-edge events do not work for axes).
+    for slot in range(SkillSystem.SLOT_ACTIONS.size()):
+        var held: bool = Input.is_action_pressed(SkillSystem.SLOT_ACTIONS[slot])
+        if held and not bool(_skill_held[slot]):
+            skills.use_slot(slot, player.read_move_axis())
+        _skill_held[slot] = held
     var step: float = combat.advance_feedback(delta)
     if step <= 0.0:
         _redraw()
@@ -413,6 +433,8 @@ func _physics_process(delta: float) -> void:
         clock.update(step)
     if state == State.RUNNING:
         door_lock.update(step)
+    if state == State.RUNNING:
+        skills.update(step)
     _redraw()
 
 
@@ -530,6 +552,7 @@ func _character_context() -> Dictionary:
     var context: Dictionary = RunState.progression_context()
     context["window_size"] = get_window().size
     context["inventory"] = Inventory.describe()
+    context["skills"] = SkillSystem.describe()
     return context
 
 
@@ -545,7 +568,7 @@ func _on_enemy_killed(definition_id: String, xp: int, _position: Vector2) -> voi
 func _on_level_up(level: int, pending_points: int) -> void:
     Events.say("LEVEL UP! Level %d — %d ability points available." % [level, pending_points],
         "progression")
-    if pending_points > 0:
+    if pending_points > 0 or RunState.skill_points > 0:
         character_menu.show_level_up(RunState.ability_scores, _character_context(),
             pending_points, int(RunState.config.get("stat_score_cap", 20)))
         _change_state(State.LEVEL_UP)
@@ -568,8 +591,33 @@ func _confirm_stat_allocation(changes: Dictionary) -> void:
         return
     character_menu.close_menu()
     _change_state(State.RUNNING)
-    Events.say("Level %d stats confirmed. HP %d/%d  AC %d" % [
-        RunState.level, RunState.hp, RunState.max_hp, RunState.ac], "progression")
+    var banked: String = "" if RunState.skill_points <= 0 else \
+        "  |  %d skill point%s banked (Esc > Skills)" % [RunState.skill_points,
+            "" if RunState.skill_points == 1 else "s"]
+    Events.say("Level %d stats confirmed. HP %d/%d  AC %d%s" % [
+        RunState.level, RunState.hp, RunState.max_hp, RunState.ac, banked], "progression")
+
+
+## CharacterMenu skill pick (level-up overlay or pause Skills page): learns
+## one rank, recomputes passives, and refreshes the menu (staged stat points
+## are kept).
+func _on_skill_learn_requested(skill_id: String) -> void:
+    if character_menu.mode == "closed":
+        return
+    var result: Dictionary = SkillSystem.learn(skill_id)
+    if bool(result["ok"]):
+        items.recompute()
+        Events.announcement_requested.emit("skill_learned", {"text": "SKILL ACQUIRED: %s, rank %d. %s" % [
+            String(ContentDB.skill(skill_id).get("name", skill_id)), int(result["rank"]),
+            "The System has updated your threat profile." if int(result["rank"]) == 1
+            else "Practice makes slightly less dead."], "priority": 3, "category": "celebration"})
+    character_menu.update_context(_character_context())
+
+
+## CharacterMenu Skills page: binds a learned active skill to a slot.
+func _on_skill_slot_requested(skill_id: String, slot: int) -> void:
+    if SkillSystem.assign_slot(skill_id, slot):
+        character_menu.update_context(_character_context())
 
 
 func _on_resume_game() -> void:

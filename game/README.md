@@ -24,7 +24,7 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Pause → Display resolution | — | — | Choose a common windowed resolution and click **Apply resolution** (saved to settings) |
 | Pause → Settings / Abandon run | — | — | Open the settings page; abandon the run (asks to confirm, ends as *abandoned*) |
 | Arrows / Enter on menus | D-pad / A | `ui_*` (built in) | Move between and press buttons on the title, intermission, summary and settings screens |
-| F9 (prototype debug) | — | `debug_level_up` | Award XP up to the next level so you can test the level-up menu immediately |
+| F9 (prototype debug) | — | `debug_level_up` | Award XP up to the next level (2 ability points and 1 skill point) so you can test the level-up menu immediately |
 | Mouse in level-up menu | — | — | Assign and refund points with + / −, then confirm |
 | R | — | `restart_seed` | Restart using same seed (during a run or on the run summary) |
 | N | — | `new_seed` | Restart using a new seed (during a run or on the run summary) |
@@ -33,10 +33,12 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | Q | LB | `use_item` | Use the active item (when charged) |
 | C | D-pad down | `use_consumable` | Use the selected consumable belt slot |
 | V | D-pad right | `next_consumable` | Select the next belt slot |
+| Z | LT | `use_skill_1` | Use the active skill in slot 1 (when learned, off cooldown and affordable) |
+| X | X | `use_skill_2` | Use the active skill in slot 2 |
 | M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc also closes it) |
 | 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc walks away without using it |
 
-Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). `use_item`, `use_consumable` and `next_consumable` are live (Wave 2B). Reserved actions with default bindings: `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Free gamepad inputs: X, LT, R3, D-pad up / left. `tests/inventory_test.gd` fails if two gameplay actions share a key or button. Aiming is still mouse-only.
+Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). `use_item`, `use_consumable` and `next_consumable` are live (Wave 2B). `use_skill_1` and `use_skill_2` are live (Wave 2F; polled with a press-edge latch so the LT axis fires once per pull). Reserved actions with default bindings: `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Free gamepad inputs: R3, D-pad up / left. `tests/inventory_test.gd` and `tests/skills_test.gd` fail if two gameplay actions share a key, button or axis direction. Aiming is still mouse-only.
 
 **Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms spend a **threat budget that grows with depth** (2–4 enemies on floors 1–2, up to 6 by floor 5); every enemy attack has a visible **wind-up telegraph** you can dodge, and enemies wait 0.6 s when you enter. Boss rooms hold the depth's boss (Armored Brute on floors 1–2, Sump Warden from floor 3) plus an escort; bosses change phase at HP thresholds and show an HP bar at the top. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
@@ -61,6 +63,7 @@ Gameplay code reads **Input Map actions** (Project → Project Settings → Inpu
 - **Data-driven enemy roster** (9 archetypes across 7 roles, 2 elite modifiers, 2 phased bosses), depth-scaled threat budgets, telegraphed attacks, hazards and summons, and a six-ability d20-inspired XP/level system.
 - **Automatic level-up menu** when XP crosses a threshold. Combat freezes while you allocate ability points; the menu shows live previews and protects against overspending.
 - **Esc pause menu and character-stat page** with HP, AC, level, XP, proficiency, six scores/modifiers, and derived melee/ranged attack bonuses.
+- **Skills** (Wave 2F): 1 skill point per level, an 8-skill starter tree with ranks and prerequisites, two active-skill slots (Z / X) with stamina costs and cooldowns, and a Skills page in the pause menu.
 
 ## Items and loot
 
@@ -74,6 +77,18 @@ Wave 2B wires the content layer (`data/content/*.json`, Wave 1B) into play. Desi
 - **Statuses** (`burning`, `poisoned`, `bleeding`, `slowed`, `stunned`, `shielded`, `hasted`, `evasive`, `concealed`) work on you and on enemies. They are shown as coloured pips above HP bars. Enemy attacks and hazards can apply them (spore puddles poison, firebombs burn). Bosses ignore stun and root, and slows last half as long on them.
 - **Triggers.** Item effects fire on `on_hit`, `on_kill`, `on_damage_taken`, `on_room_enter`, `on_room_clear`, `on_level_up`, `on_dodge`, `on_use` and `periodic`. A clock-touching item (`grant_ticks`) also stabilises the collapse grace like any other tick gain.
 - **For other systems.** `Loadout.current(slot, weapon_id)` returns the equipped entries for `EffectResolver.collect_modifiers()`. `StatusSystem.apply(target, effect, source)` applies a status to `"player"` or an enemy dictionary. `EffectRunner.fire(combat, trigger, extra)` fires a trigger. `Pickups.spawn(room_id, id, pos)` drops an item.
+
+## Skills
+
+Wave 2F puts `data/content/skills.json` (Wave 1B) into play. Design: [COMBAT_AND_RPG.md §11](../docs/design/COMBAT_AND_RPG.md#11-rpg-progression-and-skills) and [CONTENT_RULES.md §6](../docs/design/CONTENT_RULES.md#6-items-itemsjson-and-skills-skillsjson).
+
+- **Skill points.** Every level grants **1 skill point** (`skills.points_per_level`) next to the 2 ability points. The level-up overlay lists every skill with its rank, cost, description and next-rank effects; locked ones are greyed out with the reason (level, missing prerequisite or rank, maxed, not enough points). **Confirm** needs all ability points staged and all skill points spent; **Save for later** banks the skill points. Banked points are spent on **Esc → Skills**, which also shows your learned skills and lets you move an active skill between the two slots. Points and skills persist across floors and reset with a new run.
+- **Learning rules** (`scripts/skill_system.gd`, `SkillSystem.can_learn(id)` / `learn(id)`): `unlock_level` (rank 1 only), every prerequisite's skill *and* rank, `max_rank`, `cost` against the banked points. A rank **replaces** the previous rank's effects. Learning a skill emits `Events.skill_learned(id, rank)` and recomputes passive stats at once.
+- **Active skills.** A newly learned active (`Sidestep Protocol`, `Mandatory Hype`) takes the first free slot: **Z** (LT) for slot 1, **X** (gamepad X) for slot 2. Using one needs the stamina (`stamina_cost`), no `stunned`, and an elapsed cooldown (a rank may shorten the cooldown); it runs the rank's `on_use` effects, emits `Events.skill_used(id, rank)` and starts the cooldown, which ticks only while playing and clears at each floor start. Sidestep is also a 40 px dash (`skills.dashes`) that fires `on_dodge`, so dodge items work with it. `cooldown_reduction` effects with `stat: skills` (Panic Mode's kill refund) and `stat: dodge` now have consumers.
+- **INT** raises every skill effect's magnitude by 10 % per positive modifier (`skills.int_magnitude_per_mod`); items are unaffected.
+- **HUD.** The SKILLS panel under the loadout shows both slots with a cooldown sweep and the seconds left, greys a slot you cannot afford, and flags banked points.
+- **Config keys** (`data/prototype_rules.json` `skills`): `points_per_level` (1), `slots` (2), `int_magnitude_per_mod` (0.1), `dashes` (skill id → `{distance, duration, recovery}`).
+- **For other systems.** `SkillSystem.describe()` is the menu / HUD view model; `SkillSystem.rank_of(id)`, `cooldown_left(id)`, `reduce_cooldowns(seconds)`; `EffectRunner.fire_skill(combat, id, rank, trigger)` runs one skill's effects; `Loadout.skill_magnitude_mult()` is the INT factor.
 
 ## Feel
 
@@ -121,11 +136,11 @@ See [the gameplay systems specification](../docs/design/ROOM_ENEMY_RPG_PROTOTYPE
 
 ## Level-up and pause menus
 
-When XP crosses a level threshold, combat stops and a **Level Up** overlay appears. For quick testing, press **F9 during gameplay** to jump to the next level (debug-only shortcut). The default is **2 free ability points per level gained** (this is a game-design adaptation, **not** D&D's class-specific Ability Score Improvement rule). The screen shows each of the six ability scores and its modifier, with **+** and **−** buttons to stage/undo points. Points are only applied when you select **Confirm allocation**, and confirmation remains disabled until all available points are assigned. Level jumps grant points for every level earned in that XP award. Scores cannot exceed the configured cap (default **20**).
+When XP crosses a level threshold, combat stops and a **Level Up** overlay appears. For quick testing, press **F9 during gameplay** to jump to the next level (debug-only shortcut). The default is **2 free ability points and 1 skill point per level gained** (this is a game-design adaptation, **not** D&D's class-specific Ability Score Improvement rule). The screen shows each of the six ability scores and its modifier, with **+** and **−** buttons to stage/undo points, and the skill list below them (see [Skills](#skills)). Points are only applied when you select **Confirm**, and confirmation remains disabled until all ability points are assigned and the skill point is spent or saved. Level jumps grant points for every level earned in that XP award. Scores cannot exceed the configured cap (default **20**).
 
 New scores immediately update AC (DEX), max HP (CON), STR-based melee and DEX-based ranged attack bonuses, and any relevant damage modifiers on new attacks. Raising CON grants the corresponding max-HP increase to current HP. All points are lost on starting a new run.
 
-Press **Esc** to open the pause menu. Choose **View character stats** to see your build, select one of the built-in **windowed resolution presets** (800×600, 960×540, 1024×768, 1280×720, 1280×800, 1366×768, 1440×900, 1600×900, 1920×1080, 2560×1440, 3840×2160) and click **Apply resolution**, or select **Resume game** to return. Large options may be limited by your monitor/window manager; resizing affects the viewport, not the fixed 24×24 room. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
+Press **Esc** to open the pause menu. Choose **View character stats** to see your build, **Skills** to spend banked skill points and rebind the Z / X slots, select one of the built-in **windowed resolution presets** (800×600, 960×540, 1024×768, 1280×720, 1280×800, 1366×768, 1440×900, 1600×900, 1920×1080, 2560×1440, 3840×2160) and click **Apply resolution**, or select **Resume game** to return. Large options may be limited by your monitor/window manager; resizing affects the viewport, not the fixed 24×24 room. Esc resumes from either pause page. Pausing and leveling both freeze player movement, enemy AI, cooldowns, and projectiles; the collapse clock does not change. **The level-up screen cannot be skipped**; this is intentional for the current prototype.
 
 Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rules.gd), and menu rendering/input live separately in [`scripts/character_menu.gd`](scripts/character_menu.gd). Gamepad bindings exist for movement, fire, melee and pause; gamepad aiming and menu navigation, plus more UI/audio accessibility, remain future tasks.
 
@@ -231,6 +246,7 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `enemy_combat_test.gd` | Live `Combat`: wind-up timing and dodging, dormancy on entry, twin_shot hits a still crawler, boss phase roars, bulwark/volatile elites, summon caps, hazards, support wards, knockback, `boss_defeated` for both bosses |
 | `events_test.gd` | `Events` signals during scripted door transitions, kills, boss gate, death, collapse and floor clear |
 | `menu_integration_test.gd` | Live `Main.tscn`: level-up/pause modals, state machine, resolution, F9/R, Input-Map-driven physics loop |
+| `skills_test.gd` | Skill points per level, `can_learn` rules, ranks replacing each other, INT scaling, slots, Sidestep / Hype in play, refusals, `cooldown_reduction` skills/dodge, Input Map collisions, level-up overlay and Skills page picks |
 | `run_loop_test.gd` | Title → `start_run`, room counts and budgets by depth (26 on floor 1 for 424242), exit → intermission → fresh floor with carried XP/HP, last-tick exit, victory on floor 6, summary after death/abandon with Retry/New/Title, run-time freeze, pause → settings, `user://` settings roundtrip |
 | `scripts_parse_test.gd` | Every script under `scripts/` and `tests/` compiles |
 | `announcer_test.gd` | Announcer data validator, placeholders, seeded selection, cooldowns, once-per-run, preemption, rate limit, modal suppression; live toasts, log, achievements page and telemetry in `Main.tscn` |
@@ -275,6 +291,7 @@ game/
 │   ├── interactables.gd        # interactable entries (chest, shrine, rest, sign...) (pure)
 │   ├── room_services.gd        # interact registry + prompts, chest/shrine/rest/sign, trap plates
 │   ├── player.gd               # movement + collision, aim, facing, cooldowns, i-frames, dodge/dash, attack phases
+│   ├── skill_system.gd         # skill points, learning rules, active-skill slots and cooldowns (Wave 2F)
 │   ├── combat.gd               # projectiles, melee arc, d20 hits, enemy AI/attacks, apply_damage() + feedback/knockback
 │   ├── fx.gd                   # hit feedback state: hit-stop, shake, flashes, numbers, death bursts (pure)
 │   ├── door_lock.gd            # D-07 door lock, unreachable-enemy failsafe, room-clear moment
@@ -314,13 +331,13 @@ game/
     └── *_test.gd               # see "Run tests"
 ```
 
-**Data flow.** `RunState` is the single source of truth (seed, depth, floor, current room, ticks, XP/level, scores, HP/AC, visited rooms, persisted `room_states`, tick ledger, `inventory` (Wave 2B), `statuses`, reserved `skills`, `telemetry`, parsed `config`). Systems change it through its methods (`start_run`, `reset_for_floor(depth, budget)`, `floor_stats`, `close_floor`, `intermission_heal`, `award_xp`, `apply_damage_to_player`, `heal_player`, `apply_stat_allocation`, `apply_tick_entry`, `add_ticks`, `end_run`, `summary`), and everything that happens is announced on `Events` (`room_entered`, `ticks_changed`, `enemy_damaged`, `enemy_killed`, `player_damaged`, `level_up`, `run_ended`, `message`, ...). `Game` reacts to `enemy_killed` (XP, boss gate), `level_up` (modal) and `player_died` (defeat), and emits `floor_cleared`, `game_state_changed` and `settings_changed`; `RunState` counts telemetry from the bus; `Hud` shows the newest `message`. All damage flows through `Combat.apply_damage(target, amount, context)`, and all combat dice use `RunState.rng`, so the same seed and inputs replay identically.
+**Data flow.** `RunState` is the single source of truth (seed, depth, floor, current room, ticks, XP/level, scores, HP/AC, visited rooms, persisted `room_states`, tick ledger, `inventory` (Wave 2B), `statuses`, `skills` / `skill_points` / `skill_slots` / `skill_cooldowns` (Wave 2F), `telemetry`, parsed `config`). Systems change it through its methods (`start_run`, `reset_for_floor(depth, budget)`, `floor_stats`, `close_floor`, `intermission_heal`, `award_xp`, `apply_damage_to_player`, `heal_player`, `apply_stat_allocation`, `apply_tick_entry`, `add_ticks`, `end_run`, `summary`), and everything that happens is announced on `Events` (`room_entered`, `ticks_changed`, `enemy_damaged`, `enemy_killed`, `player_damaged`, `level_up`, `run_ended`, `message`, ...). `Game` reacts to `enemy_killed` (XP, boss gate), `level_up` (modal) and `player_died` (defeat), and emits `floor_cleared`, `game_state_changed` and `settings_changed`; `RunState` counts telemetry from the bus; `Hud` shows the newest `message`. All damage flows through `Combat.apply_damage(target, amount, context)`, and all combat dice use `RunState.rng`, so the same seed and inputs replay identically.
 
 **Adding a feature** usually means: add state to `RunState` (or use the reserved `inventory`/`skills`), add or reuse a signal in `events.gd`, and subscribe from your own node rather than editing `game.gd`. Room drawing is still immediate mode; a `TileMapLayer` plus sprite nodes is the candidate follow-up when animation work starts.
 
 ### Important scope limits
 
-This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but only two biomes have their own (placeholder) art so far, and it has no classes or skill selection, no companion AI, no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
+This is a **technical prototype**, not a finished game. It supports multiple basic melee/ranged enemies, a starter XP/stat system and a six-floor descent, but only two biomes have their own (placeholder) art so far, and it has no classes, an 8-skill starter tree only, no companion AI, no finished movement/attack animations, only placeholder synthesised audio, and no mid-run saves (only settings persist). Items have no selling, and weapon swing timing is not yet per-weapon. Enemy and boss abilities, guild-hall services, rewards, and clock numbers require playtesting and subsequent design decisions.
 
 ## Troubleshooting
 

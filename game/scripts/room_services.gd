@@ -88,6 +88,7 @@ func focus() -> Dictionary:
 ## Per-frame step while RUNNING: trap plates, then the HUD prompt.
 func update(delta: float) -> void:
     _update_plates(delta)
+    _update_patches(delta)
     refresh_prompt()
 
 
@@ -223,6 +224,17 @@ func _update_plates(delta: float) -> void:
                 float(spike.get("radius", 9.0)), float(spike.get("telegraph", 0.5)),
                 int(spike.get("damage", 3)), float(spike.get("duration", 0.2)),
                 "hazard:spike_plate", {"color": Color("#e8e8e8"), "plate": String(plate["id"])}))
+
+
+## Wave 3B: biome floor patches (spore clouds, luminous puddles) of the
+## current room. Hazards.step_patches re-arms them and fires the one the
+## crawler stands on; the spawned entry carries the biome's status.
+func _update_patches(delta: float) -> void:
+    var list: Array = RunState.current_room().get("patches", [])
+    if list.is_empty():
+        return
+    for entry in Hazards.step_patches(list, delta, Contents.cell_of(game.player.world_position)):
+        game.combat.spawn_hazard(entry)
 
 
 func _on_dialog_chosen(option_id: String) -> void:

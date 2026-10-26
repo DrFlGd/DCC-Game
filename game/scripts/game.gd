@@ -45,6 +45,7 @@ const CharacterMenu = preload("res://scripts/character_menu.gd")
 const Player = preload("res://scripts/player.gd")
 const Combat = preload("res://scripts/combat.gd")
 const RoomRenderer = preload("res://scripts/room_renderer.gd")
+const Biomes = preload("res://scripts/biomes.gd")
 const Hud = preload("res://scripts/ui/hud.gd")
 const RunRules = preload("res://scripts/core/run_rules.gd")
 const Settings = preload("res://scripts/core/settings.gd")
@@ -226,8 +227,9 @@ func _start_floor(depth: int) -> void:
     combat.clear_projectiles()
     combat.clear_hazards()
     player.reset(ROOM.get_center(), float(RunState.config.get("player_speed", Player.DEFAULT_SPEED)))
-    var text := "Floor %d/%d | Seed %d | %d rooms | route %d + slack = %d ticks" % [
-        depth, RunRules.target_depth(RunState.config), RunState.seed, room_count, route, budget]
+    var text := "Floor %d/%d (%s) | Seed %d | %d rooms | route %d + slack = %d ticks" % [
+        depth, RunRules.target_depth(RunState.config), Biomes.display_name(
+        String(generated.get("biome", ""))), RunState.seed, room_count, route, budget]
     print(text)
     Events.say(text, "info")
     var start_id: int = int(generated["start_id"])
@@ -248,14 +250,15 @@ func _load_room(id: int) -> void:
     var contents: Dictionary = Contents.generate(floor_seed, id, room["neighbors"],
         kind, int(RunState.config.get("obstacle_count", 38)),
         RunState.config.get("room_obstacle_caps", {}),
-        RunState.config.get("hazards", {}).get("trap_plates", {}))
+        RunState.config.get("hazards", {}).get("trap_plates", {}),
+        String(room.get("biome", "")))
     # 2C: depth scales the threat budget; links drive portal-distance and
     # reachability checks. Elite and trap rooms have their own budgets.
     var encounter: Array[Dictionary] = Enemies.generate_encounter(catalogue, kind, floor_seed,
-        id, contents["blocked"], RunState.depth, room["neighbors"])
+        id, contents["blocked"], RunState.depth, room["neighbors"], String(room.get("biome", "")))
     RunState.room_states[id] = {"blocked": contents["blocked"], "props": contents["props"],
         "enemies": encounter, "interactables": contents["interactables"],
-        "plates": contents["plates"]}
+        "plates": contents["plates"], "patches": contents.get("patches", [])}
 
 
 ## Tries the door on side `direction` of the current room: exit gate, collapse

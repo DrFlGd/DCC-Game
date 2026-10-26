@@ -221,7 +221,9 @@ static func roll_intensity(catalogue: Dictionary, rng: RandomNumberGenerator) ->
 
 
 ## Normal archetypes that may be drawn at `depth`: {id, role, threat, weight}.
-static func eligible_pool(catalogue: Dictionary, depth: int) -> Array[Dictionary]:
+## Wave 3B (ENCOUNTER_RULES R11): `biome` multiplies each weight by the
+## archetype's `biome_affinity[biome]` (default 1.0); "" leaves weights alone.
+static func eligible_pool(catalogue: Dictionary, depth: int, biome: String = "") -> Array[Dictionary]:
     var band: int = band_for_depth(catalogue, depth)
     var pool: Array[Dictionary] = []
     var defs: Dictionary = catalogue.get("enemies", {})
@@ -237,8 +239,15 @@ static func eligible_pool(catalogue: Dictionary, depth: int) -> Array[Dictionary
             continue
         pool.append({"id": String(enemy_id), "role": String(data["role"]),
             "threat": int(data["threat"]) + maxi(0, band - int(data.get("band", 1))),
-            "weight": float(data.get("weight", 1.0)), "elite": ""})
+            "weight": float(data.get("weight", 1.0)) * biome_affinity(data, biome), "elite": ""})
     return pool
+
+
+## Pick-weight multiplier of an archetype in `biome` (1.0 when unlisted or "").
+static func biome_affinity(data: Dictionary, biome: String) -> float:
+    if biome == "":
+        return 1.0
+    return maxf(0.0, float(data.get("biome_affinity", {}).get(biome, 1.0)))
 
 
 ## Picks the boss for a boss room from `encounters.boss_pool`: {id, elite}.
@@ -261,7 +270,7 @@ static func pick_boss(catalogue: Dictionary, depth: int, rng: RandomNumberGenera
 ## {kind, depth, band, intensity, budget, spent, elite_room, picks: [{id, role,
 ## threat, elite, boss}]}. The boss (if any) is picks[0] and is not budgeted.
 static func compose_encounter(catalogue: Dictionary, kind: String, depth: int,
-        rng: RandomNumberGenerator) -> Dictionary:
+        rng: RandomNumberGenerator, biome: String = "") -> Dictionary:
     var cfg: Dictionary = settings(catalogue)
     var band: int = band_for_depth(catalogue, depth)
     var plan := {"kind": kind, "depth": depth, "band": band, "intensity": "standard",
@@ -282,7 +291,7 @@ static func compose_encounter(catalogue: Dictionary, kind: String, depth: int,
     var high: int = int(floorf(float(budget) * (1.0 + tolerance) + 0.0001))
     var max_count: int = int(cfg.get("max_enemies", {}).get(str(band), 4))
     var min_count: int = int(cfg.get("min_enemies", {}).get(kind, 2))
-    var pool: Array[Dictionary] = eligible_pool(catalogue, depth)
+    var pool: Array[Dictionary] = eligible_pool(catalogue, depth, biome)
     var wants_elite: bool = kind == "elite"
     if kind == "normal":
         var chance: float = float(cfg.get("elite_chance", {}).get(str(band), 0.0))
@@ -438,12 +447,14 @@ static func _weighted(options: Array[Dictionary], rng: RandomNumberGenerator) ->
 ## Generates the persisted enemy list for a room. Same (seed, room_id, depth,
 ## blocked, links) -> same enemies. `links` is the room's neighbour map (portal
 ## distances and reachability use it); without links the room midpoint is used.
+## `biome` applies R11 affinities (eligible_pool); "" keeps the base weights.
 static func generate_encounter(catalogue: Dictionary, kind: String, seed_value: int,
-        room_id: int, blocked: Dictionary, depth: int = 1, links: Dictionary = {}) -> Array[Dictionary]:
+        room_id: int, blocked: Dictionary, depth: int = 1, links: Dictionary = {},
+        biome: String = "") -> Array[Dictionary]:
     var results: Array[Dictionary] = []
     var rng := RandomNumberGenerator.new()
     rng.seed = int(seed_value) * 73 + int(room_id) * 10211 + 41
-    var plan: Dictionary = compose_encounter(catalogue, kind, depth, rng)
+    var plan: Dictionary = compose_encounter(catalogue, kind, depth, rng, biome)
     var cfg: Dictionary = settings(catalogue)
     var first: Array = cfg.get("first_cooldown", [0.4, 1.0])
     var floods: Dictionary = {}
@@ -1256,6 +1267,13 @@ static func _validate_enemy(catalogue: Dictionary, enemy_id: String, data: Dicti
     var knockback: float = float(data.get("knockback_resist", 0.0))
     if knockback < 0.0 or knockback > 1.0:
         problems.append("%s: knockback_resist must be 0..1" % enemy_id)
+    var affinity = data.get("biome_affinity", {})
+    if not affinity is Dictionary:
+        problems.append("%s: biome_affinity must be an object {biome_id: weight}" % enemy_id)
+    else:
+        for biome_id in affinity.keys():
+            if float(affinity[biome_id]) < 0.0:
+                problems.append("%s: biome_affinity.%s must be >= 0" % [enemy_id, biome_id])
     var rules: Dictionary = band_rules(catalogue, band)
     var attack_ids: Array = []
     var attacks: Array = data["attacks"]

@@ -1,150 +1,355 @@
 {
   "schema_version": 1,
-  "_doc": "Biome catalogue (docs/design/BIOMES_AND_TILESETS.md, D-15). Loaded and validated by scripts/biomes.gd. depths = [min, max]; max -1 means open-ended. room_kinds: rooms of these kinds always use this biome (guild halls). tileset/tiles: the 128x96 standard atlas and its slot map; an empty tileset means 'no art yet': the renderer draws the fallback_art biome's atlas multiplied by fallback_tint. hazards: floor patches room_contents.gd places (kind = the Hazards entry kind it spawns). grace_hazard: keys merged over the collapse grace debris entry. Enemy affinities live in enemies.json (biome_affinity, ENCOUNTER_RULES R11).",
+  "_doc": "Biome catalogue (docs/design/BIOMES_AND_TILESETS.md, D-15). Loaded and validated by scripts/biomes.gd. depths = [min, max]; max -1 means open-ended. room_kinds: rooms of these kinds always use this biome (guild halls). tileset/tiles: the 128x96 standard atlas and its slot map; an empty tileset means 'no art yet': the renderer draws the fallback_art biome's atlas multiplied by fallback_tint. hazards: floor patches room_contents.gd places (kind = the Hazards entry kind it spawns). grace_hazard: keys merged over the collapse grace debris entry. Enemy affinities live in enemies.json (biome_affinity, ENCOUNTER_RULES R11). dressing: per-cell chances for decals, small props, glowing features and floor_c/d variants (renderer, cosmetic only).",
   "default_biome": "stone_crypt",
   "fallback_art": "stone_crypt",
-  "atlas": {"tile_size": 16, "columns": 8, "rows": 6},
+  "atlas": {
+    "tile_size": 16,
+    "columns": 8,
+    "rows": 6
+  },
   "biomes": {
     "stone_crypt": {
       "name": "Stone Crypt",
       "status": "implemented",
-      "depths": [1, 2],
+      "depths": [
+        1,
+        2
+      ],
       "band": "I",
       "mood": "Cold, quiet, torchlit",
       "tileset": "res://assets/biomes/stone_crypt/tileset_16x16_full.png",
       "tiles": "res://assets/biomes/stone_crypt/tiles.json",
       "fallback_tint": "#ffffff",
       "ambient": "#00000000",
-      "light": {"color": "#e8a33a", "alpha": 0.0, "radius": 0},
+      "light": {
+        "color": "#e8a33a",
+        "alpha": 0.0,
+        "radius": 0
+      },
       "palette": {
         "outline": "#0e0b16",
-        "stone": ["#1a1426", "#2b2640", "#3d3656", "#564d72", "#736a8f", "#968db0"],
-        "wood": ["#5e3430", "#8a5236", "#b87a4b"],
-        "metal": ["#4a4f5e", "#7a8194"],
-        "bone": ["#c4bca6"],
-        "flame": ["#e8a33a"]
+        "stone": [
+          "#1a1426",
+          "#2b2640",
+          "#3d3656",
+          "#564d72",
+          "#736a8f",
+          "#968db0"
+        ],
+        "wood": [
+          "#5e3430",
+          "#8a5236",
+          "#b87a4b"
+        ],
+        "metal": [
+          "#4a4f5e",
+          "#7a8194"
+        ],
+        "bone": [
+          "#c4bca6"
+        ],
+        "flame": [
+          "#e8a33a"
+        ]
       },
-      "dressing": {"decal_chance": 0.035, "prop_chance": 0.012, "feature_chance": 0.0},
+      "dressing": {
+        "decal_chance": 0.035,
+        "prop_chance": 0.012,
+        "feature_chance": 0.0,
+        "floor_variant_chance": 0.0
+      },
       "hazards": [],
       "grace_hazard": {}
     },
     "fungal_cavern": {
       "name": "Fungal Cavern",
       "status": "implemented",
-      "depths": [3, 4],
+      "depths": [
+        3,
+        4
+      ],
       "band": "II",
       "mood": "Damp, bioluminescent, organic",
       "tileset": "res://assets/biomes/fungal_cavern/tileset_16x16.png",
       "tiles": "res://assets/biomes/fungal_cavern/tiles.json",
       "fallback_tint": "#9fd8b8",
       "ambient": "#03100a33",
-      "light": {"color": "#7fe0b0", "alpha": 0.16, "radius": 24},
+      "light": {
+        "color": "#7fe0b0",
+        "alpha": 0.16,
+        "radius": 24
+      },
       "palette": {
         "outline": "#0f1512",
-        "ground": ["#1d2a22", "#2f4436", "#4a6650"],
-        "mycelium": ["#6b4f7a", "#9a73b0"],
-        "glow": ["#7fe0b0"],
-        "spore": ["#e6d38a"]
+        "ground": [
+          "#1d2a22",
+          "#2f4436",
+          "#4a6650"
+        ],
+        "mycelium": [
+          "#6b4f7a",
+          "#9a73b0"
+        ],
+        "glow": [
+          "#7fe0b0"
+        ],
+        "spore": [
+          "#e6d38a"
+        ]
       },
-      "dressing": {"decal_chance": 0.06, "prop_chance": 0.025, "feature_chance": 0.006},
+      "dressing": {
+        "decal_chance": 0.06,
+        "prop_chance": 0.025,
+        "feature_chance": 0.006,
+        "floor_variant_chance": 0.18
+      },
       "hazards": [
-        {"kind": "spore_cloud", "tile": "hazard", "status": "poisoned", "damage": 0,
-         "telegraph": 0.4, "duration": 0.6, "rearm": 3.0, "radius": 18, "color": "#e6d38a",
-         "label": "", "cells": [2, 6], "per_room": [1, 2],
-         "room_kinds": ["normal", "elite", "trap", "boss"]},
-        {"kind": "glow_puddle", "tile": "decal_c", "status": "slowed", "damage": 0,
-         "telegraph": 0.15, "duration": 0.4, "rearm": 1.2, "radius": 10, "color": "#7fe0b0",
-         "label": "", "cells": [1, 3], "per_room": [0, 2],
-         "room_kinds": ["normal", "elite", "trap"]}
+        {
+          "kind": "spore_cloud",
+          "tile": "hazard",
+          "status": "poisoned",
+          "damage": 0,
+          "telegraph": 0.4,
+          "duration": 0.6,
+          "rearm": 3.0,
+          "radius": 18,
+          "color": "#e6d38a",
+          "label": "",
+          "cells": [
+            2,
+            6
+          ],
+          "per_room": [
+            1,
+            2
+          ],
+          "room_kinds": [
+            "normal",
+            "elite",
+            "trap",
+            "boss"
+          ]
+        },
+        {
+          "kind": "glow_puddle",
+          "tile": "decal_c",
+          "status": "slowed",
+          "damage": 0,
+          "telegraph": 0.15,
+          "duration": 0.4,
+          "rearm": 1.2,
+          "radius": 10,
+          "color": "#7fe0b0",
+          "label": "",
+          "cells": [
+            1,
+            3
+          ],
+          "per_room": [
+            0,
+            2
+          ],
+          "room_kinds": [
+            "normal",
+            "elite",
+            "trap"
+          ]
+        }
       ],
-      "grace_hazard": {"kind": "spore_burst", "status": "poisoned", "color": "#e6d38a"}
+      "grace_hazard": {
+        "kind": "spore_burst",
+        "status": "poisoned",
+        "color": "#e6d38a"
+      }
     },
     "flooded_catacombs": {
       "name": "Flooded Catacombs",
       "status": "fallback",
-      "depths": [5, 6],
+      "depths": [
+        5,
+        6
+      ],
       "band": "III",
       "mood": "Drowned, echoing, blue-green",
       "tileset": "",
       "tiles": "",
       "fallback_tint": "#8fc6cf",
       "ambient": "#04161c26",
-      "light": {"color": "#4fa3a5", "alpha": 0.0, "radius": 0},
+      "light": {
+        "color": "#4fa3a5",
+        "alpha": 0.0,
+        "radius": 0
+      },
       "palette": {
         "outline": "#0a1216",
-        "stone": ["#16262e", "#24404a", "#3a6168"],
-        "water": ["#2f6f7a", "#4fa3a5"],
-        "foam": ["#c9e6df"],
-        "brass": ["#b08d57"]
+        "stone": [
+          "#16262e",
+          "#24404a",
+          "#3a6168"
+        ],
+        "water": [
+          "#2f6f7a",
+          "#4fa3a5"
+        ],
+        "foam": [
+          "#c9e6df"
+        ],
+        "brass": [
+          "#b08d57"
+        ]
       },
-      "dressing": {"decal_chance": 0.03, "prop_chance": 0.01, "feature_chance": 0.0},
+      "dressing": {
+        "decal_chance": 0.03,
+        "prop_chance": 0.01,
+        "feature_chance": 0.0,
+        "floor_variant_chance": 0.0
+      },
       "hazards": [],
-      "grace_hazard": {"kind": "falling_masonry", "color": "#4fa3a5"}
+      "grace_hazard": {
+        "kind": "falling_masonry",
+        "color": "#4fa3a5"
+      }
     },
     "maintenance_tunnels": {
       "name": "Maintenance Tunnels",
       "status": "fallback",
-      "depths": [7, 8],
+      "depths": [
+        7,
+        8
+      ],
       "band": "IV",
       "mood": "Industrial, humming, hazard-striped",
       "tileset": "",
       "tiles": "",
       "fallback_tint": "#c9c2a0",
       "ambient": "#0a0a0c22",
-      "light": {"color": "#9fd2e8", "alpha": 0.0, "radius": 0},
+      "light": {
+        "color": "#9fd2e8",
+        "alpha": 0.0,
+        "radius": 0
+      },
       "palette": {
         "outline": "#101114",
-        "steel": ["#23262b", "#3a3f47", "#5a616b"],
-        "hazard": ["#d9b13b", "#2b2b2b"],
-        "rust": ["#c4572e"],
-        "steam": ["#9fd2e8"]
+        "steel": [
+          "#23262b",
+          "#3a3f47",
+          "#5a616b"
+        ],
+        "hazard": [
+          "#d9b13b",
+          "#2b2b2b"
+        ],
+        "rust": [
+          "#c4572e"
+        ],
+        "steam": [
+          "#9fd2e8"
+        ]
       },
-      "dressing": {"decal_chance": 0.03, "prop_chance": 0.01, "feature_chance": 0.0},
+      "dressing": {
+        "decal_chance": 0.03,
+        "prop_chance": 0.01,
+        "feature_chance": 0.0,
+        "floor_variant_chance": 0.0
+      },
       "hazards": [],
-      "grace_hazard": {"kind": "steam_burst", "status": "burning", "color": "#9fd2e8"}
+      "grace_hazard": {
+        "kind": "steam_burst",
+        "status": "burning",
+        "color": "#9fd2e8"
+      }
     },
     "bone_foundry": {
       "name": "Bone Foundry",
       "status": "fallback",
-      "depths": [9, -1],
+      "depths": [
+        9,
+        -1
+      ],
       "band": "IV-V",
       "mood": "Hot, ashen, rhythmic hammering",
       "tileset": "",
       "tiles": "",
       "fallback_tint": "#e0a080",
       "ambient": "#1a060026",
-      "light": {"color": "#ff7a1a", "alpha": 0.0, "radius": 0},
+      "light": {
+        "color": "#ff7a1a",
+        "alpha": 0.0,
+        "radius": 0
+      },
       "palette": {
         "outline": "#120b0a",
-        "scorch": ["#2a1a17", "#4a2c24", "#6e4535"],
-        "bone": ["#d8cbb0"],
-        "molten": ["#ff7a1a", "#ffc04a"],
-        "iron": ["#5c5c66"]
+        "scorch": [
+          "#2a1a17",
+          "#4a2c24",
+          "#6e4535"
+        ],
+        "bone": [
+          "#d8cbb0"
+        ],
+        "molten": [
+          "#ff7a1a",
+          "#ffc04a"
+        ],
+        "iron": [
+          "#5c5c66"
+        ]
       },
-      "dressing": {"decal_chance": 0.03, "prop_chance": 0.01, "feature_chance": 0.0},
+      "dressing": {
+        "decal_chance": 0.03,
+        "prop_chance": 0.01,
+        "feature_chance": 0.0,
+        "floor_variant_chance": 0.0
+      },
       "hazards": [],
-      "grace_hazard": {"kind": "slag_spatter", "status": "burning", "color": "#ff7a1a"}
+      "grace_hazard": {
+        "kind": "slag_spatter",
+        "status": "burning",
+        "color": "#ff7a1a"
+      }
     },
     "guild_interior": {
       "name": "Guild Interior",
       "status": "implemented",
       "depths": [],
-      "room_kinds": ["guild_hall"],
+      "room_kinds": [
+        "guild_hall"
+      ],
       "band": "any",
       "mood": "Warm, wooden, bustling",
       "tileset": "res://assets/biomes/guild_interior/tileset_16x16.png",
       "tiles": "res://assets/biomes/guild_interior/tiles.json",
       "fallback_tint": "#e8c8a0",
       "ambient": "#3a200a14",
-      "light": {"color": "#d9b36a", "alpha": 0.12, "radius": 28},
+      "light": {
+        "color": "#d9b36a",
+        "alpha": 0.12,
+        "radius": 28
+      },
       "palette": {
         "outline": "#160f0b",
-        "plank": ["#3b2618", "#5e3d24", "#8a5a33"],
-        "rug": ["#a33b3b"],
-        "lamp": ["#d9b36a"],
-        "parchment": ["#e8dcc0"]
+        "plank": [
+          "#3b2618",
+          "#5e3d24",
+          "#8a5a33"
+        ],
+        "rug": [
+          "#a33b3b"
+        ],
+        "lamp": [
+          "#d9b36a"
+        ],
+        "parchment": [
+          "#e8dcc0"
+        ]
       },
-      "dressing": {"decal_chance": 0.04, "prop_chance": 0.03, "feature_chance": 0.0},
+      "dressing": {
+        "decal_chance": 0.04,
+        "prop_chance": 0.03,
+        "feature_chance": 0.0,
+        "floor_variant_chance": 0.15
+      },
       "hazards": [],
       "grace_hazard": {}
     }

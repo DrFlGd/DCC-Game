@@ -1,0 +1,128 @@
+name: Godot export (release builds)
+
+# Builds Linux, Windows and macOS (unsigned) packages from game/export_presets.cfg.
+# Cut a release by pushing a tag that matches config/version in game/project.godot:
+#   git tag v0.1.0 && git push origin v0.1.0
+# A manual run (Actions -> Godot export -> Run workflow) builds the zips as
+# workflow artifacts without publishing a release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: godot-export-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2
+  TEMPLATES_DIR: ~/.local/share/godot/export_templates/4.7.2.stable
+
+jobs:
+  build:
+    name: Test and export
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2 (GDScript) with export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+
+      - name: Ensure export templates are installed
+        run: |
+          dir="$(eval echo "$TEMPLATES_DIR")"
+          if [ ! -f "$dir/linux_release.x86_64" ] || [ ! -f "$dir/windows_release_x86_64.exe" ] || [ ! -f "$dir/macos.zip" ]; then
+            echo "Templates missing from $dir; downloading the official archive."
+            mkdir -p "$dir" "$RUNNER_TEMP/tpl"
+            curl -fsSL -o "$RUNNER_TEMP/tpl/templates.tpz" \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            unzip -o -j -q "$RUNNER_TEMP/tpl/templates.tpz" \
+              "templates/linux_release.x86_64" "templates/windows_release_x86_64.exe" \
+              "templates/macos.zip" "templates/version.txt" -d "$dir"
+          fi
+          ls -la "$dir"
+          godot --version
+
+      - name: Check tag matches config/version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' game/project.godot)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match config/version=$version in game/project.godot"
+            exit 1
+          fi
+
+      - name: Run all headless checks
+        run: bash game/tests/run_all.sh --clean
+
+      - name: Stamp version.json
+        run: python3 tools/stamp_version.py
+
+      - name: Export builds
+        run: |
+          mkdir -p builds/linux builds/windows builds/macos
+          godot --headless --path game --export-release "Linux x86_64" ../builds/linux/dcc-game
+          godot --headless --path game --export-release "Windows x86_64" ../builds/windows/dcc-game.exe
+          godot --headless --path game --export-release "macOS" ../builds/macos/dcc-game.zip
+          test -x builds/linux/dcc-game
+          test -s builds/windows/dcc-game.exe
+          test -s builds/macos/dcc-game.zip
+
+      - name: Smoke-launch the Linux build
+        run: timeout 60 ./builds/linux/dcc-game --headless --quit-after 2
+
+      - name: Package zips
+        id: package
+        run: |
+          version="$(python3 -c "import json; print(json.load(open('game/version.json'))['version'])")"
+          name="dcc-game-v${version}"
+          mkdir -p dist
+          (cd builds/linux && zip -9 -q "../../dist/${name}-linux-x86_64.zip" dcc-game)
+          (cd builds/windows && zip -9 -q "../../dist/${name}-windows-x86_64.zip" dcc-game.exe)
+          cp builds/macos/dcc-game.zip "dist/${name}-macos-unsigned.zip"
+          cp game/version.json dist/version.json
+          ls -la dist
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DCC Game ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/version.json

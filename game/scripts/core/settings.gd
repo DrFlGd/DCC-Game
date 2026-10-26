@@ -10,6 +10,13 @@ extends RefCounted
 ## `Events.settings_changed(values)`. Feature code (damage numbers, screen
 ## shake, audio) reads `Settings.shared()` and listens to that signal.
 ##
+## Wave 3C adds the accessibility keys (text_scale, high_contrast,
+## reduced_flash, colorblind_telegraphs, aim_assist; scripts/core/accessibility.gd
+## reads them) and the remapped controls: `bindings` holds
+## InputBindings.overrides() ({action: PackedStringArray of event strings such
+## as "key:90", "mouse:1", "joy_button:2", "joy_axis:4:+"}) and is saved under
+## the [input] section. Game applies it at boot with apply_bindings().
+##
 ## Under a `--script` test run the shared instance uses `user://settings_test.cfg`
 ## so tests never overwrite a player's settings.
 ## No autoload references here: tests and character_menu.gd preload this file.
@@ -17,6 +24,11 @@ extends RefCounted
 const PATH := "user://settings.cfg"
 const TEST_PATH := "user://settings_test.cfg"
 const SECTION := "settings"
+## Remapped controls (Wave 3C): one key per overridden action.
+const INPUT_SECTION := "input"
+const InputBindings = preload("res://scripts/core/input_bindings.gd")
+## Text size multipliers offered by the settings screen (Wave 3C).
+const TEXT_SCALES := [1.0, 1.25, 1.5]
 ## Common windowed resolutions offered by the settings screen and pause menu.
 const RESOLUTION_PRESETS := [
     Vector2i(800, 600), Vector2i(960, 540), Vector2i(1024, 768),
@@ -27,7 +39,8 @@ const RESOLUTION_PRESETS := [
 const DEFAULT_RESOLUTION := Vector2i(960, 540)
 ## Setting keys, in the order the settings screen shows them.
 const KEYS := ["resolution", "fullscreen", "master_volume", "music_volume", "sfx_volume",
-    "show_damage_numbers", "screen_shake"]
+    "show_damage_numbers", "screen_shake", "text_scale", "high_contrast", "reduced_flash",
+    "colorblind_telegraphs", "aim_assist"]
 
 static var _shared
 
@@ -45,6 +58,19 @@ var sfx_volume := 1.0
 var show_damage_numbers := true
 ## 0.0 (off) - 1.0 (full) screen-shake multiplier.
 var screen_shake := 1.0
+## Wave 3C accessibility. Text size multiplier, one of TEXT_SCALES.
+var text_scale := 1.0
+## Opaque HUD / announcer panels, outlined text, stronger telegraph colours.
+var high_contrast := false
+## No bright hit flashes or strobes; hit-stop and screen shake capped.
+var reduced_flash := false
+## Enemy telegraphs get a hatch pattern and a thick outline, not just colour.
+var colorblind_telegraphs := false
+## Gamepad aim snaps to the nearest enemy inside a small cone
+## (prototype_rules.json input.aim_assist_degrees). Never applies to the mouse.
+var aim_assist := true
+## Remapped controls: {action: PackedStringArray} (see the class comment).
+var bindings: Dictionary = {}
 
 
 func _init(file_path: String = PATH) -> void:
@@ -68,6 +94,12 @@ func load_settings() -> bool:
         return false
     for key in KEYS:
         set_value(key, file.get_value(SECTION, key, get(key)))
+    bindings = {}
+    if file.has_section(INPUT_SECTION):
+        for action in file.get_section_keys(INPUT_SECTION):
+            var value = file.get_value(INPUT_SECTION, action, [])
+            if value is Array or value is PackedStringArray:
+                bindings[action] = PackedStringArray(Array(value).map(func(v): return str(v)))
     return true
 
 
@@ -76,6 +108,8 @@ func save_settings() -> bool:
     var file := ConfigFile.new()
     for key in KEYS:
         file.set_value(SECTION, key, get(key))
+    for action in bindings.keys():
+        file.set_value(INPUT_SECTION, String(action), PackedStringArray(bindings[action]))
     return file.save(path) == OK
 
 
@@ -95,6 +129,18 @@ func set_value(key: String, value) -> bool:
             show_damage_numbers = bool(value)
         "screen_shake":
             screen_shake = clampf(float(value), 0.0, 1.0)
+        "text_scale":
+            if not (value is float or value is int):
+                return false
+            var matched := false
+            for option in TEXT_SCALES:
+                if is_equal_approx(float(value), float(option)):
+                    text_scale = float(option)
+                    matched = true
+            if not matched:
+                return false
+        "high_contrast", "reduced_flash", "colorblind_telegraphs", "aim_assist":
+            set(key, bool(value))
         _:
             return false
     return true
@@ -105,6 +151,22 @@ func to_dict() -> Dictionary:
     for key in KEYS:
         result[key] = get(key)
     return result
+
+
+## Records the live Input Map's overrides (InputBindings.overrides()) so the
+## next save_settings() writes them under [input].
+func capture_bindings() -> void:
+    bindings = InputBindings.overrides()
+
+
+## Applies `bindings` to the Input Map on top of project.godot's defaults.
+## Conflicting or malformed overrides fall back to the defaults (and are
+## dropped from `bindings`). Returns true when applied as saved.
+func apply_bindings() -> bool:
+    var ok: bool = InputBindings.apply_overrides(bindings)
+    if not ok:
+        bindings = {}
+    return ok
 
 
 ## Applies fullscreen / windowed resolution to `window`. Headless runs only

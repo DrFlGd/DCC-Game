@@ -6,6 +6,10 @@ extends CanvasLayer
 ## Game freezes the world (State.DIALOG) while it is open; this node only
 ## reports the result through `chosen(id)` / `cancelled()`.
 ## No autoload references, so tests may load it directly.
+## Wave 3C: B (ui_cancel) also cancels, A confirms the focused option, the
+## cancel button names the device's back input, and text follows text_scale.
+const Accessibility = preload("res://scripts/core/accessibility.gd")
+const InputBindings = preload("res://scripts/core/input_bindings.gd")
 signal chosen(option_id: String)
 signal cancelled
 
@@ -56,22 +60,26 @@ func open(new_title: String, new_body: String, new_options: Array) -> void:
         child.queue_free()
     var heading := Label.new()
     heading.text = title
-    heading.add_theme_font_size_override("font_size", 20)
+    heading.add_theme_font_size_override("font_size", Accessibility.px(20))
     box.add_child(heading)
     var text := Label.new()
     text.text = body
     text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    text.add_theme_font_size_override("font_size", Accessibility.px(16))
     box.add_child(text)
     for index in range(options.size()):
         var button := Button.new()
-        button.text = "[%d] %s" % [index + 1, String(options[index]["label"])]
+        button.text = "[%d] %s" % [index + 1, String(options[index]["label"])] \
+            if not InputBindings.is_gamepad() else String(options[index]["label"])
+        button.add_theme_font_size_override("font_size", Accessibility.px(16))
         var option_id: String = String(options[index]["id"])
         button.pressed.connect(func(): choose(option_id))
         box.add_child(button)
         if index == 0:
             button.call_deferred("grab_focus")
     var leave := Button.new()
-    leave.text = "[Esc] Walk away"
+    leave.text = "[%s] Walk away" % ("B" if InputBindings.is_gamepad() else "Esc")
+    leave.add_theme_font_size_override("font_size", Accessibility.px(16))
     leave.pressed.connect(cancel)
     box.add_child(leave)
     overlay.visible = true
@@ -100,7 +108,7 @@ func cancel() -> void:
 func _input(event: InputEvent) -> void:
     if not is_open():
         return
-    if event.is_action_pressed("pause"):
+    if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
         cancel()
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo:

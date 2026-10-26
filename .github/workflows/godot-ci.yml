@@ -2,14 +2,23 @@ name: Godot prototype smoke tests
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "game/**"
+      - "tools/**"
       - ".github/workflows/godot-ci.yml"
   pull_request:
     paths:
       - "game/**"
+      - "tools/**"
       - ".github/workflows/godot-ci.yml"
   workflow_dispatch:
+
+# A newer push to the same branch or PR cancels the run still in progress.
+concurrency:
+  group: godot-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -17,15 +26,19 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # No cache: installing Godot takes seconds, and a stale .godot import
+      # cache is what crashes the import step (see game/tests/run_all.sh).
       - name: Install Godot 4.7.2 (GDScript)
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.7.2
           use-dotnet: false
           include-templates: false
+          cache: false
       - name: Verify engine
         run: godot --version
-      - name: Run all headless checks (import, tests, scene launch)
-        run: bash game/tests/run_all.sh
+      - name: Run all headless checks (clean import, tests, scene launch)
+        run: bash game/tests/run_all.sh --clean

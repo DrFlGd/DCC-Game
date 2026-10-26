@@ -5,8 +5,14 @@
 #      not report parse errors in scripts that no scene loads)
 #   3. tests/smoke_test.gd, then every other tests/*_test.gd
 #   4. a short launch of the main scene (--quit-after 5)
-# Usage (from anywhere): game/tests/run_all.sh     Env: GODOT=/path/to/godot
-#                        TEST_TIMEOUT=seconds per step (default 180)
+# Usage (from anywhere): game/tests/run_all.sh [--clean]
+#   --clean (or CLEAN_IMPORT=1) deletes game/.godot before the import step so
+#   every asset is re-imported from scratch. CI always passes it.
+# Env: GODOT=/path/to/godot   TEST_TIMEOUT=seconds per step (default 180)
+#
+# Known crash: after new or changed WAV assets land (e.g. a merge that brings
+# in regenerated audio), a stale game/.godot import cache can make the import
+# step or the first test segfault (exit code 139). Re-run with --clean.
 # A step fails on a non-zero exit, a timeout, or "SCRIPT ERROR" in its output.
 #
 # Autoloads in --script mode (verified on Godot 4.7.2):
@@ -24,6 +30,14 @@
 set -uo pipefail
 
 GODOT="${GODOT:-godot}"
+CLEAN_IMPORT="${CLEAN_IMPORT:-0}"
+for arg in "$@"; do
+    case "$arg" in
+        --clean) CLEAN_IMPORT=1 ;;
+        -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        *) echo "run_all.sh: unknown argument '$arg' (use --clean)" >&2; exit 2 ;;
+    esac
+done
 STEP_TIMEOUT="${TEST_TIMEOUT:-180}"
 GAME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dcc-tests.XXXXXX")"
@@ -55,6 +69,8 @@ run_step() {
     local reason=""
     if [ "$code" -eq 124 ]; then
         reason="timed out after ${STEP_TIMEOUT}s (a compile error in a --script test hangs Godot)"
+    elif [ "$code" -eq 139 ] && [ "$CLEAN_IMPORT" != "1" ]; then
+        reason="exit code 139 (segfault; a stale .godot import cache? re-run with --clean)"
     elif [ "$code" -ne 0 ]; then
         reason="exit code $code"
     elif grep -q "SCRIPT ERROR" "$log"; then
@@ -75,6 +91,10 @@ run_step() {
 }
 
 "$GODOT" --version
+if [ "$CLEAN_IMPORT" = "1" ]; then
+    echo "---- clean import: removing $GAME_DIR/.godot"
+    rm -rf "$GAME_DIR/.godot"
+fi
 run_step "import" --editor --quit
 run_step "tests/scripts_parse_test.gd" --script res://tests/scripts_parse_test.gd
 run_step "tests/smoke_test.gd" --script res://tests/smoke_test.gd

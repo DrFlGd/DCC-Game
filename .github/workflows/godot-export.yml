@@ -5,13 +5,25 @@ name: Godot export (release builds)
 #   git tag v0.1.0 && git push origin v0.1.0
 # The tag creates a *draft* GitHub Release with the zips; publish it by hand.
 # A manual run (Actions -> Godot export -> Run workflow) builds the zips as
-# workflow artifacts without publishing a release.
+# workflow artifacts. Tick "publish_release" to also create the tag and the
+# GitHub Release from the chosen commit (for when tags cannot be pushed from
+# the environment doing the release); "draft" controls whether that release
+# is left as a draft.
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Also create the v<config/version> tag and GitHub Release"
+        type: boolean
+        default: false
+      draft:
+        description: "Leave the release as a draft"
+        type: boolean
+        default: true
 
 concurrency:
   group: godot-export-${{ github.ref }}
@@ -29,6 +41,8 @@ jobs:
     name: Test and export
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.package.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -94,6 +108,7 @@ jobs:
           cp game/version.json dist/version.json
           ls -la dist
           echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -106,7 +121,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -121,10 +136,14 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: DCC Game ${{ github.ref_name }}
-          # Draft: a person publishes it after checking the asset rights note
-          # (README "Rights") and the IP stance (D-12).
-          draft: true
+          name: DCC Game v${{ needs.build.outputs.version }}
+          # On a manual run the action creates the tag on the built commit.
+          tag_name: v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          # Tag pushes stay drafts: a person publishes after checking the asset
+          # rights note (README "Rights") and the IP stance (D-12). A manual run
+          # follows its "draft" input.
+          draft: ${{ github.event_name == 'push' || inputs.draft }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |

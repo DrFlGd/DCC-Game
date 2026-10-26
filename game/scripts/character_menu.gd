@@ -9,6 +9,12 @@ extends CanvasLayer
 ## point spent, unless nothing is learnable; "Save for later" banks skill
 ## points. The pause menu's Skills page lists learned skills, slot bindings
 ## and banked points, and spends them the same way.
+## Wave 3C: fully gamepad / keyboard operable. Every page focuses a control
+## when it opens; B (ui_cancel that is not `pause`) goes back to the overview
+## or resumes from it; a focused list (achievements, inventory) scrolls with
+## up / down before focus moves on. Text follows text_scale, the panel turns
+## black and white in high contrast, and key names come from the live bindings
+## for the last-used device (InputBindings).
 signal resume_requested
 signal allocation_confirmed(changes: Dictionary)
 signal resolution_requested(size: Vector2i)
@@ -26,6 +32,12 @@ const RPG = preload("res://scripts/rpg_rules.gd")
 const Achievements = preload("res://scripts/core/achievements.gd")
 const Profile = preload("res://scripts/core/profile.gd")
 const Settings = preload("res://scripts/core/settings.gd")
+const Accessibility = preload("res://scripts/core/accessibility.gd")
+const InputBindings = preload("res://scripts/core/input_bindings.gd")
+## Skill slot actions (SkillSystem.SLOT_ACTIONS), for live key names.
+const SLOT_ACTIONS := ["use_skill_1", "use_skill_2"]
+## Pixels one up / down press scrolls a focused list.
+const SCROLL_STEP := 48
 ## Kept as an alias so callers and tests can keep using CharacterMenu's name;
 ## the list itself lives in settings.gd.
 const RESOLUTION_PRESETS = Settings.RESOLUTION_PRESETS
@@ -69,6 +81,63 @@ func _ready() -> void:
 
 func is_open() -> bool:
     return mode != "closed"
+
+
+## Wave 3C: list scrolling and B on the pause pages (see the class comment).
+func _input(event: InputEvent) -> void:
+    if mode == "closed" or overlay == null or not overlay.visible:
+        return
+    var focused: Control = get_viewport().gui_get_focus_owner()
+    if focused is ScrollContainer and center.is_ancestor_of(focused):
+        var scroll := focused as ScrollContainer
+        var limit: float = maxf(0.0, scroll.get_v_scroll_bar().max_value - scroll.size.y)
+        if event.is_action_pressed("ui_down", true) and scroll.scroll_vertical < int(limit):
+            scroll.scroll_vertical = mini(int(limit), scroll.scroll_vertical + SCROLL_STEP)
+            get_viewport().set_input_as_handled()
+            return
+        if event.is_action_pressed("ui_up", true) and scroll.scroll_vertical > 0:
+            scroll.scroll_vertical = maxi(0, scroll.scroll_vertical - SCROLL_STEP)
+            get_viewport().set_input_as_handled()
+            return
+    if event.is_action_pressed("ui_cancel") and not event.is_action_pressed("pause"):
+        if go_back():
+            get_viewport().set_input_as_handled()
+
+
+## B: a pause sub-page returns to the overview; the overview resumes the game.
+## The level-up overlay ignores it. Returns true when something happened.
+func go_back() -> bool:
+    if mode != "pause":
+        return false
+    if page != "overview":
+        _open_overview_page()
+    else:
+        _resume()
+    return true
+
+
+## Live key name of `action` for the last-used device.
+static func key_name(action: String) -> String:
+    return InputBindings.hint(action)
+
+
+## Explicit left / right neighbours along a row of buttons (wrapping), so the
+## D-pad walks the row instead of jumping to a wider control below it.
+static func link_row(row: Container) -> void:
+    var buttons: Array = []
+    for child in row.get_children():
+        if child is Control and (child as Control).focus_mode != Control.FOCUS_NONE:
+            buttons.append(child)
+    for i in range(buttons.size()):
+        var here: Control = buttons[i]
+        here.focus_neighbor_left = here.get_path_to(buttons[(i - 1 + buttons.size()) % buttons.size()])
+        here.focus_neighbor_right = here.get_path_to(buttons[(i + 1) % buttons.size()])
+
+
+## Focusable list wrapper so a gamepad can scroll it (see _input).
+func _focus_scroll(scroll: ScrollContainer) -> void:
+    scroll.name = "scroll"
+    scroll.focus_mode = Control.FOCUS_ALL
 
 
 func close_menu() -> void:
@@ -252,8 +321,8 @@ func _refresh() -> void:
     var panel := PanelContainer.new()
     panel.custom_minimum_size = Vector2(576, 425)
     var style := StyleBoxFlat.new()
-    style.bg_color = Color("#172333")
-    style.border_color = Color("#d5b978")
+    style.bg_color = Color("#000000") if Accessibility.high_contrast() else Color("#172333")
+    style.border_color = Color.WHITE if Accessibility.high_contrast() else Color("#d5b978")
     style.set_border_width_all(2)
     style.set_corner_radius_all(8)
     panel.add_theme_stylebox_override("panel", style)
@@ -420,7 +489,8 @@ func _skill_list(content: VBoxContainer, height: float, with_slots: bool) -> But
             heading += "   %d stamina, %.1fs" % [int(entry.get("stamina_cost", 0)),
                 float(entry.get("cooldown", 0.0))]
             if int(entry.get("slot", -1)) >= 0:
-                heading += "   [%s]" % SLOT_KEYS[int(entry["slot"])]
+                heading += "   [%s]" % key_name(SLOT_ACTIONS[int(entry["slot"])]) \
+                    if int(entry["slot"]) < SLOT_ACTIONS.size() else SLOT_KEYS[int(entry["slot"])]
         var color := Color("#a9e7c5") if rank > 0 else (Color.WHITE if learnable else Color("#7d8b99"))
         info.add_child(_text(heading, 13, color))
         var lines: PackedStringArray = [String(entry.get("description", ""))]
@@ -441,7 +511,7 @@ func _skill_list(content: VBoxContainer, height: float, with_slots: bool) -> But
             slot_row.add_theme_constant_override("separation", 6)
             info.add_child(slot_row)
             for slot in range(skill_view().get("slots", []).size()):
-                var bind := _button("Slot %d [%s]" % [slot + 1, SLOT_KEYS[slot] if slot < SLOT_KEYS.size()
+                var bind := _button("Slot %d [%s]" % [slot + 1, key_name(SLOT_ACTIONS[slot]) if slot < SLOT_ACTIONS.size()
                     else str(slot + 1)], Callable(self, "assign_skill_slot").bind(id, slot))
                 bind.name = "slot_%d_%s" % [slot, id]
                 bind.custom_minimum_size.y = 26
@@ -493,10 +563,15 @@ func _pause_content(content: VBoxContainer) -> void:
     row.add_child(_button("Settings", func(): settings_requested.emit()))
     row.add_child(_button("Achievements", Callable(self, "_open_achievements_page")))
     row.add_child(_button("Abandon run", Callable(self, "_open_abandon_page")))
-    var resume := _button("Resume game  (Esc)", Callable(self, "_resume"))
+    var resume := _button("Resume game  (%s)" % key_name("pause"), Callable(self, "_resume"))
+    resume.name = "resume"
     content.add_child(resume)
-    content.add_child(_text("WASD: move   Mouse: aim   Left click: shoot   Space: melee   Z / X: skills",
-        12, Color("#9eb8c4")))
+    link_row(row)
+    link_row(resolution_row)
+    content.add_child(_text("%s: move   %s: aim   %s: shoot   %s: melee   %s / %s: skills   %s" % [
+        InputBindings.move_hint(), InputBindings.aim_hint(), key_name("fire"), key_name("melee"),
+        key_name("use_skill_1"), key_name("use_skill_2"),
+        "B: back" if InputBindings.is_gamepad() else "Esc: back"], 12, Color("#9eb8c4")))
     resume.grab_focus()
 
 
@@ -531,8 +606,10 @@ func _character_content(content: VBoxContainer) -> void:
             Color.WHITE))
         grid.add_child(_text("%d    modifier %+d" % [score, RPG.modifier(score)],
             15, Color("#a9e7c5")))
-    content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
-    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+    var back := _button("Back to pause menu", Callable(self, "_open_overview_page"))
+    content.add_child(back)
+    content.add_child(_button("Resume game  (%s)" % key_name("pause"), Callable(self, "_resume")))
+    back.grab_focus()
 
 
 ## Achievements page (Wave 2G): every definition, unlocked ones from the profile.
@@ -552,6 +629,7 @@ func _achievements_content(content: VBoxContainer) -> void:
     content.add_child(_text("ACHIEVEMENTS   %d / %d" % [earned, definitions.size()], 25,
         Color("#f6d48d")))
     var scroll := ScrollContainer.new()
+    _focus_scroll(scroll)
     scroll.custom_minimum_size = Vector2(538, 290)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     content.add_child(scroll)
@@ -572,7 +650,8 @@ func _achievements_content(content: VBoxContainer) -> void:
         detail.custom_minimum_size.x = 510
         rows.add_child(detail)
     content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
-    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+    content.add_child(_button("Resume game  (%s)" % key_name("pause"), Callable(self, "_resume")))
+    scroll.grab_focus()
 
 
 ## Inventory page (Wave 2B): weapons, active item, passives with stack counts,
@@ -589,6 +668,7 @@ func _inventory_content(content: VBoxContainer) -> void:
     content.add_child(_text("INVENTORY   %d credits" % int(view.get("credits", 0)), 25,
         Color("#f6d48d")))
     var scroll := ScrollContainer.new()
+    _focus_scroll(scroll)
     scroll.custom_minimum_size = Vector2(538, 290)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     content.add_child(scroll)
@@ -596,7 +676,7 @@ func _inventory_content(content: VBoxContainer) -> void:
     rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     rows.add_theme_constant_override("separation", 1)
     scroll.add_child(rows)
-    for slot in [["melee", "Melee"], ["ranged", "Ranged"], ["active", "Active [Q]"]]:
+    for slot in [["melee", "Melee"], ["ranged", "Ranged"], ["active", "Active [%s]" % key_name("use_item")]]:
         var entry: Dictionary = view.get(slot[0], {})
         var suffix := ""
         if slot[0] == "active" and not entry.is_empty():
@@ -611,8 +691,9 @@ func _inventory_content(content: VBoxContainer) -> void:
     for entry in passives:
         _inventory_row(rows, "%s  x%d/%d" % [String(entry["name"]), int(entry["count"]),
             int(entry.get("stack_max", 1))], entry)
-    rows.add_child(_text("BELT  (%d slots, C uses the selected one, V cycles)" % int(
-        view.get("belt_size", 6)), 14, Color("#f6d48d")))
+    rows.add_child(_text("BELT  (%d slots, %s uses the selected one, %s cycles)" % [int(
+        view.get("belt_size", 6)), key_name("use_consumable"), key_name("next_consumable")], 14,
+        Color("#f6d48d")))
     var belt: Array = view.get("consumables", [])
     if belt.is_empty():
         rows.add_child(_text("Empty.", 12, Color("#8ea3b3")))
@@ -621,7 +702,8 @@ func _inventory_content(content: VBoxContainer) -> void:
         _inventory_row(rows, "%s%d. %s  x%d/%d" % ["> " if i == int(view.get("selected", 0)) else "  ",
             i + 1, String(entry["name"]), int(entry["count"]), int(entry.get("stack_max", 1))], entry)
     content.add_child(_button("Back to pause menu", Callable(self, "_open_overview_page")))
-    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+    content.add_child(_button("Resume game  (%s)" % key_name("pause"), Callable(self, "_resume")))
+    scroll.grab_focus()
 
 
 ## Skills page (Wave 2F): banked points, slot bindings, then every skill with
@@ -646,7 +728,7 @@ func _skills_content(content: VBoxContainer) -> void:
     var first: Button = _skill_list(content, 262.0, true)
     var back := _button("Back to pause menu", Callable(self, "_open_overview_page"))
     content.add_child(back)
-    content.add_child(_button("Resume game  (Esc)", Callable(self, "_resume")))
+    content.add_child(_button("Resume game  (%s)" % key_name("pause"), Callable(self, "_resume")))
     if first != null:
         first.grab_focus()
     else:
@@ -665,8 +747,8 @@ func _inventory_row(rows: VBoxContainer, heading: String, entry: Dictionary) -> 
 func _button(label: String, callback: Callable) -> Button:
     var button := Button.new()
     button.text = label
-    button.custom_minimum_size.y = 31
-    button.add_theme_font_size_override("font_size", 14)
+    button.custom_minimum_size.y = roundf(31.0 * Accessibility.text_scale())
+    button.add_theme_font_size_override("font_size", Accessibility.px(14))
     button.pressed.connect(callback)
     return button
 
@@ -674,6 +756,9 @@ func _button(label: String, callback: Callable) -> Button:
 func _text(value: String, font_size: int, color: Color) -> Label:
     var label := Label.new()
     label.text = value
-    label.add_theme_font_size_override("font_size", font_size)
+    label.add_theme_font_size_override("font_size", Accessibility.px(font_size))
     label.add_theme_color_override("font_color", color)
+    if Accessibility.high_contrast():
+        label.add_theme_constant_override("outline_size", Accessibility.OUTLINE)
+        label.add_theme_color_override("font_outline_color", Accessibility.OUTLINE_COLOR)
     return label

@@ -64,8 +64,15 @@ func open(run_summary: Dictionary) -> void:
     actions.add_child(retry_button)
     actions.add_child(_button("New run", func(): new_run_requested.emit()))
     actions.add_child(_button("Title", func(): title_requested.emit()))
-    content.add_child(_text("R: retry seed   N: new run", 11, MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+    # Wave 3C: worded for the last-used device (R / N are keyboard shortcuts).
+    _add_hint(content)
     retry_button.grab_focus()
+
+
+func _hint_text() -> String:
+    if InputBindings.is_gamepad():
+        return nav_hint("", false)
+    return "R: retry seed   N: new run   " + nav_hint("", false)
 
 
 func copy_seed() -> void:

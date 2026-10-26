@@ -3,6 +3,9 @@ extends SceneTree
 ## Run after import: godot --headless --path game --script res://tests/menu_integration_test.gd
 ## Game scripts reference the Events/RunState autoloads, so they are load()ed at
 ## runtime instead of preloaded (see tests/run_all.sh).
+## Wave 3C: a gamepad-only traversal (title -> Settings -> Controls -> back)
+## with synthesized InputEventJoypadButtons through Input.parse_input_event,
+## so D-pad focus moves, A confirms and B backs out on the real screens.
 var failures := 0
 
 
@@ -23,10 +26,102 @@ func _key(keycode: Key) -> InputEventKey:
     return event
 
 
+## Presses and releases gamepad `button`, letting the engine dispatch both.
+func _pad(button: JoyButton) -> void:
+    for pressed in [true, false]:
+        var event := InputEventJoypadButton.new()
+        event.device = 0
+        event.button_index = button
+        event.pressed = pressed
+        Input.parse_input_event(event)
+        await process_frame
+
+
+func _focus() -> Control:
+    return get_root().gui_get_focus_owner()
+
+
+## D-pad down until `target` has focus (at most `limit` presses).
+func _pad_down_to(target: Control, limit: int) -> bool:
+    for _i in range(limit):
+        if _focus() == target:
+            return true
+        await _pad(JOY_BUTTON_DPAD_DOWN)
+    return _focus() == target
+
+
+## Wave 3C: title -> Settings -> Controls -> B -> B with the gamepad alone.
+func _gamepad_traversal(game) -> void:
+    await process_frame
+    var title = game.title_screen
+    check(game.state == game.State.TITLE and _focus() == title.new_run_button,
+        "gamepad: title focuses New run")
+    var settings_button: Button = null
+    for node in title.center.find_children("*", "Button", true, false):
+        if (node as Button).text == "Settings":
+            settings_button = node
+    check(await _pad_down_to(settings_button, 6), "gamepad: D-pad reaches Settings (focus %s)" % [_focus()])
+    await _pad(JOY_BUTTON_A)
+    var settings = game.settings_screen
+    check(settings.is_open(), "gamepad: A opens settings")
+    check(_focus() != null and _focus().name == "resolution", "gamepad: settings focuses its first row")
+    check(await _pad_down_to(settings.controls_button, 24), "gamepad: D-pad reaches Remap controls (focus %s)"
+        % [_focus()])
+    await _pad(JOY_BUTTON_A)
+    var controls = settings.controls_screen
+    check(controls.is_open() and _focus() == controls.binding_button("move_up", "kbm"),
+        "gamepad: A opens the controls screen with the first binding focused")
+    await _pad(JOY_BUTTON_DPAD_DOWN)
+    check(_focus() == controls.binding_button("move_down", "kbm"), "gamepad: D-pad moves down the bindings")
+    await _pad(JOY_BUTTON_B)
+    check(not controls.is_open() and settings.is_open() and _focus() == settings.controls_button,
+        "gamepad: B closes controls back to Settings")
+    await _pad(JOY_BUTTON_B)
+    check(not settings.is_open() and game.state == game.State.TITLE and title.is_open()
+        and _focus() == title.new_run_button, "gamepad: B closes settings back to the title")
+
+
+## Wave 3C: Start pauses, D-pad up / left reach Inventory, A opens it with its list
+## focused, B returns to the overview, B resumes; Back opens the map and B
+## closes it.
+func _gamepad_pause(game) -> void:
+    game.start_run(424242)
+    await process_frame
+    var ui = game.character_menu
+    await _pad(JOY_BUTTON_START)
+    check(ui.mode == "pause" and game.state == game.State.PAUSED, "gamepad: Start pauses")
+    var inventory: Button = null
+    for node in ui.center.find_children("*", "Button", true, false):
+        if (node as Button).text == "Inventory":
+            inventory = node
+    var reached := false
+    await _pad(JOY_BUTTON_DPAD_UP)
+    for _i in range(6):
+        if _focus() == inventory:
+            reached = true
+            break
+        await _pad(JOY_BUTTON_DPAD_LEFT)
+    check(reached, "gamepad: D-pad reaches Inventory (focus %s)" % [_focus()])
+    await _pad(JOY_BUTTON_A)
+    check(ui.page == "inventory" and _focus() is ScrollContainer, "gamepad: inventory list focused")
+    await _pad(JOY_BUTTON_B)
+    check(ui.mode == "pause" and ui.page == "overview" and _focus() != null,
+        "gamepad: B returns to the pause overview")
+    await _pad(JOY_BUTTON_B)
+    check(ui.mode == "closed" and game.state == game.State.RUNNING, "gamepad: B on the overview resumes")
+    await _pad(JOY_BUTTON_BACK)
+    check(game.state == game.State.MAP, "gamepad: Back opens the map from the HUD")
+    await _pad(JOY_BUTTON_B)
+    check(game.state == game.State.RUNNING, "gamepad: B closes the map")
+
+
 func _run() -> void:
     var run_state: Node = get_root().get_node("RunState")
     var game = load("res://scenes/Main.tscn").instantiate()
     get_root().add_child(game)
+    await _gamepad_traversal(game)
+    await _gamepad_pause(game)
+    game.show_title()
     var ui = game.character_menu
     check(game.name == "Game", "scene root is the Game node")
     for child in ["Player", "Combat", "RoomRenderer", "Hud", "CharacterMenu"]:

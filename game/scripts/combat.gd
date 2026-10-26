@@ -994,11 +994,13 @@ func _sync_settings() -> void:
     var settings = Settings.shared()
     fx.show_numbers = bool(settings.show_damage_numbers)
     fx.shake_scale = clampf(float(settings.screen_shake), 0.0, 1.0)
+    fx.reduced_flash = bool(settings.reduced_flash)
 
 
 func _on_settings_changed(values: Dictionary) -> void:
     fx.show_numbers = bool(values.get("show_damage_numbers", fx.show_numbers))
     fx.shake_scale = clampf(float(values.get("screen_shake", fx.shake_scale)), 0.0, 1.0)
+    fx.reduced_flash = bool(values.get("reduced_flash", fx.reduced_flash))
 
 
 func _on_player_healed(amount: int) -> void:

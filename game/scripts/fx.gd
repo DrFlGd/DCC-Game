@@ -15,6 +15,10 @@ extends RefCounted
 ##   combat.fx.flash(key, Color.WHITE)
 ##   combat.fx.burst(world_pos, Color("#9bd34a"))
 ## `key` is an enemy instance_id or "player".
+##
+## Wave 3C: `reduced_flash` (the accessibility setting, synced by Combat) turns
+## flashes into a short subtle tint (no HDR white), caps every hit-stop at
+## REDUCED_HITSTOP_MAX and caps the shake multiplier at REDUCED_SHAKE_CAP.
 
 ## Number styles: colour, font size, rise (px) and lifetime (s).
 const STYLES := {
@@ -34,6 +38,11 @@ const FLASH_SECONDS := 0.08
 const MERGE_WINDOW := 0.1
 const BURST_LIFE := 0.3
 const MAX_NUMBERS := 40
+## Reduced-flash limits (Wave 3C).
+const REDUCED_FLASH_SECONDS := 0.05
+const REDUCED_FLASH_STRENGTH := 0.3
+const REDUCED_HITSTOP_MAX := 0.03
+const REDUCED_SHAKE_CAP := 0.25
 ## Hit-stop defaults; Combat passes `feel.hitstop` from prototype_rules.json.
 const HITSTOP_DEFAULTS := {"hit": 0.04, "crit": 0.07, "kill": 0.09, "phase": 0.09,
     "player_hit": 0.05, "room_clear": 0.12, "window": 0.5, "window_budget": 0.12}
@@ -46,6 +55,8 @@ var config: Dictionary = HITSTOP_DEFAULTS.duplicate()
 ## Mirrors Settings.show_damage_numbers / screen_shake (Combat keeps them in sync).
 var show_numbers := true
 var shake_scale := 1.0
+## Mirrors Settings.reduced_flash (Combat keeps it in sync).
+var reduced_flash := false
 var shake_amplitude := 0.0
 var shake_left := 0.0
 var shake_length := 0.0
@@ -101,6 +112,8 @@ func update(delta: float, frozen: bool = false) -> void:
 func request_hitstop(seconds: float, force: bool = false) -> float:
     if seconds <= 0.0:
         return 0.0
+    if reduced_flash:
+        seconds = minf(seconds, REDUCED_HITSTOP_MAX)
     var window: float = float(config["window"])
     for i in range(_stops.size() - 1, -1, -1):
         if time - float(_stops[i][0]) > window:
@@ -156,7 +169,8 @@ func shake(cue: Array, duration_override: float = -1.0) -> void:
 func current_shake() -> float:
     if shake_left <= 0.0:
         return 0.0
-    return shake_amplitude * (shake_left / shake_length) * shake_scale
+    var scale: float = minf(shake_scale, REDUCED_SHAKE_CAP) if reduced_flash else shake_scale
+    return shake_amplitude * (shake_left / shake_length) * scale
 
 
 ## World-space renderer offset for this frame.
@@ -169,15 +183,24 @@ func shake_offset() -> Vector2:
 
 # --- Flash -----------------------------------------------------------------------
 
+## Starts `key`'s hit flash. With reduced_flash it is a short tint instead:
+## at most REDUCED_FLASH_SECONDS, colour clamped to 0..1 (no overbright white)
+## and strength capped at REDUCED_FLASH_STRENGTH.
 func flash(key: String, color: Color = Color.WHITE, duration: float = FLASH_SECONDS) -> void:
+    if reduced_flash:
+        duration = minf(duration, REDUCED_FLASH_SECONDS)
+        color = Color(clampf(color.r, 0.0, 1.0), clampf(color.g, 0.0, 1.0),
+            clampf(color.b, 0.0, 1.0), color.a)
     flashes[key] = {"left": duration, "color": color}
 
 
-## 0..1 strength of `key`'s flash (1 right after the hit).
+## 0..1 strength of `key`'s flash (1 right after the hit; at most
+## REDUCED_FLASH_STRENGTH with reduced_flash).
 func flash_amount(key: String) -> float:
     if not flashes.has(key):
         return 0.0
-    return clampf(float(flashes[key]["left"]) / FLASH_SECONDS, 0.0, 1.0)
+    var amount: float = clampf(float(flashes[key]["left"]) / FLASH_SECONDS, 0.0, 1.0)
+    return minf(amount, REDUCED_FLASH_STRENGTH) if reduced_flash else amount
 
 
 func flash_color(key: String) -> Color:

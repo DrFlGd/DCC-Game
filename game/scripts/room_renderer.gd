@@ -28,6 +28,7 @@ const Enemies = preload("res://scripts/enemy_system.gd")
 const Hazards = preload("res://scripts/hazards.gd")
 const Collapse = preload("res://scripts/collapse_policy.gd")
 const Settings = preload("res://scripts/core/settings.gd")
+const Accessibility = preload("res://scripts/core/accessibility.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const StatusSystem = preload("res://scripts/status_system.gd")
 
@@ -312,7 +313,7 @@ static func grace_shake() -> Vector2:
         return Vector2.ZERO
     var config: Dictionary = Collapse.grace_config(RunState.config.get("collapse", {}))
     var wave: Dictionary = Collapse.grace_wave(float(RunState.grace["remaining"]), config)
-    var amount: float = float(wave.get("shake", 0.0)) * float(Settings.shared().screen_shake)
+    var amount: float = float(wave.get("shake", 0.0)) * Accessibility.shake_scale()
     var t: float = float(Time.get_ticks_msec()) / 1000.0
     return Vector2(sin(t * 53.0), cos(t * 47.0)) * amount
 
@@ -498,8 +499,11 @@ func _draw_enemy(foe: Dictionary) -> void:
         draw_arc(point, sprite_size.x * 0.5 + 1.5, 0.0, TAU, 28, tint, 1.5)
         modulation = Color.WHITE.lerp(tint, 0.25)
     if state == "winding_up" or state == "dashing":
-        var cue: Color = TELEGRAPH_COLORS.get(String(attack.get("type", "melee")), Color.RED)
-        var pulse: float = 0.35 + 0.15 * sin(float(foe.get("state_time", 0.0)) * 18.0)
+        # Wave 3C: high-contrast palette; no pulsing with reduced_flash.
+        var cue: Color = Accessibility.telegraph_color(String(attack.get("type", "melee")),
+            TELEGRAPH_COLORS)
+        var pulse: float = Accessibility.steady(
+            0.35 + 0.15 * sin(float(foe.get("state_time", 0.0)) * 18.0), 0.4)
         modulation = modulation.lerp(cue, pulse)
         _draw_telegraph(foe, attack, cue)
     if float(foe.get("dormant", 0.0)) > 0.0:
@@ -530,7 +534,9 @@ func _draw_telegraph(foe: Dictionary, attack: Dictionary, cue: Color) -> void:
     var aim: Vector2 = foe.get("aim", Vector2.RIGHT)
     var length: float = maxf(0.001, float(foe.get("state_length", 1.0)))
     var progress: float = clampf(float(foe.get("state_time", 0.0)) / length, 0.0, 1.0)
-    var faint := Color(cue, 0.22)
+    var faint := Color(cue, Accessibility.telegraph_fill())
+    if Accessibility.colorblind_telegraphs():
+        _draw_telegraph_pattern(foe, attack, cue, progress)
     match String(attack.get("telegraph", "arc")):
         "arc":
             var reach: float = float(attack.get("range", 22.0)) + 5.5
@@ -557,6 +563,59 @@ func _draw_telegraph(foe: Dictionary, attack: Dictionary, cue: Color) -> void:
             var radius: float = float(attack.get("aoe_radius", 24.0))
             draw_circle(center, radius * progress, faint)
             draw_arc(center, radius, 0.0, TAU, 32, cue, 1.5)
+
+
+## Wave 3C colour-blind telegraphs: a dark-underlaid pattern inside the shape
+## (radial spokes for arcs, rungs across dash lanes, chords across circles,
+## ticks along aim lines) and a letter for the attack type over the attacker,
+## so telegraphs differ by more than colour.
+const TELEGRAPH_LETTERS := {"melee": "M", "area": "A", "dash": "D", "ranged": "R",
+    "puddle": "P", "summon": "S", "support": "+"}
+
+
+func _draw_telegraph_pattern(foe: Dictionary, attack: Dictionary, cue: Color, progress: float) -> void:
+    var point: Vector2 = foe["pos"]
+    var aim: Vector2 = foe.get("aim", Vector2.RIGHT)
+    var dark := Color(0.02, 0.02, 0.04, 0.85)
+    var lines: Array = []
+    match String(attack.get("telegraph", "arc")):
+        "arc":
+            var reach: float = float(attack.get("range", 22.0)) + 5.5
+            var half: float = deg_to_rad(float(attack.get("arc", 120.0))) * 0.5
+            for i in range(5):
+                var direction: Vector2 = aim.rotated(-half + 2.0 * half * float(i) / 4.0)
+                lines.append([point + direction * reach * 0.35, point + direction * reach])
+        "line":
+            var reach: float = float(attack.get("range", 120.0))
+            var side: Vector2 = aim.orthogonal() * 3.0
+            var step := 12.0
+            while step < reach:
+                lines.append([point + aim * step - side, point + aim * step + side])
+                step += 12.0
+        "dash":
+            var lane: float = float(attack.get("dash_distance", 64.0))
+            var side: Vector2 = aim.orthogonal() * float(foe.get("radius", 6.0))
+            var step := 8.0
+            while step < lane:
+                lines.append([point + aim * step - side, point + aim * step + side])
+                step += 8.0
+        "circle":
+            var center: Vector2 = foe.get("target_point", point)
+            var radius: float = float(attack.get("aoe_radius", 24.0))
+            var offset: float = -radius + 6.0
+            while offset < radius:
+                var half_chord: float = sqrt(maxf(0.0, radius * radius - offset * offset))
+                var a: Vector2 = center + Vector2(-half_chord, offset).rotated(PI * 0.25)
+                var b: Vector2 = center + Vector2(half_chord, offset).rotated(PI * 0.25)
+                lines.append([a, b])
+                offset += 6.0
+    for segment in lines:
+        draw_line(segment[0], segment[1], dark, 2.5)
+        draw_line(segment[0], segment[1], Color(cue, 0.55 + 0.4 * progress), 1.0)
+    var letter: String = String(TELEGRAPH_LETTERS.get(String(attack.get("type", "melee")), "!"))
+    var at: Vector2 = point + Vector2(-3.5, -16.0)
+    draw_string_outline(ThemeDB.fallback_font, at, letter, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, 3, dark)
+    draw_string(ThemeDB.fallback_font, at, letter, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, cue)
 
 
 ## Draws one atlas slot of the current biome at `center` (world px), tinted by
@@ -718,7 +777,9 @@ func _crawler_modulation() -> Color:
     var modulation: Color = _flash_modulation("player", Color.WHITE)
     if player.is_invulnerable():
         var t: float = float(Time.get_ticks_msec()) / 1000.0
-        modulation.a = 0.35 if int(t * 16.0) % 2 == 0 else 0.9
+        # Wave 3C: reduced_flash replaces the 8 Hz blink with a steady fade.
+        modulation.a = 0.6 if Accessibility.reduced_flash() \
+            else (0.35 if int(t * 16.0) % 2 == 0 else 0.9)
     return modulation
 
 

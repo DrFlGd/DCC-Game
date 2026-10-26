@@ -24,6 +24,12 @@ extends Node2D
 ## Wave 2F adds SkillSystem (skill_system.gd: skill points, learning, the two
 ## active-skill slots and cooldowns); Game routes `use_skill_1/2`, the frame
 ## step and CharacterMenu's skill requests to it.
+## Wave 3C (input and accessibility): saved control overrides are applied at
+## boot before the title screen; every frame the aim source is resolved
+## (right stick, mouse or movement; Player.update_aim) and every input event
+## updates the last-used device (InputBindings.device,
+## Events.input_device_changed). B (ui_cancel) closes the floor map; the
+## settings screen owns the controls screen.
 signal state_changed(previous: int, current: int)
 
 ## RUNNING: simulation ticks. LEVEL_UP / PAUSED: CharacterMenu is modal and the
@@ -66,6 +72,7 @@ const ContentDB = preload("res://scripts/content/content_db.gd")
 const DoorLock = preload("res://scripts/door_lock.gd")
 const SkillSystem = preload("res://scripts/skill_system.gd")
 const Audio = preload("res://scripts/audio.gd")
+const InputBindings = preload("res://scripts/core/input_bindings.gd")
 const Companion = preload("res://scripts/companion.gd")
 
 ## World room bounds; never changes with window size.
@@ -103,6 +110,8 @@ var skills: SkillSystem
 var _skill_held: Array = [false, false]
 ## Sound effects, ambience and music on the Events bus (Wave 3A, audio.gd).
 var audio: Audio
+## Mouse position last frame (screen px), for the aim source rules (3C).
+var _last_mouse_screen := Vector2.INF
 ## Wave 3E follower prototype (companion.gd); null unless
 ## RunState.companion_enabled (prototype_rules `companion.enabled`, F8).
 var companion: Companion
@@ -138,12 +147,15 @@ func _ready() -> void:
     services.modal_closed.connect(_on_modal_closed)
     settings = Settings.shared()
     settings.apply_window(get_window())
+    # Wave 3C: remapped controls apply before anything reads input.
+    settings.apply_bindings()
     announcer = _ensure_child("Announcer", Announcer) as Announcer
     audio = _ensure_child("Audio", Audio) as Audio
     combat.setup(player, catalogue)
     # After services (the shop registers there), before Game's own Events hooks.
     items.setup(self)
     player.configure(RunState.config.get("feel", {}))
+    player.configure_input(RunState.config.get("input", {}))
     door_lock = _ensure_child("DoorLock", DoorLock) as DoorLock
     door_lock.setup(self)
     skills = _ensure_child("SkillSystem", SkillSystem) as SkillSystem
@@ -417,7 +429,7 @@ func _physics_process(delta: float) -> void:
     if state != State.RUNNING:
         _redraw()
         return
-    player.aim_at(Layout.screen_to_world(get_global_mouse_position(), layout))
+    _update_aim(axis)
     if can_act and player.try_fire(items.cooldown("ranged")):
         combat.player_fire()
     if can_act and player.try_melee(items.cooldown("melee"),
@@ -459,14 +471,47 @@ func try_dodge(move_axis: Vector2) -> bool:
     return true
 
 
+## Wave 3C (D-02): picks the aim source for this frame (right stick past the
+## deadzone, else the mouse, else the held or movement direction) and applies
+## gamepad aim assist toward live enemies (Settings.aim_assist).
+func _update_aim(move_axis: Vector2) -> void:
+    var mouse_screen: Vector2 = get_global_mouse_position()
+    var moved: bool = _last_mouse_screen != Vector2.INF \
+        and mouse_screen.distance_to(_last_mouse_screen) >= InputBindings.MOUSE_SWITCH_PX
+    _last_mouse_screen = mouse_screen
+    var targets: Array = []
+    for foe in RunState.current_room().get("enemies", []):
+        if int(foe.get("hp", 0)) > 0 and float(foe.get("dormant", 0.0)) <= 0.0:
+            targets.append(Vector2(foe["pos"]))
+    var device: String = player.update_aim(Player.read_aim_axis(),
+        Layout.screen_to_world(mouse_screen, layout), moved, InputBindings.device, move_axis,
+        targets, bool(settings.aim_assist))
+    set_input_device(device)
+
+
+## Records the last-used input device and announces a change
+## (Events.input_device_changed) so hint lines switch wording.
+func set_input_device(device: String) -> void:
+    if device == "" or device == InputBindings.device:
+        return
+    InputBindings.device = device
+    Events.input_device_changed.emit(device)
+    _redraw()
+
+
 func _redraw() -> void:
     renderer.queue_redraw()
     var shown: String = ""
     if state == State.RUNNING:
         shown = door_lock.prompt() if door_lock.prompt() != "" else (
             items.prompt if items.prompt != "" else services.prompt)
-    hud.prompt = shown
+    # Wave 3C: prompts are written with "[E]"; show the live interact binding.
+    hud.prompt = shown.replace("[E]", "[%s]" % InputBindings.hint("interact"))
     hud.hover = items.hover if state == State.RUNNING else {}
+    # Wave 3C: the gamepad reticle (hidden for mouse aim).
+    hud.reticle = player.reticle_point() if state == State.RUNNING \
+        and player.aim_device == InputBindings.GAMEPAD else Vector2.INF
+    hud.reticle_assisted = player.aim_assisted
     hud.refresh()
 
 
@@ -477,9 +522,13 @@ func _relayout() -> void:
 
 
 func _input(event: InputEvent) -> void:
+    # Wave 3C: any key, click, button or stick push sets the hint device.
+    set_input_device(InputBindings.classify(event))
     # Wave 2E: the floor map toggles on `map` and also closes on `pause`;
     # a RoomServices choice modal handles its own keys.
-    if event.is_action_pressed("map") or (state == State.MAP and event.is_action_pressed("pause")):
+    # Wave 3C: B (ui_cancel) also closes the map.
+    if event.is_action_pressed("map") or (state == State.MAP and (event.is_action_pressed("pause")
+            or event.is_action_pressed("ui_cancel"))):
         if state == State.MAP:
             close_map()
         elif event.is_action_pressed("map"):
@@ -489,7 +538,8 @@ func _input(event: InputEvent) -> void:
     if state == State.DIALOG or not event.is_action_pressed("pause"):
         return
     if settings_screen.is_open():
-        settings_screen.close()
+        # Wave 3C: closes the controls screen first when it is open.
+        settings_screen.back()
     elif character_menu.mode == "pause":
         character_menu.close_menu()
         _change_state(State.RUNNING)
@@ -621,8 +671,8 @@ func _confirm_stat_allocation(changes: Dictionary) -> void:
     character_menu.close_menu()
     _change_state(State.RUNNING)
     var banked: String = "" if RunState.skill_points <= 0 else \
-        "  |  %d skill point%s banked (Esc > Skills)" % [RunState.skill_points,
-            "" if RunState.skill_points == 1 else "s"]
+        "  |  %d skill point%s banked (%s > Skills)" % [RunState.skill_points,
+            "" if RunState.skill_points == 1 else "s", InputBindings.hint("pause")]
     Events.say("Level %d stats confirmed. HP %d/%d  AC %d%s" % [
         RunState.level, RunState.hp, RunState.max_hp, RunState.ac, banked], "progression")
 
@@ -666,6 +716,8 @@ func _apply_resolution(resolution: Vector2i) -> void:
 ## Settings screen (or pause menu) changed `key`: save, apply window settings,
 ## and announce Events.settings_changed.
 func _on_setting_changed(key: String, _value) -> void:
+    if key == "input_bindings":
+        settings.capture_bindings()
     settings.save_settings()
     if key == "resolution" or key == "fullscreen":
         settings.apply_window(get_window())

@@ -10,20 +10,21 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 
 1. Install Godot 4.7.2 standard.
 2. Open Godot Project Manager and **Import** `game/project.godot` from this repository.
-3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project. The game opens on the **title screen**: choose **New run** (random seed), type a whole number and choose **Seeded run**, open **Settings**, or **Quit**. Keyboard (arrows + Enter) and gamepad (D-pad + A) move between buttons.
+3. Press **F6** while `scenes/Main.tscn` is open, or **F5** to play the project. The game opens on the **title screen**: choose **New run** (random seed), type a whole number and choose **Seeded run**, open **Settings**, or **Quit**. Every menu works with the keyboard alone (arrows / Tab, Enter, Esc) or a gamepad alone (D-pad or left stick, A to choose, B to go back); see [Input and accessibility](#input-and-accessibility).
 4. Resize the game window by dragging an edge; the room remains **24×24 tiles** and scales to fit. Walk toward decorated door openings to enter the next room. Door labels show the *net tick change* (a negative value means ticks spent; a positive value means granted). Door artwork appears closed even though connected doors are traversable; doors **sealed** by a fight (D-07) get a red tint, an iron bar and a gold lock, and fade open when the room is cleared.
 
 | Input (keyboard / mouse) | Gamepad default | Input Map action | Effect |
 | --- | --- | --- | --- |
 | WASD or arrow keys | Left stick | `move_up/down/left/right` | Move (the D-pad is the consumable belt since Wave 2B) |
-| Mouse | — (right stick reserved as `aim_*`) | — | Aim freely in any direction |
+| Mouse | Right stick | `aim_up/down/left/right` | Aim freely in any direction; the last device used decides (see [Input and accessibility](#input-and-accessibility)) |
 | Hold left mouse button | Hold RT | `fire` | Shoot projectiles |
 | Hold Space | Hold RB | `melee` | Melee attack in aim direction |
 | Shift | B | `dodge` | Dodge roll: 48 px in the move direction (aim direction when standing still), i-framed for 0.2 s, costs 35 stamina |
 | Esc | Start | `pause` | Open pause menu, view character stats, or resume; closes the settings page |
 | Pause → Display resolution | — | — | Choose a common windowed resolution and click **Apply resolution** (saved to settings) |
 | Pause → Settings / Abandon run | — | — | Open the settings page; abandon the run (asks to confirm, ends as *abandoned*) |
-| Arrows / Enter on menus | D-pad / A | `ui_*` (built in) | Move between and press buttons on the title, intermission, summary and settings screens |
+| Arrows / Tab, Enter, Esc on menus | D-pad or left stick, A, B | `ui_*` (A / B added in `project.godot`) | Move between and press buttons on every screen; B backs out (settings, controls, pause pages, map, shrine dialog) |
+| Settings → Remap controls… | — | — | Rebind any gameplay action per device; **Reset to defaults** restores `project.godot` |
 | F9 (prototype debug) | — | `debug_level_up` | Award XP up to the next level (2 ability points and 1 skill point) so you can test the level-up menu immediately |
 | F8 (prototype debug) | — | `debug_toggle_companion` | Turn the companion prototype on / off for this session (spawns it beside you mid-run; see [Companion](#companion-prototype)) |
 | Mouse in level-up menu | — | — | Assign and refund points with + / −, then confirm |
@@ -36,11 +37,11 @@ This is the **D-01 Option A technical spike**, not a finished game. The first en
 | V | D-pad right | `next_consumable` | Select the next belt slot |
 | Z | LT | `use_skill_1` | Use the active skill in slot 1 (when learned, off cooldown and affordable) |
 | X | X | `use_skill_2` | Use the active skill in slot 2 |
-| M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc also closes it) |
-| 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc walks away without using it |
+| M | Back / Select | `map` | Open / close the full floor map (the world freezes; Esc or B also closes it) |
+| 1 / 2, mouse | D-pad / A | — | Pick a shrine option; Esc or B walks away without using it |
 | Hold E 0.4 s (no prompt showing) | Hold A | `interact` | Companion prototype only: toggle the hound between **stay** and **follow** |
 
-Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). `use_item`, `use_consumable` and `next_consumable` are live (Wave 2B). `use_skill_1` and `use_skill_2` are live (Wave 2F; polled with a press-edge latch so the LT axis fires once per pull). Reserved actions with default bindings: `swap_weapon` (Tab / Y) and `aim_up/down/left/right` (right stick); `interact` and `map` are live (Wave 2E). Free gamepad inputs: R3, D-pad up / left. `tests/inventory_test.gd` and `tests/skills_test.gd` fail if two gameplay actions share a key, button or axis direction. Aiming is still mouse-only.
+Gameplay code reads **Input Map actions** (Project → Project Settings → Input Map), never raw keycodes, so bindings can be changed without touching scripts. Movement uses physical key positions (WASD works on any layout). `dodge` is live (Wave 2D). `use_item`, `use_consumable` and `next_consumable` are live (Wave 2B). `use_skill_1` and `use_skill_2` are live (Wave 2F; polled with a press-edge latch so the LT axis fires once per pull). Reserved action with default bindings: `swap_weapon` (Tab / Y); `interact` and `map` are live (Wave 2E); `aim_*` is live (Wave 3C, right stick). Free gamepad inputs: R3, D-pad up / left. `tests/inventory_test.gd` and `tests/skills_test.gd` fail if two gameplay actions share a key, button or axis direction; the controls screen keeps that rule at runtime. The table shows the defaults: the HUD hint lines, menus and prompts show the *live* bindings of the device you used last.
 
 **Goal:** on each floor, defeat the boss (red/pink room), then enter the exit (gold room) before the clock hits zero. Taking the exit opens the **intermission** (floor recap, a heal of half your missing HP, **Descend**), and the next, larger floor starts with a fresh clock. Clearing the exit of floor **6** (`run.target_depth`) wins the run. Death, collapse, abandoning or winning opens the **run summary** (outcome, cause, depth, rooms, ticks spent/granted, kills, damage, level/XP, time, copyable seed) with **Retry seed**, **New run** and **Title**. Guild halls grant sample bonus ticks. Normal rooms spend a **threat budget that grows with depth** (2–4 enemies on floors 1–2, up to 6 by floor 5); every enemy attack has a visible **wind-up telegraph** you can dodge, and enemies wait 0.6 s when you enter. Boss rooms hold the depth's boss (Armored Brute on floors 1–2, Sump Warden from floor 3) plus an escort; bosses change phase at HP thresholds and show an HP bar at the top. Killing enemies earns XP and levels. The minimap shows visited rooms and the exit location.
 
@@ -105,6 +106,51 @@ Wave 3E adds one follower, the **Scrap Hound** (`cmp_scrap_hound` in `data/compa
 - **Config keys** (`data/prototype_rules.json` `companion`): `enabled` (false), `id`, `retarget_chance` (0.3), `retarget_radius` (64), `retarget_interval` (1.0 s), `command_hold_seconds` (0.4). Per-companion stats, the bite, revive rules and announcer lines live in `data/companions.json`.
 - **Code.** `scripts/companion.gd` (the node: rolls, damage, revive, signals, drawing), `scripts/companion_ai.gd` (pure AI), `scripts/companions.gd` (loader and validator). Enemies retarget in `enemy_system.gd` (`update_companion_target`), and `Combat.hit_companion()` handles hits on it. The companion has its own RNG, seeded from `seed ^ depth`, so it never changes the run's dice. It sends `Events.companion_spawned`, `companion_downed`, `companion_revived` and `companion_killed_enemy`, and counts kills in the `companion_kills` telemetry key.
 
+## Input and accessibility
+
+Wave 3C (D-02, [COMBAT_AND_RPG §2](../docs/design/COMBAT_AND_RPG.md#2-input--d-02)).
+
+**Device switching.** Any key, mouse click or mouse movement (2 px or more) makes keyboard/mouse the current device; any gamepad button or a stick / trigger pushed past half-way makes it the gamepad. Game tracks it in `InputBindings.device` and emits `Events.input_device_changed(device)` (`"keyboard"` or `"gamepad"`); the HUD hint lines, the pause menu, the title / settings / controls / summary hints, the floor map header, shrine dialog and interaction prompts (`[E]` becomes `[A]`) switch wording at once.
+
+**Aiming** (`Player.update_aim`, every simulated frame):
+
+1. Right stick (`aim_*`, raw strength) past `input.aim_deadzone` (0.25, radial): aim along the stick; device = gamepad.
+2. Otherwise, if the mouse moved this frame or keyboard/mouse is the current device: aim at the mouse (kept when the pointer is on the crawler).
+3. Otherwise (gamepad, stick centred): aim along the movement when `input.aim_fallback_to_move` (true) and the crawler moves, else keep the last aim.
+
+**Aim assist** applies to gamepad aim only (never the mouse) when the **Gamepad aim assist** setting is on (default): the aim snaps to the live, non-dormant enemy with the smallest angle inside `input.aim_assist_degrees` (8°) either side and within `input.aim_assist_range` (200 px); ties go to the nearer, then the earlier enemy. It uses no RNG, so seeded runs are unchanged. The raw stick aim is kept separately, so a held aim does not drift onto enemies. 0° disables it. A **reticle** (ring and ticks, gold while assist holds a target) is drawn by the HUD at `input.reticle_distance` (34 px) along the aim while the gamepad is the device, and hidden for the mouse. All `input.*` values live in `data/prototype_rules.json`.
+
+**Remapping.** Settings → **Remap controls…** opens `ui/controls_screen.gd`: every gameplay action with its keyboard/mouse and gamepad bindings. Choose a binding, then press the new key, mouse button, gamepad button or stick / trigger direction (Esc or Start cancels; 6 s timeout). An input another action uses is **swapped** (that action takes your old binding); pause's Esc / Start and the developer keys (R, N, F9, F8) are refused. Movement keeps its arrow keys as a second binding. `pause` always keeps Esc and Start; a binding you add sits beside them. The aim actions' keyboard column is the mouse and cannot be changed. **Reset to defaults** restores `project.godot`. Developer actions (`restart_seed`, `new_seed`, `debug_level_up`, `debug_toggle_companion`) are not listed.
+
+Overrides are saved to `user://settings.cfg` under `[input]`, one key per changed action, as a list of event strings, and applied before the title screen appears:
+
+```ini
+[input]
+melee=PackedStringArray("key:71", "joy_button:10")
+use_skill_1=PackedStringArray("key:90", "joy_axis:5:+")
+```
+
+| String | Event |
+| --- | --- |
+| `key:<n>` | keyboard key by physical position (`physical_keycode`; what rebinding stores) |
+| `keycode:<n>` | keyboard key by label (`keycode`; the project's Esc / R / N / F9) |
+| `mouse:<n>` | mouse button (1 left, 2 right, 3 middle, 8 / 9 side) |
+| `joy_button:<n>` | gamepad button (0 A, 1 B, 2 X, 3 Y, 4 Back, 6 Start, 7 L3, 8 R3, 9 LB, 10 RB, 11–14 D-pad up / down / left / right) |
+| `joy_axis:<n>:+` / `-` | gamepad axis direction (0 / 1 left stick, 2 / 3 right stick, 4 LT, 5 RT) |
+
+A file that binds one input to two gameplay actions (hand-edited) falls back to the defaults.
+
+**Accessibility settings** (settings page; saved in `[settings]`, applied live through `Events.settings_changed`; helpers in `scripts/core/accessibility.gd`):
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `text_scale` | `1.0` | 1.0 / 1.25 / 1.5: font sizes on the HUD (status block, hint lines that re-wrap to the window, panels, tooltip, prompt), toasts and the system log, every menu, the shrine dialog and the floor map (`Accessibility.px(base)`) |
+| `high_contrast` | `false` | Opaque black HUD / menu / toast panels with white edges, outlined text, and a saturated telegraph palette (`Accessibility.telegraph_color`) |
+| `reduced_flash` | `false` | Hit flashes become a short subtle tint (≤ 0.05 s, ≤ 30 %, no overbright white), hit-stop is capped at 0.03 s, shake (hits and grace debris) at 25 % of the slider, and the i-frame blink, wind-up pulse and ROOM CLEAR border pulse hold steady |
+| `colorblind_telegraphs` | `false` | Enemy wind-ups add a pattern (arc spokes, lane rungs, circle hatching, line ticks) and a letter for the attack type (M, A, D, R, P, S, +) |
+| `aim_assist` | `true` | Gamepad aim assist (above) |
+| `screen_shake` | `1.0` | Unchanged slider (0–1); reduced flash caps it |
+
 ## Feel
 
 Combat feel lives in Wave 2D. Design: [COMBAT_AND_RPG.md §3, §8, §9](../docs/design/COMBAT_AND_RPG.md#3-movement-dodge-and-stamina).
@@ -163,7 +209,7 @@ Player stat allocation is validated by [`scripts/rpg_rules.gd`](scripts/rpg_rule
 
 `Game` (`scripts/game.gd`) is a state machine: `TITLE → RUNNING ⇄ PAUSED / LEVEL_UP → INTERMISSION → RUNNING (next floor) … → SUMMARY → TITLE or RUNNING`. Every change emits `Events.game_state_changed(previous, current)` with the state names. The screens are code-built `CanvasLayer`s in `scripts/ui/` (`title_screen.gd`, `intermission_screen.gd`, `summary_screen.gd`, `settings_screen.gd`, sharing `screen_base.gd`); they only emit requests, and `Game` acts on them. Simulation and the run clock (`run_time_seconds`) only advance in `RUNNING`.
 
-**Settings** (`scripts/core/settings.gd`, a plain `RefCounted` with one shared instance, `Settings.shared()`) hold the window resolution preset, fullscreen, master, music and effects volumes (applied to the audio buses by `scripts/audio.gd`), damage numbers on/off and screen-shake intensity. They are loaded and the window settings applied at startup, saved to `user://settings.cfg` on every change, and announced with `Events.settings_changed(values)`. `--script` test runs use `user://settings_test.cfg` instead.
+**Settings** (`scripts/core/settings.gd`, a plain `RefCounted` with one shared instance, `Settings.shared()`) hold the window resolution preset, fullscreen, master, music and effects volumes (applied to the audio buses by `scripts/audio.gd`), damage numbers on/off, screen-shake intensity, the Wave 3C accessibility keys and remapped controls (see [Input and accessibility](#input-and-accessibility)). They are loaded and the window settings applied at startup, saved to `user://settings.cfg` on every change, and announced with `Events.settings_changed(values)`. `--script` test runs use `user://settings_test.cfg` instead.
 
 ## Editing the clock and floor
 
@@ -260,7 +306,8 @@ It runs, failing fast with a summary: the import step, `tests/scripts_parse_test
 | `enemies_test.gd` | Enemy schema v2 (shipped and broken records), roster, budgets within 10 % and composition rules over 20 seeds × depths 1–6, boss/elite rooms, spawn constraints, veteran/elite scaling, phases, twin_shot geometry, dormancy and wind-up state machine |
 | `enemy_combat_test.gd` | Live `Combat`: wind-up timing and dodging, dormancy on entry, twin_shot hits a still crawler, boss phase roars, bulwark/volatile elites, summon caps, hazards, support wards, knockback, `boss_defeated` for both bosses |
 | `events_test.gd` | `Events` signals during scripted door transitions, kills, boss gate, death, collapse and floor clear |
-| `menu_integration_test.gd` | Live `Main.tscn`: level-up/pause modals, state machine, resolution, F9/R, Input-Map-driven physics loop |
+| `menu_integration_test.gd` | Live `Main.tscn`: level-up/pause modals, state machine, resolution, F9/R, Input-Map-driven physics loop; gamepad-only traversal (synthesized joypad events): title → Settings → Remap controls → B → B, Start → pause → Inventory → B → B, Back → map → B |
+| `input_test.gd` | Wave 3C: aim source rules (stick beats mouse, deadzone, movement fallback, hold), aim-assist geometry, event-string round trips, rebinding (apply, swap, refuse, reserved, movement arrows, pause), defaults, `[input]` and accessibility persistence, text-scale helper, high contrast, reduced flash in `fx`, device hints, controls screen capture / cancel / reset, choice-dialog B, settings rebuild, live gamepad aim and reticle |
 | `skills_test.gd` | Skill points per level, `can_learn` rules, ranks replacing each other, INT scaling, slots, Sidestep / Hype in play, refusals, `cooldown_reduction` skills/dodge, Input Map collisions, level-up overlay and Skills page picks |
 | `run_loop_test.gd` | Title → `start_run`, room counts and budgets by depth (26 on floor 1 for 424242), exit → intermission → fresh floor with carried XP/HP, last-tick exit, victory on floor 6, summary after death/abandon with Retry/New/Title, run-time freeze, pause → settings, `user://` settings roundtrip |
 | `scripts_parse_test.gd` | Every script under `scripts/` and `tests/` compiles |
@@ -292,7 +339,9 @@ game/
 │   │   ├── events.gd           # autoload Events: the signal bus (documented per signal)
 │   │   ├── run_state.gd        # autoload RunState: run data, progression math, telemetry
 │   │   ├── run_rules.gd        # rooms by depth, floor budget (route + slack), target depth
-│   │   ├── settings.gd         # player settings <-> user://settings.cfg (Settings.shared())
+│   │   ├── settings.gd         # player settings <-> user://settings.cfg (Settings.shared()), [input] overrides
+│   │   ├── input_bindings.gd   # remappable actions, event strings, rebind/swap, defaults, device + key names (3C)
+│   │   ├── accessibility.gd    # text scale, high contrast, reduced flash, telegraph palette helpers (3C)
 │   │   ├── announcer_lines.gd  # announcer.json validator + {placeholder} resolver
 │   │   ├── announcer_brain.gd  # seeded line picking, cooldowns, toast queue rules (pure)
 │   │   ├── achievements.gd     # achievement tracker and rules (pure)
@@ -329,7 +378,8 @@ game/
 │   ├── ui/title_screen.gd      # New run / Seeded run / Settings / Quit
 │   ├── ui/intermission_screen.gd # floor recap + Descend
 │   ├── ui/summary_screen.gd    # run summary + Retry seed / New run / Title
-│   ├── ui/settings_screen.gd   # settings page (title and pause menu)
+│   ├── ui/settings_screen.gd   # settings page (title and pause menu), accessibility rows
+│   ├── ui/controls_screen.gd   # remap controls per device, swap on conflict, reset (3C)
 │   ├── ui/screen_base.gd       # shared panel/button helpers for the screens above
 │   ├── character_menu.gd       # level-up allocation, pause and stat screens
 │   ├── floor_generator.gd      # deterministic graph, special rooms, feasibility re-roll
